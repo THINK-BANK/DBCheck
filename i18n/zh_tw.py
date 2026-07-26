@@ -2981,5 +2981,11 @@ ZH_TW.update({
     "webui.scheduler_desc": "管理定時巡檢任務",
     "webui.status_last_inspect": "上次巡檢",
     "webui.status_time": "當前時間",
+    "webui.clickhouse_jdbc_report_filename": "ClickHouse_JDBC巡檢報告_{ip}_{name}_{ts}",
+    "webui.log_clickhouse_jdbc_start": "[{ts}] [ClickHouse JDBC 巡檢] 開始巡檢...",
+    "webui.err_clickhouse_jdbc_module": "ClickHouse JDBC 巡檢模組未安裝",
+    "webui.db_clickhouse_name": "ClickHouse (JDBC)",
+    "webui.db_clickhouse_desc": "適用於 ClickHouse 列式 OLAP（單機/叢集），透過 JDBC (JPype + clickhouse-jdbc) 連線，JDBC-over-HTTP 8123",
+    "webui.db_clickhouse_ver": "列式 OLAP",
     "webui.status_version": "版本",
 })

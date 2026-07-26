@@ -51,6 +51,25 @@ def _load_own_connection_config():
 _Db2CC = _load_own_connection_config()
 Db2ConnectionConfig = _Db2CC.Db2ConnectionConfig
 
+
+def _load_own_jdbc_jvm():
+    """按文件绝对路径 + 唯一模块名加载本插件自有的 jdbc_jvm 模块。
+
+    各插件的 jdbc_jvm.py 同名，裸 import 会被 sys.path 顺序影响（先加载的插件
+    目录抢注 jdbc_jvm），导致 db2 误导入 clickhouse 的 jdbc_jvm（缺
+    register_db2_driver）。改用 importlib 按绝对路径 + 唯一模块名加载，与导入
+    顺序无关。
+    """
+    spec = importlib.util.spec_from_file_location(
+        "db2_jdbc_jdbc_jvm",
+        os.path.join(_PLUGIN_DIR, "jdbc_jvm.py"),
+    )
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["db2_jdbc_jdbc_jvm"] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
 # 项目根目录：main_plugin.py -> db2_jdbc -> available -> plugins -> root
 _PROJECT_ROOT = os.path.abspath(os.path.join(_PLUGIN_DIR, "..", "..", ".."))
 
@@ -237,9 +256,11 @@ class Db2JdbcInspector(BaseInspectionEngine):
             import jpype.imports
 
             # 1. 确保 JVM 启动且驱动 jar 在 classpath（共享单例）
-            from jdbc_jvm import ensure_jvm, register_db2_driver
-            ensure_jvm()
-            register_db2_driver()
+            # 按绝对路径 + 唯一模块名加载本插件自有的 jdbc_jvm，避免被 clickhouse
+            # 等同名模块抢注（同名兄弟模块冲突）
+            _jvm = _load_own_jdbc_jvm()
+            _jvm.ensure_jvm()
+            _jvm.register_db2_driver()
 
             # 2. 构建连接配置（Db2ConnectionConfig 已在模块级按路径绑定，避免同名模块污染）
             cfg = Db2ConnectionConfig(

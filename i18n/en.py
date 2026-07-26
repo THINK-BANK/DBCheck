@@ -3214,5 +3214,11 @@ EN.update({
     "webui.scheduler_desc": "Manage scheduled inspection tasks",
     "webui.status_last_inspect": "Last Inspection",
     "webui.status_time": "Current Time",
+    "webui.clickhouse_jdbc_report_filename": "ClickHouse_JDBC_Inspection_Report_{ip}_{name}_{ts}",
+    "webui.log_clickhouse_jdbc_start": "[{ts}] [ClickHouse JDBC Inspection] Starting...",
+    "webui.err_clickhouse_jdbc_module": "ClickHouse JDBC inspection module not installed",
+    "webui.db_clickhouse_name": "ClickHouse (JDBC)",
+    "webui.db_clickhouse_desc": "For ClickHouse columnar OLAP (single/cluster), via JDBC (JPype + clickhouse-jdbc), JDBC-over-HTTP 8123",
+    "webui.db_clickhouse_ver": "Columnar OLAP",
     "webui.status_version": "Version",
 })

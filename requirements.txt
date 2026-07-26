@@ -28,6 +28,7 @@ requests>=2.25.0         # Webhook notifications (DingTalk/WeCom/Feishu) used by
 flask>=2.0.0
 flask-socketio>=5.0.0
 gevent>=24.0.0           # Required by flask-socketio async_mode='gevent' (Werkzeug 3.x dropped threading)
+Werkzeug>=3.0.0         # Flask 依赖；inspection_api.py 直接 from werkzeug.utils import secure_filename
 
 # ── Database Drivers ──────────────────────────────────────────────────────────
 pymysql>=1.0.0          # MySQL / TiDB
@@ -39,6 +40,7 @@ dmpython>=1.0.0         # Dameng DM8
 pyodbc>=4.0.0           # SQL Server (also requires ODBC Driver 17)
 gbase8sdb>=0.2.0        # GBase 8s (官方 Python 驱动，需 GBase SDK)
 jaydebeapi>=1.2.0      # GBase 8s JDBC 连接（无需 SDK，需 JDK + JDBC 驱动 jar）
+JPype1>=1.5.0          # jaydebeapi / oracle_jdbc / db2_jdbc 的 JVM 后端（import jpype）
 pymongo>=4.6.0          # MongoDB plugin dependency
 redis>=5.0.0            # Redis / Redis Cluster plugin dependency
 
@@ -48,6 +50,10 @@ paramiko>=2.10.0
 # ── Batch Inspection & Data Processing ───────────────────────────────────────
 openpyxl>=3.0.0
 pandas>=1.3.0
+
+# ── RAG & Document Processing ───────────────────────────────────────
+numpy>=1.21.0           # rag/vector_store.py 向量检索直接 import numpy
+beautifulsoup4>=4.12.0  # rag/document_processor.py 解析 HTML（from bs4 import BeautifulSoup）
 
 # ── PDF Export ───────────────────────────────────────────────────────────────
 reportlab>=4.0.0          # PDF report generation (for config baseline & index health PDF export)

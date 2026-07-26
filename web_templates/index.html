@@ -1019,9 +1019,9 @@ select option { background: var(--surface2); }
 .section-header {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 10px;
-  margin-bottom: 6px;
+  margin-bottom: 12px;
 }
 .section-title {
   font-size: 15px;
@@ -3747,7 +3747,7 @@ function formatBytes(bytes) {
               return;
             }
             listEl.innerHTML = list.map(ds => {
-              const dbIcons = {mysql:'🐬', mariadb:'🐬', oceanbase:'🐋', pg:'🐘', oracle:'🔴', oracle_jdbc:'🔴', dm:'🟡', sqlserver:'🟠', tidb:'🟢', ivorysql:'🐘', kingbase:'🐘', gbase:'🟢'};
+              const dbIcons = {mysql:'🐬', mariadb:'🐬', oceanbase:'🐋', pg:'🐘', oracle:'🔴', oracle_jdbc:'🔴', dm:'🟡', sqlserver:'🟠', tidb:'🟢', ivorysql:'🐘', kingbase:'🐘', gbase:'🟢', clickhouse:'🧊'};
               const icon = dbIcons[ds.db_type] || '🗄️';
               const dbLogos = {oceanbase:'/oceanbase.png'};
               const logo = dbLogos[ds.db_type];
@@ -4019,8 +4019,8 @@ function formatBytes(bytes) {
         // 优先从 data 属性读取（插件类型），其次用硬编码映射
         const defaultPort = opt?.getAttribute('data-port') || '';
         const defaultUser = opt?.getAttribute('data-user') || '';
-        const portMap = {mysql:3306, mariadb:3306, oceanbase:2881, pg:5432, dm:5236, oracle:1521, oracle_jdbc:1521, sqlserver:1433, tidb:4000, ivorysql:5432, yashandb:1688, kingbase:54321, gbase:9088, db2:50000, redis:6379, 'redis-cluster':6379};
-        const userMap = {mysql:'root', mariadb:'root', oceanbase:'root@test', pg:'postgres', dm:'SYSDBA', oracle:'system', oracle_jdbc:'system', sqlserver:'sa', tidb:'root', ivorysql:'postgres', yashandb:'sys', kingbase:'kingbase', gbase:'gbasedbt', db2:'db2inst1', redis:'', 'redis-cluster':''};
+        const portMap = {mysql:3306, mariadb:3306, oceanbase:2881, pg:5432, dm:5236, oracle:1521, oracle_jdbc:1521, sqlserver:1433, tidb:4000, ivorysql:5432, yashandb:1688, kingbase:54321, gbase:9088, db2:50000, redis:6379, 'redis-cluster':6379, clickhouse:8123};
+        const userMap = {mysql:'root', mariadb:'root', oceanbase:'root@test', pg:'postgres', dm:'SYSDBA', oracle:'system', oracle_jdbc:'system', sqlserver:'sa', tidb:'root', ivorysql:'postgres', yashandb:'sys', kingbase:'kingbase', gbase:'gbasedbt', db2:'db2inst1', redis:'', 'redis-cluster':'', clickhouse:'default'};
         document.getElementById('ds-port').value = (defaultPort && parseInt(defaultPort)) || portMap[dbType] || 3306;
         const userEl = document.getElementById('ds-user');
         if (dbType !== _currentDbType || !userEl.value) {
@@ -4043,20 +4043,22 @@ function formatBytes(bytes) {
           if (_dsUserLabel2) _dsUserLabel2.style.display = '';
         }
         _currentDbType = dbType;
-        const showDsDbField = (dbType === 'pg' || dbType === 'ivorysql' || dbType === 'kingbase' || dbType === 'gbase' || dbType === 'oceanbase' || dbType === 'db2' || dbType === 'mysql' || dbType === 'mariadb' || dbType === 'tidb');
+        const showDsDbField = (dbType === 'pg' || dbType === 'ivorysql' || dbType === 'kingbase' || dbType === 'gbase' || dbType === 'oceanbase' || dbType === 'db2' || dbType === 'mysql' || dbType === 'mariadb' || dbType === 'tidb' || dbType === 'clickhouse');
         document.getElementById('ds-database-wrap').style.display = showDsDbField ? '' : 'none';
         document.getElementById('ds-tenant-wrap').style.display = (dbType === 'oceanbase') ? '' : 'none';
         document.getElementById('ds-service-wrap').style.display = (dbType === 'oracle' || dbType === 'oracle_jdbc') ? '' : 'none';
         document.getElementById('ds-sysdba-wrap').style.display = (dbType === 'oracle' || dbType === 'oracle_jdbc') ? '' : 'none';
         // 原生 Oracle 与 Oracle(JDBC) 以及 DB2(JDBC) 均显示 JDBC URL 字段；标签随类型切换
         var _jdbcWrap = document.getElementById('ds-jdbc-url-wrap');
-        if (_jdbcWrap) _jdbcWrap.style.display = (dbType === 'oracle' || dbType === 'oracle_jdbc' || dbType === 'db2') ? '' : 'none';
+        if (_jdbcWrap) _jdbcWrap.style.display = (dbType === 'oracle' || dbType === 'oracle_jdbc' || dbType === 'db2' || dbType === 'clickhouse') ? '' : 'none';
         var _jdbcLabel = document.getElementById('ds-jdbc-url-label');
         var _jdbcInput = document.getElementById('ds-jdbc-url');
         if (_jdbcLabel) {
           if (dbType === 'oracle_jdbc') {
             _jdbcLabel.innerHTML = 'JDBC URL <span style="color:var(--text-muted);font-weight:normal">（可选，留空则使用上方主机/端口/服务名）</span>';
           } else if (dbType === 'db2') {
+            _jdbcLabel.innerHTML = 'JDBC URL <span style="color:var(--text-muted);font-weight:normal">（可选，留空则使用上方主机/端口/数据库名）</span>';
+          } else if (dbType === 'clickhouse') {
             _jdbcLabel.innerHTML = 'JDBC URL <span style="color:var(--text-muted);font-weight:normal">（可选，留空则使用上方主机/端口/数据库名）</span>';
           } else {
             _jdbcLabel.innerHTML = '连接串 (DSN) <span style="color:var(--text-muted);font-weight:normal">（可选，TNS 描述符 (DESCRIPTION=...) 或留空用上方主机/端口/服务名）</span>';
@@ -4067,6 +4069,8 @@ function formatBytes(bytes) {
             _jdbcInput.placeholder = 'jdbc:oracle:thin:@//host:1521/ORCLCDB 或 @host:1521:ORCL';
           } else if (dbType === 'db2') {
             _jdbcInput.placeholder = 'jdbc:db2://host:50000/testdb';
+          } else if (dbType === 'clickhouse') {
+            _jdbcInput.placeholder = 'jdbc:clickhouse://host:8123/default';
           } else {
             _jdbcInput.placeholder = '(DESCRIPTION=(HOST=host)(PORT=1521)(CONNECT_DATA=(SERVICE_NAME=ORCLCDB))) 或 //host:1521/ORCLCDB';
           }
@@ -4080,7 +4084,7 @@ function formatBytes(bytes) {
         // 根据数据库类型更新 database 输入框的 placeholder
         var dbInput = document.getElementById('ds-database');
         if (dbInput) {
-          var _ph = {'pg':'postgres','ivorysql':'postgres','kingbase':'kingbase','gbase':'sysmaster','oceanbase':'oceanbase','mongodb':'admin','db2':'testdb','mysql':'mysql','mariadb':'mysql','tidb':'mysql'};
+          var _ph = {'pg':'postgres','ivorysql':'postgres','kingbase':'kingbase','gbase':'sysmaster','oceanbase':'oceanbase','mongodb':'admin','db2':'testdb','mysql':'mysql','mariadb':'mysql','tidb':'mysql','clickhouse':'default'};
           dbInput.placeholder = _ph[dbType] || 'mysql';
           // OceanBase 不预填数据库名（仅为占位提示），由用户在 DBeaver 风格界面自行填写
           if (dbType === 'oceanbase' && !dbInput.value) dbInput.value = '';
@@ -4121,6 +4125,7 @@ function formatBytes(bytes) {
         if (!dbName && dbType === 'gbase') dbName = 'sysmaster';
         if (!dbName && dbType === 'oceanbase') dbName = 'oceanbase';
         if (!dbName && dbType === 'mongodb') dbName = 'admin';
+        if (!dbName && dbType === 'clickhouse') dbName = 'default';
         const tenant = (document.getElementById('ds-tenant')?.value || '').trim();
         const sysdba = document.getElementById('ds-sysdba')?.checked || false;
         const gbaseServer = document.getElementById('ds-gbase-server')?.value.trim() || '';
@@ -4213,6 +4218,9 @@ function formatBytes(bytes) {
         if (payload.db_type === 'redis-cluster') {
           payload.seed_nodes = document.getElementById('ds-redis-seed-nodes')?.value.trim() || '';
         }
+        if (payload.db_type === 'clickhouse') {
+          payload.database = document.getElementById('ds-database').value.trim() || 'default';
+        }
         var _skipUser = (payload.db_type === 'redis' || payload.db_type === 'redis-cluster');
         if (!payload.name || !payload.host || (!_skipUser && !payload.user)) {
           msgEl.style.color = 'var(--danger)';
@@ -4303,6 +4311,9 @@ function formatBytes(bytes) {
                 document.getElementById('ds-tls-cert-key-file').value = ds.tls_cert_key_file || '';
                 document.getElementById('ds-tls').checked = !!ds.tls;
                 document.getElementById('ds-tls-allow-invalid').checked = !!ds.tls_allow_invalid_certs;
+              }
+              if (ds.db_type === 'clickhouse') {
+                document.getElementById('ds-database').value = ds.database || 'default';
               }
               // SSH 回填
               if (ds.ssh_enabled || ds.ssh_host) {
@@ -4761,7 +4772,6 @@ function formatBytes(bytes) {
         <div class="home-section" style="margin-top:24px;">
           <div class="section-header">
             <h2 class="section-title" data-i18n="webui.home_chart_title">数据统计</h2>
-            <span class="section-desc" data-i18n="webui.home_chart_desc">模板、巡检、基线、规则统计</span>
           </div>
           <div class="overview-grid" id="home-charts-grid">
             <!-- 模板统计 -->
@@ -4773,7 +4783,7 @@ function formatBytes(bytes) {
                   <div class="card-subtitle" data-i18n="webui.home_template_stats_sub">各模板章节数</div>
                 </div>
               </div>
-              <canvas class="chart-card-body" id="home-template-chart"></canvas>
+              <div class="chart-card-body" id="home-template-chart"></div>
             </div>
             <!-- 巡检统计 -->
             <div class="overview-card">
@@ -4784,7 +4794,7 @@ function formatBytes(bytes) {
                   <div class="card-subtitle" data-i18n="webui.home_inspection_stats_sub">各数据库巡检次数</div>
                 </div>
               </div>
-              <canvas class="chart-card-body" id="home-inspection-chart"></canvas>
+              <div class="chart-card-body" id="home-inspection-chart"></div>
             </div>
             <!-- 基线统计 -->
             <div class="overview-card">
@@ -4795,7 +4805,7 @@ function formatBytes(bytes) {
                   <div class="card-subtitle" data-i18n="webui.home_baseline_stats_sub">各数据库基线数</div>
                 </div>
               </div>
-              <canvas class="chart-card-body" id="home-baseline-chart"></canvas>
+              <div class="chart-card-body" id="home-baseline-chart"></div>
             </div>
             <!-- 规则统计 -->
             <div class="overview-card">
@@ -4806,7 +4816,7 @@ function formatBytes(bytes) {
                   <div class="card-subtitle" data-i18n="webui.home_rule_stats_sub">各数据库规则数</div>
                 </div>
               </div>
-              <canvas class="chart-card-body" id="home-rule-chart"></canvas>
+              <div class="chart-card-body" id="home-rule-chart"></div>
             </div>
           </div>
           <!-- 数据库类型图标墙 -->
@@ -8200,6 +8210,9 @@ async function onDatasourceChange() {
         document.getElementById('f-database').value = ds.database || '';
         document.getElementById('f-tenant').value = ds.tenant || '';
       }
+      if (ds.db_type === 'clickhouse') {
+        document.getElementById('f-database').value = ds.database || 'default';
+      }
       if (ds.db_type === 'oracle' || ds.db_type === 'oracle_jdbc') {
         console.log('[Oracle模板] onDatasourceChange: oracle branch entered, ds:', ds);
         document.getElementById('f-service-name').value = ds.service_name || '';
@@ -8302,7 +8315,7 @@ async function selectDbType(type, skipReload) {
       if (fUserReqSpan) fUserReqSpan.style.display = '';
     }
   }
-  document.getElementById('f-database-wrap').style.display = (type === 'pg' || type === 'ivorysql' || type === 'kingbase' || type === 'gbase' || type === 'oceanbase' || type === 'mongodb' || type === 'mysql' || type === 'mariadb' || type === 'tidb') ? '' : 'none';
+  document.getElementById('f-database-wrap').style.display = (type === 'pg' || type === 'ivorysql' || type === 'kingbase' || type === 'gbase' || type === 'oceanbase' || type === 'mongodb' || type === 'mysql' || type === 'mariadb' || type === 'tidb' || type === 'clickhouse') ? '' : 'none';
   document.getElementById('f-tenant-wrap').style.display = (type === 'oceanbase') ? '' : 'none';
   // Oracle全面巡检：显示服务名输入框
   var svcWrap = document.getElementById('f-service-wrap');
@@ -8312,18 +8325,31 @@ async function selectDbType(type, skipReload) {
   if (sysdbaWrap) sysdbaWrap.style.display = (type === 'oracle' || type === 'oracle_jdbc') ? '' : 'none';
   // Oracle / Oracle(JDBC)：显示连接串字段，标签随类型切换
   var jdbcWrap = document.getElementById('f-jdbc-url-wrap');
-  if (jdbcWrap) jdbcWrap.style.display = (type === 'oracle' || type === 'oracle_jdbc') ? '' : 'none';
+  if (jdbcWrap) jdbcWrap.style.display = (type === 'oracle' || type === 'oracle_jdbc' || type === 'db2' || type === 'clickhouse') ? '' : 'none';
   var fJdbcLabel = document.getElementById('f-jdbc-url-label');
-  if (fJdbcLabel) fJdbcLabel.textContent = (type === 'oracle_jdbc') ? 'JDBC URL' : '连接串 (DSN)';
+  if (fJdbcLabel) {
+    if (type === 'oracle_jdbc' || type === 'db2' || type === 'clickhouse') fJdbcLabel.textContent = 'JDBC URL';
+    else fJdbcLabel.textContent = '连接串 (DSN)';
+  }
   var fJdbcHint = document.getElementById('f-jdbc-url-hint');
-  if (fJdbcHint) fJdbcHint.textContent = (type === 'oracle_jdbc') ? '可选，留空则使用上方主机/端口/服务名' : '可选，TNS 描述符 (DESCRIPTION=...) 或留空用上方主机/端口/服务名';
+  if (fJdbcHint) {
+    if (type === 'oracle_jdbc') fJdbcHint.textContent = '可选，留空则使用上方主机/端口/服务名';
+    else if (type === 'db2') fJdbcHint.textContent = '可选，留空则使用上方主机/端口/数据库名';
+    else if (type === 'clickhouse') fJdbcHint.textContent = '可选，留空则使用上方主机/端口/数据库名';
+    else fJdbcHint.textContent = '可选，TNS 描述符 (DESCRIPTION=...) 或留空用上方主机/端口/服务名';
+  }
   var fJdbcInput = document.getElementById('f-jdbc-url');
-  if (fJdbcInput) fJdbcInput.placeholder = (type === 'oracle_jdbc') ? 'jdbc:oracle:thin:@//host:1521/ORCLCDB 或 @host:1521:ORCL' : '(DESCRIPTION=(HOST=host)(PORT=1521)(CONNECT_DATA=(SERVICE_NAME=ORCLCDB))) 或 //host:1521/ORCLCDB';
+  if (fJdbcInput) {
+    if (type === 'oracle_jdbc') fJdbcInput.placeholder = 'jdbc:oracle:thin:@//host:1521/ORCLCDB 或 @host:1521:ORCL';
+    else if (type === 'db2') fJdbcInput.placeholder = 'jdbc:db2://host:50000/testdb';
+    else if (type === 'clickhouse') fJdbcInput.placeholder = 'jdbc:clickhouse://host:8123/default';
+    else fJdbcInput.placeholder = '(DESCRIPTION=(HOST=host)(PORT=1521)(CONNECT_DATA=(SERVICE_NAME=ORCLCDB))) 或 //host:1521/ORCLCDB';
+  }
   // MongoDB：显示专用连接参数
   var mongoWrap = document.getElementById('f-mongo-wrap');
   if (mongoWrap) mongoWrap.style.display = (type === 'mongodb') ? '' : 'none';
   // 更新数据库名称输入框的 placeholder 并自动填写默认值
-  const defaultDbMap = { pg: 'postgres', ivorysql: 'postgres', kingbase: 'kingbase', gbase: 'sysmaster', mongodb: 'admin', mysql: 'mysql', mariadb: 'mysql', tidb: 'mysql' };
+  const defaultDbMap = { pg: 'postgres', ivorysql: 'postgres', kingbase: 'kingbase', gbase: 'sysmaster', mongodb: 'admin', mysql: 'mysql', mariadb: 'mysql', tidb: 'mysql', clickhouse: 'default' };
   const dbPlaceholderMap = Object.assign({}, defaultDbMap, { oceanbase: 'oceanbase' });
   var fDbEl = document.getElementById('f-database');
   if (fDbEl) {
@@ -8333,7 +8359,7 @@ async function selectDbType(type, skipReload) {
   // 更新数据库标签（去掉静态写死的 PostgreSQL）
   var dbOptLabel = document.querySelector('#f-database-wrap .opt');
   if (dbOptLabel) {
-    var labelMap = { pg: 'PostgreSQL', ivorysql: 'PostgreSQL', kingbase: 'KingbaseES', gbase: 'GBase 8s', mysql: 'MySQL', mariadb: 'MariaDB', tidb: 'TiDB' };
+    var labelMap = { pg: 'PostgreSQL', ivorysql: 'PostgreSQL', kingbase: 'KingbaseES', gbase: 'GBase 8s', mysql: 'MySQL', mariadb: 'MariaDB', tidb: 'TiDB', clickhouse: 'ClickHouse' };
     dbOptLabel.textContent = labelMap[type] || '';
   }
 }
@@ -8402,6 +8428,15 @@ async function testDb() {
       el.innerHTML = '<div class="status-banner err">' + i18n('webui.connection_fail') + '：请填写主机地址' + (dbType === 'redis' || dbType === 'redis-cluster' ? '' : '和用户名') + '</div>';
       return;
     }
+    const fDbEl = document.getElementById('f-database');
+    let fDbVal = fDbEl ? fDbEl.value.trim() : '';
+    if (!fDbVal) {
+      if (dbType === 'pg' || dbType === 'ivorysql') fDbVal = 'postgres';
+      else if (dbType === 'kingbase') fDbVal = 'kingbase';
+      else if (dbType === 'gbase') fDbVal = 'sysmaster';
+      else if (dbType === 'mongodb') fDbVal = 'admin';
+      else if (dbType === 'clickhouse') fDbVal = 'default';
+    }
     const res = await fetch('/api/test_db', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
@@ -8411,7 +8446,7 @@ async function testDb() {
         port:     parseInt(document.getElementById('f-port').value) || (dbType==='oracle'?1521:(dbType==='mysql'?3306:5432)),
         user:     user,
         password: document.getElementById('f-password').value,
-        database: (dbType === 'pg' || dbType === 'ivorysql') ? (document.getElementById('f-database').value.trim() || 'postgres') : (dbType === 'kingbase') ? (document.getElementById('f-database').value.trim() || 'kingbase') : (dbType === 'gbase') ? (document.getElementById('f-database').value.trim() || 'sysmaster') : (dbType === 'oceanbase') ? (document.getElementById('f-database').value.trim() || '') : (document.getElementById('f-database').value.trim() || ''),
+        database: fDbVal,
         tenant:   (dbType === 'oceanbase') ? (document.getElementById('f-tenant').value.trim() || '') : '',
         service_name: document.getElementById('f-service-name') ? document.getElementById('f-service-name').value.trim() : null,
         sysdba: document.getElementById('f-sysdba').checked,
@@ -8850,7 +8885,14 @@ async function startInspection() {
   const port = parseInt(document.getElementById('f-port').value) || (dbType==='mysql'?3306:dbType==='oracle'?1521:dbType==='dm'?5236:dbType==='ivorysql'?5432:5432);
   const user = document.getElementById('f-user').value.trim() || (userDefaults[dbType]||'root');
   const password = document.getElementById('f-password').value;
-  const database = (dbType === 'pg' || dbType === 'ivorysql') ? (document.getElementById('f-database').value.trim() || 'postgres') : (dbType === 'kingbase') ? (document.getElementById('f-database').value.trim() || 'kingbase') : (dbType === 'gbase') ? (document.getElementById('f-database').value.trim() || 'sysmaster') : (dbType === 'oceanbase') ? (document.getElementById('f-database').value.trim() || '') : (document.getElementById('f-database').value.trim() || '');
+  let database = document.getElementById('f-database').value.trim();
+  if (!database) {
+    if (dbType === 'pg' || dbType === 'ivorysql') database = 'postgres';
+    else if (dbType === 'kingbase') database = 'kingbase';
+    else if (dbType === 'gbase') database = 'sysmaster';
+    else if (dbType === 'mongodb') database = 'admin';
+    else if (dbType === 'clickhouse') database = 'default';
+  }
   const tenant = (dbType === 'oceanbase') ? (document.getElementById('f-tenant').value.trim() || '') : '';
   const svcName = document.getElementById('f-service-name') ? document.getElementById('f-service-name').value.trim() : null;
   const jdbcUrl = document.getElementById('f-jdbc-url')?.value.trim() || null;
@@ -9960,6 +10002,142 @@ function drawLineChart(canvasId, labels, values, cfg) {
     }
   });
 }
+
+// ─── 首页四个统计图表（ECharts）───
+const homeCharts = {};
+function renderHomeCharts(stats, dbTypeMap) {
+  if (typeof echarts === 'undefined') {
+    console.warn('[HomeCharts] ECharts not loaded, fallback to canvas');
+    if (stats.template_chapters && stats.template_chapters.length > 0) {
+      const labels = stats.template_chapters.map(t => t.name || '模板' + t.id);
+      const values = stats.template_chapters.map(t => t.chapters || 0);
+      drawBarChart('home-template-chart', labels, values, ['#3b82f6','#2563eb','#1d4fed','#1e40af','#1e3a8f']);
+    }
+    if (stats.inspection_by_db && Object.keys(stats.inspection_by_db).length > 0) {
+      const labels = Object.keys(stats.inspection_by_db).map(k => dbTypeMap[k] || k);
+      const values = Object.values(stats.inspection_by_db);
+      drawPieChart('home-inspection-chart', labels, values, ['#f97316','#ea580c','#dc2626','#b91c1c','#991b1b','#7f1d1d']);
+    }
+    if (stats.baseline_by_db && Object.keys(stats.baseline_by_db).length > 0) {
+      const labels = Object.keys(stats.baseline_by_db).map(k => dbTypeMap[k] || k);
+      const values = Object.values(stats.baseline_by_db);
+      drawPieChart('home-baseline-chart', labels, values, ['#22c55e','#16a34a','#15803d','#166534','#14532d','#14451f']);
+    }
+    if (stats.rule_engine_by_db && Object.keys(stats.rule_engine_by_db).length > 0) {
+      const labels = Object.keys(stats.rule_engine_by_db).map(k => dbTypeMap[k] || k);
+      const values = Object.values(stats.rule_engine_by_db);
+      drawPieChart('home-rule-chart', labels, values, ['#a855f7','#9333ea','#7e22ce','#6b21a8','#581c87','#3b0764']);
+    }
+    return;
+  }
+
+  const textColor = '#c9d1d9';
+  const mutedColor = '#8b949e';
+  const axisColor = '#30363d';
+  const tooltipBg = 'rgba(22,27,34,0.95)';
+  const tooltipBorder = '#30363d';
+
+  // 释放旧实例，避免内存泄漏和重复渲染
+  Object.keys(homeCharts).forEach(k => {
+    if (homeCharts[k]) { try { homeCharts[k].dispose(); } catch(e) {} homeCharts[k] = null; }
+  });
+
+  // 1. 模板统计：横向条形图（带渐变 + 数值标签）
+  if (stats.template_chapters && stats.template_chapters.length > 0) {
+    const labels = stats.template_chapters.map(t => t.name || '模板' + t.id).slice(0, 10);
+    const values = stats.template_chapters.map(t => t.chapters || 0).slice(0, 10);
+    const el = document.getElementById('home-template-chart');
+    if (el) {
+      homeCharts.template = echarts.init(el);
+      homeCharts.template.setOption({
+        backgroundColor: 'transparent',
+        grid: { left: '2%', right: '14%', top: '5%', bottom: '2%', containLabel: true },
+        tooltip: { trigger: 'axis', backgroundColor: tooltipBg, borderColor: tooltipBorder, textStyle: { color: textColor } },
+        xAxis: { type: 'value', splitLine: { lineStyle: { color: axisColor } }, axisLabel: { color: mutedColor, fontSize: 10 } },
+        yAxis: { type: 'category', data: labels, axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: textColor, fontSize: 11 } },
+        series: [{
+          type: 'bar', data: values, barWidth: 14,
+          itemStyle: { borderRadius: [0, 7, 7, 0], color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [{ offset: 0, color: '#3b82f6' }, { offset: 1, color: '#06b6d4' }]) },
+          label: { show: true, position: 'right', color: textColor, fontSize: 10 }
+        }]
+      });
+    }
+  }
+
+  // 2. 巡检统计：环形图（带右侧图例）
+  if (stats.inspection_by_db && Object.keys(stats.inspection_by_db).length > 0) {
+    const entries = Object.entries(stats.inspection_by_db).map(([k, v]) => ({ name: dbTypeMap[k] || k, value: v })).sort((a, b) => b.value - a.value);
+    const el = document.getElementById('home-inspection-chart');
+    if (el) {
+      const colors = ['#f97316', '#fb923c', '#fbbf24', '#f87171', '#ef4444', '#b91c1c'];
+      homeCharts.inspection = echarts.init(el);
+      homeCharts.inspection.setOption({
+        backgroundColor: 'transparent',
+        color: colors,
+        tooltip: { trigger: 'item', backgroundColor: tooltipBg, borderColor: tooltipBorder, textStyle: { color: textColor }, formatter: '{b}: {c} ({d}%)' },
+        legend: { orient: 'vertical', right: '2%', top: 'center', textStyle: { color: mutedColor, fontSize: 10 }, itemWidth: 10, itemHeight: 10 },
+        series: [{
+          type: 'pie', radius: ['42%', '68%'], center: ['36%', '50%'], data: entries,
+          label: { show: false },
+          itemStyle: { borderRadius: 5, borderColor: '#0d1117', borderWidth: 2 }
+        }]
+      });
+    }
+  }
+
+  // 3. 基线统计：雷达图（与饼图/环形图区分）
+  if (stats.baseline_by_db && Object.keys(stats.baseline_by_db).length > 0) {
+    const entries = Object.entries(stats.baseline_by_db).map(([k, v]) => ({ name: dbTypeMap[k] || k, value: v }));
+    const labels = entries.map(e => e.name);
+    const values = entries.map(e => e.value);
+    const max = Math.max(...values, 1);
+    const el = document.getElementById('home-baseline-chart');
+    if (el) {
+      homeCharts.baseline = echarts.init(el);
+      homeCharts.baseline.setOption({
+        backgroundColor: 'transparent',
+        tooltip: { trigger: 'item', backgroundColor: tooltipBg, borderColor: tooltipBorder, textStyle: { color: textColor } },
+        radar: {
+          indicator: labels.map(l => ({ name: l, max: max })),
+          center: ['45%', '50%'], radius: '62%',
+          axisName: { color: mutedColor, fontSize: 10 },
+          splitArea: { areaStyle: { color: ['rgba(34,197,94,0.06)', 'rgba(34,197,94,0.10)', 'rgba(34,197,94,0.14)', 'rgba(34,197,94,0.18)'] } },
+          axisLine: { lineStyle: { color: 'rgba(34,197,94,0.3)' } },
+          splitLine: { lineStyle: { color: 'rgba(34,197,94,0.2)' } }
+        },
+        series: [{
+          type: 'radar', data: [{ value: values, name: '基线数', areaStyle: { color: 'rgba(34,197,94,0.25)' }, lineStyle: { color: '#22c55e' }, itemStyle: { color: '#22c55e' } }]
+        }]
+      });
+    }
+  }
+
+  // 4. 规则统计：玫瑰图（南丁格尔玫瑰图，与巡检环形图区分）
+  if (stats.rule_engine_by_db && Object.keys(stats.rule_engine_by_db).length > 0) {
+    const entries = Object.entries(stats.rule_engine_by_db).map(([k, v]) => ({ name: dbTypeMap[k] || k, value: v })).sort((a, b) => b.value - a.value);
+    const el = document.getElementById('home-rule-chart');
+    if (el) {
+      const colors = ['#a855f7', '#c084fc', '#d8b4fe', '#7e22ce', '#6b21a8', '#581c87'];
+      homeCharts.rules = echarts.init(el);
+      homeCharts.rules.setOption({
+        backgroundColor: 'transparent',
+        color: colors,
+        tooltip: { trigger: 'item', backgroundColor: tooltipBg, borderColor: tooltipBorder, textStyle: { color: textColor }, formatter: '{b}: {c} ({d}%)' },
+        legend: { orient: 'vertical', right: '2%', top: 'center', textStyle: { color: mutedColor, fontSize: 10 }, itemWidth: 10, itemHeight: 10 },
+        series: [{
+          type: 'pie', radius: [18, 68], center: ['36%', '50%'], roseType: 'area', data: entries,
+          label: { show: false },
+          itemStyle: { borderRadius: 5, borderColor: '#0d1117', borderWidth: 2 }
+        }]
+      });
+    }
+  }
+}
+
+// 首页统计图表随窗口自适应
+window.addEventListener('resize', () => {
+  Object.values(homeCharts).forEach(c => c && c.resize && c.resize());
+});
 
 // ─── 横向条形图（模板统计：每个模板章节数）───
 function drawBarChart(canvasId, labels, values, colors) {
@@ -12602,37 +12780,12 @@ async function loadHomeStats() {
         'sqlserver': 'SQL Server',
         'tidb': 'TiDB',
         'ivorysql': 'IvorySQL',
-        'yashandb': 'YashanDB'
+        'yashandb': 'YashanDB',
+        'clickhouse': 'ClickHouse'
       };
 
-      // 5.1 模板统计（柱状图：每个模板的章节数）
-      if (stats.template_chapters && stats.template_chapters.length > 0) {
-        console.log('template_chapters count:', stats.template_chapters.length, stats.template_chapters);
-        const labels = stats.template_chapters.map(t => t.name || '模板' + t.id);
-        const values = stats.template_chapters.map(t => t.chapters || 0);
-        requestAnimationFrame(() => drawBarChart('home-template-chart', labels, values, ['#3b82f6','#2563eb','#1d4fed','#1e40af','#1e3a8f']));
-      }
-
-      // 5.2 巡检统计（饼图：每种数据库巡检次数）
-      if (stats.inspection_by_db && Object.keys(stats.inspection_by_db).length > 0) {
-        const labels = Object.keys(stats.inspection_by_db).map(k => dbTypeMap[k] || k);
-        const values = Object.values(stats.inspection_by_db);
-        requestAnimationFrame(() => drawPieChart('home-inspection-chart', labels, values, ['#f97316','#ea580c','#dc2626','#b91c1c','#991b1b','#7f1d1d']));
-      }
-
-      // 5.3 基线统计（饼图：每种数据库基线数）
-      if (stats.baseline_by_db && Object.keys(stats.baseline_by_db).length > 0) {
-        const labels = Object.keys(stats.baseline_by_db).map(k => dbTypeMap[k] || k);
-        const values = Object.values(stats.baseline_by_db);
-        requestAnimationFrame(() => drawPieChart('home-baseline-chart', labels, values, ['#22c55e','#16a34a','#15803d','#166534','#14532d','#14451f']));
-      }
-
-      // 5.4 规则统计（饼图：每种数据库规则数）
-      if (stats.rule_engine_by_db && Object.keys(stats.rule_engine_by_db).length > 0) {
-        const labels = Object.keys(stats.rule_engine_by_db).map(k => dbTypeMap[k] || k);
-        const values = Object.values(stats.rule_engine_by_db);
-        requestAnimationFrame(() => drawPieChart('home-rule-chart', labels, values, ['#a855f7','#9333ea','#7e22ce','#6b21a8','#581c87','#3b0764']));
-      }
+      // 5. 首页统计图表（使用 ECharts 渲染）
+      renderHomeCharts(stats, dbTypeMap);
     }
 
     // 显示概览区域
@@ -19447,6 +19600,7 @@ function mkdirRemote() {
       window.dbTypes = await res.json();
       generateDbTypeCards();
       populateDbTypeDropdowns();
+      populateDbIconWall();
       // 卡片生成后，默认选中 oracle
       const oracleCard = document.getElementById('tc-oracle');
       if (oracleCard && typeof selectDbType === 'function') {
@@ -19539,7 +19693,52 @@ function mkdirRemote() {
     // 6. 动态生成reports页面的数据库类型过滤按钮
     generateReportFilterButtons();
   }
-  
+
+  // 动态填充首页「数据库类型图标墙」：把已启用的插件数据库类型追加到硬编码内置项之后
+  function populateDbIconWall() {
+    const wall = document.querySelector('.db-icon-wall-inner');
+    if (!wall) return;
+
+    // 收集已有的内置项 title，用于去重（避免插件与内置项或插件之间重复）
+    const existingTitles = new Set();
+    wall.querySelectorAll('.db-icon-item').forEach(item => {
+      const t = item.getAttribute('title');
+      if (t) existingTitles.add(t);
+    });
+
+    (window.dbTypes || []).forEach(dbType => {
+      if (dbType.is_plugin !== true) return;
+      const label = dbType.label || dbType.value || '';
+      const value = dbType.value || label;
+      // 若图标墙内已存在 title 等于该插件的 label 或 value，跳过（去重）
+      if (existingTitles.has(label) || existingTitles.has(value)) return;
+
+      const item = document.createElement('div');
+      item.className = 'db-icon-item';
+      item.setAttribute('title', label);
+
+      // 结构与硬编码内置项完全一致，保证样式统一
+      const img = document.createElement('img');
+      img.src = dbType.icon || '';
+      img.alt = label;
+      img.setAttribute('onerror', "this.style.display='none';this.nextElementSibling.style.display='flex'");
+
+      const fallback = document.createElement('span');
+      fallback.className = 'db-icon-fallback';
+      fallback.style.display = 'none';
+      fallback.textContent = dbType.emoji || '🗄️';
+
+      const textLabel = document.createElement('span');
+      textLabel.className = 'db-icon-label';
+      textLabel.textContent = label;
+
+      item.appendChild(img);
+      item.appendChild(fallback);
+      item.appendChild(textLabel);
+      wall.appendChild(item);
+    });
+  }
+
   // 动态生成reports页面的数据库类型过滤按钮
   function generateReportFilterButtons() {
     const dbTypes = window.dbTypes || [];

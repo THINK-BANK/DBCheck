@@ -1651,7 +1651,9 @@ class BaseInspectionEngine:
                         'col3': f'当前值={current_value}, 期望值={expected_value}',
                         'col4': desc_zh,
                         'col5': 'HIGH' if risk_level == 'HIGH' else ('MEDIUM' if risk_level == 'MEDIUM' else 'LOW'),
-                        'fix_sql': f"-- 请调整参数 {param_name}\nALTER SYSTEM SET {param_name} = {expected_value} SCOPE=BOTH;"
+                        'fix_sql': (f"SET {param_name} = {expected_value};"
+                                    if self.db_type == 'clickhouse'
+                                    else f"-- 请调整参数 {param_name}\nALTER SYSTEM SET {param_name} = {expected_value} SCOPE=BOTH;")
                     }
                     self.context['auto_analyze'].append(issue_item)
                     existing_items.add(param_name)

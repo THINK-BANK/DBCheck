@@ -1458,8 +1458,9 @@ class AIAdvisor:
         return self.backend != 'disabled'
 
     def _build_prompt(self, db_type: str, label: str, metrics: dict, issues: list,
-                      lang: str = 'zh', rag_context: str = '') -> str:
-        """构建发给 LLM 的诊断 Prompt，支持中英文"""
+                      lang: str = 'zh', rag_context: str = '',
+                      mode: str = 'advice') -> str:
+        """构建发给 LLM 的诊断 Prompt，支持中英文；按 mode 分支（诊断/建议）。"""
         labels = self.METRIC_LABELS_ZH if lang == 'zh' else self.METRIC_LABELS_EN
         sep = '=' * 60
 
@@ -1499,7 +1500,42 @@ class AIAdvisor:
                 oracle_extra += f"\n[Top SQL by Buffer Gets]\n{metrics['top_sql_top5']}"
 
         if lang == 'zh':
-            db_type_name = {'mysql': 'MySQL', 'pg': 'PostgreSQL', 'oracle': 'Oracle', 'sqlserver': 'SQL Server', 'tidb': 'TiDB', 'ivorysql': 'IvorySQL', 'kingbase': 'KingbaseES', 'gbase': 'GBase 8s'}.get(db_type, db_type.upper())
+            db_type_name = {'mysql': 'MySQL', 'pg': 'PostgreSQL', 'oracle': 'Oracle',
+                            'sqlserver': 'SQL Server', 'tidb': 'TiDB', 'ivorysql': 'IvorySQL',
+                            'kingbase': 'KingbaseES', 'gbase': 'GBase 8s'}.get(db_type, db_type.upper())
+            if mode == 'diagnosis':
+                tail = (
+                    f"{sep}\n【四、诊断要求】\n{sep}\n"
+                    "请基于以上巡检数据，**定位问题的根因（Root Cause）**并给出诊断结论"
+                    "（本模式聚焦根因定位，不展开优化方案；优化方案由「建议」模式提供）。要求：\n"
+                    "1. **问题定位**：明确指出哪些指标/风险项异常，异常表现是什么。\n"
+                    "2. **根因推断**：结合版本号、等待事件、阻塞会话、Top SQL 等证据，"
+                    "逐条推断最可能的根因，并给出推理链。\n"
+                    "3. **影响分析**：评估该问题对业务/性能的影响范围与严重程度。\n"
+                    "4. **证据引用**：若【参考文档】中有相关内容，请标注「（参考文档）」；"
+                    "否则基于你的专业知识给出诊断。\n"
+                    "5. 最后给出该数据库的整体健康评价（优秀/良好/一般/危险）及主要关注点。\n\n"
+                    "格式要求（直接输出 Markdown，不要加「以下是」等前缀）：\n"
+                    "## 根因诊断\n\n[按证据逐条给出：问题 → 根因 → 影响]\n\n"
+                    "## 整体评价\n\n[一句话整体评价]"
+                )
+            else:
+                tail = (
+                    f"{sep}\n【四、诊断要求】\n{sep}\n"
+                    "请基于以上巡检数据，给出 4~6 条专业优化建议，要求：\n"
+                    "1. **版本适配**：严格根据【关键指标】中的数据库版本号，确保所有建议的参数名、SQL 语法、功能特性均适用于当前版本。若某参数在当前版本已弃用（Deprecated），必须推荐该版本的正确替代方案，并明确说明替代原因。\n"
+                    "2. **优先分析【等待事件 Top5】**:识别主要等待类型（如 db file sequential read、log file sync、buffer busy waits 等），给出具体优化方向\n"
+                    "3. **如存在【阻塞会话】**:分析阻塞原因（锁竞争、热块更新等）并给出解决思路\n"
+                    "4. **针对【Top SQL】**:评估是否存在全表扫描、大量磁盘读等问题，给出优化建议\n"
+                    "5. **结合【关键指标】和【风险项】综合判断**:给出整体健康评价\n"
+                    "6. **参数调优建议**：涉及配置参数调整时，必须给出参数在当前版本中的确切名称、推荐值范围及生效方式（动态/需重启）\n"
+                    "7. **引用依据**：若【参考文档】中有相关内容，请在建议中标注「（参考文档）」；若无参考文档，基于你的专业知识给出建议\n"
+                    "8. 每条建议必须包含：问题定位 → 原因分析 → 具体修复方案（或参数调整参考值）\n"
+                    "9. 最后给出该数据库的整体健康评价（优秀/良好/一般/危险）及主要关注点\n\n"
+                    "格式要求（直接输出 Markdown，不要加「以下是」等前缀）：\n"
+                    "## 重点关注\n\n[Top SQL 和等待事件的深度分析]\n\n## 优化建议\n\n"
+                    "1. [建议1]\n2. [建议2]\n...\n\n## 整体评价\n\n[一句话整体评价]"
+                )
             prompt = f"""你是一位拥有20年经验的 {db_type_name} 数据库资深DBA，擅长数据库性能分析及优化，对 {db_type_name} 的配置参数体系特别熟悉。你的诊断需要结合官方文档及下方提供的 RAG 参考文档，充分考虑当前数据库版本特性，给出适合当前版本的专业建议（例如：在 MySQL 8.0 中 expire_logs_days 已被弃用，应建议使用 binlog_expire_logs_seconds 替代）。以下是对 {db_type_name} 数据库「{label}」的全面巡检结果，请进行深度诊断。
 
 {sep}
@@ -1518,35 +1554,44 @@ class AIAdvisor:
 【三、参考文档（RAG 知识库）】
 {rag_context if rag_context else '  （未加载任何参考文档）'}
 {sep}
-【四、诊断要求】
-{sep}
-请基于以上巡检数据，给出 4~6 条专业优化建议，要求：
-1. **版本适配**：严格根据【关键指标】中的数据库版本号，确保所有建议的参数名、SQL 语法、功能特性均适用于当前版本。若某参数在当前版本已弃用（Deprecated），必须推荐该版本的正确替代方案，并明确说明替代原因。
-2. **优先分析【等待事件 Top5】**:识别主要等待类型（如 db file sequential read、log file sync、buffer busy waits 等），给出具体优化方向
-3. **如存在【阻塞会话】**:分析阻塞原因（锁竞争、热块更新等）并给出解决思路
-4. **针对【Top SQL】**:评估是否存在全表扫描、大量磁盘读等问题，给出优化建议
-5. **结合【关键指标】和【风险项】综合判断**:给出整体健康评价
-6. **参数调优建议**：涉及配置参数调整时，必须给出参数在当前版本中的确切名称、推荐值范围及生效方式（动态/需重启）
-7. **引用依据**：若【参考文档】中有相关内容，请在建议中标注"（参考文档）"；若无参考文档，基于你的专业知识给出建议
-8. 每条建议必须包含：问题定位 → 原因分析 → 具体修复方案（或参数调整参考值）
-9. 最后给出该数据库的整体健康评价（优秀/良好/一般/危险）及主要关注点
-
-格式要求（直接输出 Markdown，不要加"以下是"等前缀）：
-## 重点关注
-
-[Top SQL 和等待事件的深度分析]
-
-## 优化建议
-
-1. [建议1]
-2. [建议2]
-...
-
-## 整体评价
-
-[一句话整体评价]"""
+{tail}"""
         else:
-            prompt = f"""You are a senior DBA with 20 years of experience specializing in the {db_type_name.upper()} database, expert in performance analysis, optimization, and deep knowledge of configuration parameters. Your diagnosis must reference official documentation and the RAG knowledge base provided below, fully consider the current database version, and provide version-appropriate recommendations (e.g., in MySQL 8.0, expire_logs_days is deprecated; recommend binlog_expire_logs_seconds instead). Below is the comprehensive inspection report for the {db_type.upper()} database "{label}". Please provide an in-depth diagnosis.
+            db_type_name = db_type.upper()
+            if mode == 'diagnosis':
+                tail = (
+                    f"{sep}\n[IV. Diagnosis Requirements]\n{sep}\n"
+                    "Based on the inspection data above, **locate the root cause (Root Cause)** "
+                    "and provide a diagnosis conclusion (this mode focuses on root cause; "
+                    "optimization recommendations are provided by the 'advice' mode). Requirements:\n"
+                    "1. **Problem Identification**: clearly state which metrics/risk items are abnormal and how.\n"
+                    "2. **Root Cause Inference**: combine version, wait events, blocked sessions, Top SQL "
+                    "to infer the most likely root cause with a reasoning chain.\n"
+                    "3. **Impact Analysis**: assess the business/performance impact and severity.\n"
+                    "4. **Evidence citation**: if [Reference Documents] contain relevant info, mark with '(see reference docs)'.\n"
+                    "5. Provide an overall health rating (Excellent/Good/Fair/Critical) and main concerns.\n\n"
+                    "Format requirement (output Markdown directly, no prefixes):\n"
+                    "## Root Cause Diagnosis\n\n[issue -> root cause -> impact]\n\n## Overall Assessment\n\n[one-sentence assessment]"
+                )
+            else:
+                tail = (
+                    f"{sep}\n[IV. Diagnosis Requirements]\n{sep}\n"
+                    "Based on the inspection data above, provide 4~6 professional optimization recommendations:\n"
+                    "1. **Version compatibility**: Strictly base all recommendations on the database version "
+                    "from [Key Health Metrics]. If a parameter is deprecated, recommend the correct replacement and explain why.\n"
+                    "2. Prioritize analysis of [Top 5 Wait Events]: identify major wait types and provide optimization directions.\n"
+                    "3. If [Blocked Sessions] exist: analyze the cause and propose solutions.\n"
+                    "4. For [Top SQL]: evaluate full table scans, high disk reads, etc., and provide optimization recommendations.\n"
+                    "5. Combine [Key Metrics] and [Risk Items] for an overall health assessment.\n"
+                    "6. **Parameter tuning**: specify the exact parameter name, recommended value range, and how it takes effect (dynamic/restart).\n"
+                    "7. **Reference citations**: mark recommendations with '(see reference docs)' when relevant.\n"
+                    "8. Each recommendation must include: Problem Identification -> Cause Analysis -> Specific Fix.\n"
+                    "9. Provide an overall health rating (Excellent/Good/Fair/Critical) and main concerns.\n\n"
+                    "Format requirement (output Markdown directly, no prefixes like 'Here are'):\n"
+                    "## Key Concerns\n\n[In-depth analysis of Top SQL and wait events]\n\n"
+                    "## Optimization Recommendations\n\n1. [Recommendation 1]\n2. [Recommendation 2]\n...\n\n"
+                    "## Overall Assessment\n\n[One-sentence overall assessment]"
+                )
+            prompt = f"""You are a senior DBA with 20 years of experience specializing in the {db_type_name} database, expert in performance analysis, optimization, and deep knowledge of configuration parameters. Your diagnosis must reference official documentation and the RAG knowledge base provided below, fully consider the current database version, and provide version-appropriate recommendations (e.g., in MySQL 8.0, expire_logs_days is deprecated; recommend binlog_expire_logs_seconds instead). Below is the comprehensive inspection report for the {db_type.upper()} database "{label}". Please provide an in-depth diagnosis.
 
 {sep}
 [I. Key Health Metrics]
@@ -1564,37 +1609,11 @@ class AIAdvisor:
 [III. Reference Documents (RAG Knowledge Base)]
 {rag_context if rag_context else '  (No reference documents loaded)'}
 {sep}
-[IV. Diagnosis Requirements]
-{sep}
-Based on the inspection data above, provide 4~6 professional optimization recommendations:
-1. **Version compatibility**: Strictly base all recommendations on the database version from [Key Health Metrics]. Ensure all parameter names, SQL syntax, and features are applicable to the current version. If a parameter is deprecated in the current version, recommend the correct replacement and explain why.
-2. Prioritize analysis of [Top 5 Wait Events]: identify major wait types (e.g., db file sequential read, log file sync, buffer busy waits) and provide specific optimization directions.
-3. If [Blocked Sessions] exist: analyze the cause (lock contention, hot block updates, etc.) and propose solutions.
-4. For [Top SQL]: evaluate whether there are full table scans, high disk reads, etc., and provide optimization recommendations.
-5. Combine [Key Metrics] and [Risk Items] for an overall health assessment.
-6. **Parameter tuning**: When recommending configuration changes, specify the exact parameter name for the current version, recommended value range, and how it takes effect (dynamic/restart required).
-7. **Reference citations**: If [Reference Documents] contain relevant information, mark recommendations with "(see reference docs)"; otherwise base recommendations on your professional knowledge.
-8. Each recommendation must include: Problem Identification → Cause Analysis → Specific Fix (or parameter tuning reference).
-9. Provide an overall health rating (Excellent/Good/Fair/Critical) and main concerns.
-
-Format requirement (output Markdown directly, no prefixes like "Here are"):
-## Key Concerns
-
-[In-depth analysis of Top SQL and wait events]
-
-## Optimization Recommendations
-
-1. [Recommendation 1]
-2. [Recommendation 2]
-...
-
-## Overall Assessment
-
-[One-sentence overall assessment]"""
+{tail}"""
         return prompt
 
     def diagnose(self, db_type: str, label: str, context: dict, issues: list,
-                 timeout: int = 30, lang: str = 'zh') -> str:
+                 timeout: int = 30, lang: str = 'zh', mode: str = 'advice') -> str:
         """
         调用 AI 后端进行诊断分析。
 
@@ -1698,7 +1717,7 @@ Format requirement (output Markdown directly, no prefixes like "Here are"):
             except Exception:
                 pass  # RAG 失败不影响 AI 诊断主流程
 
-        prompt = self._build_prompt(db_type, label, metrics, issues, lang, rag_context)
+        prompt = self._build_prompt(db_type, label, metrics, issues, lang, rag_context, mode)
 
         try:
             if self.backend == 'ollama':
@@ -2306,6 +2325,22 @@ def smart_analyze_db2(context: dict) -> list:
     return plugin_issues
 
 
+def smart_analyze_clickhouse(context: dict) -> list:
+    """ClickHouse 智能风险分析：运行 clickhouse.yaml 内置规则（db_types=[clickhouse]）。
+
+    与 db2/oracle_jdbc/mongodb 一致，规则主体放在插件规则引擎
+    （pro/rules/builtin/clickhouse.yaml），此处仅负责调用 analyze_with_plugins
+    汇总规则命中项；任何异常均降级为空列表，保证巡检不中断。
+    """
+    try:
+        from pro.rule_engine import analyze_with_plugins
+        plugin_issues = analyze_with_plugins('clickhouse', context)
+    except Exception as e:
+        print(f"[WARN] smart_analyze_clickhouse plugin rules failed: {e}")
+        plugin_issues = []
+    return plugin_issues
+
+
 def smart_analyze_redis(context: dict) -> list:
     """Redis 单机智能风险分析：运行 redis.yaml 内置规则（db_types=[redis, redis-cluster]）。
 
@@ -2584,6 +2619,8 @@ def run_full_analysis(db_type: str, host: str, port, label: str,
         issues = smart_analyze_kingbase(context)
     elif db_type == 'db2':
         issues = smart_analyze_db2(context)
+    elif db_type == 'clickhouse':
+        issues = smart_analyze_clickhouse(context)
     else:
         issues = []  # 未知类型，返回空列表
 

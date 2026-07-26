@@ -2797,7 +2797,7 @@ def api_start_inspection():
                 'user':      instance.get('user', ''),
                 'tenant':    instance.get('tenant', '') or '',
                 'password':  instance.get('password', ''),
-                'database':  instance.get('database') or ('admin' if db_type == 'mongodb' else ('master' if db_type == 'sqlserver' else ('DAMENG' if db_type == 'dm' else ('testdb' if db_type == 'gbase' else ('' if db_type in ('tidb', 'oceanbase', 'mysql', 'mariadb', 'redis', 'redis-cluster') else 'postgres'))))),
+                'database':  instance.get('database') or ('admin' if db_type == 'mongodb' else ('master' if db_type == 'sqlserver' else ('DAMENG' if db_type == 'dm' else ('testdb' if db_type == 'gbase' else ('default' if db_type == 'clickhouse' else ('' if db_type in ('tidb', 'oceanbase', 'mysql', 'mariadb', 'redis', 'redis-cluster') else 'postgres')))))),
                 'service_name': instance.get('service_name', None),
                 'sysdba':    bool(instance.get('sysdba', False)),  # ← 新增（确保是布尔值）
                 'name':      instance.get('name', ''),
@@ -2820,7 +2820,7 @@ def api_start_inspection():
                 'user':      data.get('user', ''),
                 'tenant':    data.get('tenant', '') or '',
                 'password':  data.get('password', ''),
-                'database':  data.get('database') or ('admin' if db_type == 'mongodb' else ('master' if db_type == 'sqlserver' else ('DAMENG' if db_type == 'dm' else ('testdb' if db_type == 'gbase' else ('' if db_type in ('tidb', 'oceanbase', 'mysql', 'mariadb', 'redis', 'redis-cluster') else 'postgres'))))),
+                'database':  data.get('database') or ('admin' if db_type == 'mongodb' else ('master' if db_type == 'sqlserver' else ('DAMENG' if db_type == 'dm' else ('testdb' if db_type == 'gbase' else ('default' if db_type == 'clickhouse' else ('' if db_type in ('tidb', 'oceanbase', 'mysql', 'mariadb', 'redis', 'redis-cluster') else 'postgres')))))),
                 'service_name': data.get('service_name', None),
                 'sysdba':    bool(data.get('sysdba', False)),  # ← 新增（确保是布尔值）
                 'sid':       data.get('sid', None),
@@ -5662,9 +5662,56 @@ def api_ds_databases(ds_id):
                 if not databases:
                     databases = [inst.get('database') or 'admin']
             except Exception:
-                databases = [inst.get('database') or 'admin']
-            finally:
+                # 连接失败：不再静默伪装成 admin（否则用户以为可连，
+                # 点进 objects 才暴露连接被拒），直接交由外层返回真实错误
                 client.close()
+                raise
+            client.close()
+        elif db_type == 'clickhouse':
+            from plugins.available.clickhouse_jdbc.main_plugin import get_connection
+            conn = get_connection(host, int(port), user, pwd, database='default')
+            try:
+                cur = conn.cursor()
+                cur.execute("SHOW DATABASES")
+                databases = [r[0] for r in cur.fetchall()]
+                cur.close()
+            finally:
+                conn.close()
+        elif db_type == 'redis':
+            import redis
+            _kw = dict(
+                host=host,
+                port=int(port) or 6379,
+                password=pwd or None,
+                socket_timeout=10,
+                socket_connect_timeout=10,
+                decode_responses=True,
+                encoding_errors='replace',
+                protocol=2,
+            )
+            if user:
+                _kw['username'] = user
+            r = redis.Redis(**_kw)
+            try:
+                r.ping()
+                try:
+                    _count = int((r.config_get('databases') or {}).get('databases', 16))
+                except Exception:
+                    _count = 16
+                databases = []
+                for i in range(_count):
+                    try:
+                        _c = redis.Redis(**_kw)
+                        _c.select(i)
+                        if _c.dbsize() > 0:
+                            databases.append(str(i))
+                        _c.close()
+                    except Exception:
+                        pass
+                if not databases:
+                    databases = [str(inst.get('database') or 0)]
+            finally:
+                r.close()
         else:
             return jsonify({'error': f'暂不支持该数据库类型: {db_type}'}), 400
 
@@ -5926,6 +5973,58 @@ def api_ds_objects(ds_id):
                     views = []
             finally:
                 client.close()
+        elif db_type == 'clickhouse':
+            from plugins.available.clickhouse_jdbc.main_plugin import get_connection
+            _db_safe = str(database).replace("'", "''")
+            conn = get_connection(host, int(port), user, pwd, database=database or 'default')
+            try:
+                cur = conn.cursor()
+                cur.execute(
+                    f"SELECT name, engine FROM system.tables "
+                    f"WHERE database = '{_db_safe}' ORDER BY name"
+                )
+                for name, engine in cur.fetchall():
+                    if 'View' in (engine or ''):
+                        views.append(name)
+                    else:
+                        tables.append(name)
+                cur.close()
+            finally:
+                conn.close()
+        elif db_type == 'redis':
+            import redis
+            _db_idx = int(database) if str(database).isdigit() else int(inst.get('database') or 0)
+            _kw = dict(
+                host=host,
+                port=int(port) or 6379,
+                password=pwd or None,
+                db=_db_idx,
+                socket_timeout=10,
+                socket_connect_timeout=10,
+                decode_responses=True,
+                encoding_errors='replace',
+                protocol=2,
+            )
+            if user:
+                _kw['username'] = user
+            r = redis.Redis(**_kw)
+            try:
+                r.ping()
+                _seen = 0
+                _limit = 500
+                _cursor = 0
+                while _seen < _limit:
+                    _cursor, _keys = r.scan(cursor=_cursor, count=200)
+                    for _k in _keys:
+                        if _seen >= _limit:
+                            break
+                        tables.append(_k)
+                        _seen += 1
+                    if _cursor == 0:
+                        break
+                views = []
+            finally:
+                r.close()
         else:
             return jsonify({'error': f'暂不支持该数据库类型: {db_type}'}), 400
 
@@ -6111,6 +6210,16 @@ def api_execute_sql():
             from plugins.available.db2_jdbc.main_plugin import get_connection
             db_name = database or 'testdb'
             conn = get_connection(host, port, user, pwd, database=db_name)
+            cursor = conn.cursor()
+            cursor.execute(sql)
+            columns = [desc[0] for desc in cursor.description] if cursor.description else []
+            rows = cursor.fetchmany(200)
+            has_more = len(rows) >= 200
+
+        elif db_type == 'clickhouse':
+            from plugins.available.clickhouse_jdbc.main_plugin import get_connection
+            db_name = database or 'default'
+            conn = get_connection(host, int(port), user, pwd, database=db_name)
             cursor = conn.cursor()
             cursor.execute(sql)
             columns = [desc[0] for desc in cursor.description] if cursor.description else []
@@ -6861,6 +6970,23 @@ def api_inspection_execute_sql():
                 db_info.get('host', ''), db_info.get('port'),
                 db_info.get('user', ''), db_info.get('password', ''),
                 database=db_info.get('database', ''))
+            cursor = conn.cursor()
+            statements = _split_sql(sql)
+            total_affected = 0
+            for stmt in statements:
+                cursor.execute(stmt)
+                total_affected += cursor.rowcount
+            conn.commit()
+            affected = total_affected
+            cursor.close()
+            conn.close()
+
+        elif db_type == 'clickhouse':
+            from plugins.available.clickhouse_jdbc.main_plugin import get_connection
+            conn = get_connection(
+                db_info.get('host', ''), db_info.get('port'),
+                db_info.get('user', ''), db_info.get('password', ''),
+                database=db_info.get('database', '') or 'default')
             cursor = conn.cursor()
             statements = _split_sql(sql)
             total_affected = 0

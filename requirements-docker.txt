@@ -29,6 +29,10 @@ paramiko>=2.10.0
 # ── Batch Inspection & Data Processing ─────────────────────────────────────
 openpyxl>=3.0.0
 
+# ── RAG & Document Processing ─────────────────────────────────────────────
+numpy>=1.21.0           # rag/vector_store.py 向量检索（import numpy）
+beautifulsoup4>=4.12.0  # rag/document_processor.py（from bs4 import BeautifulSoup）
+
 # ── PDF Export ──────────────────────────────────────────────────────────────
 reportlab>=4.0.0
 

@@ -353,11 +353,11 @@ def _parse_iso(iso_str):
 
 
 def _default_port(db_type):
-    return {'mysql': 3306, 'mariadb': 3306, 'pg': 5432, 'oracle': 1521, 'oracle_jdbc': 1521, 'dm': 5236, 'sqlserver': 1433, 'tidb': 4000, 'ivorysql': 5432, 'yashandb': 1688, 'kingbase': 54321, 'gbase': 5258, 'oceanbase': 2881}.get(db_type, 3306)
+    return {'mysql': 3306, 'mariadb': 3306, 'pg': 5432, 'oracle': 1521, 'oracle_jdbc': 1521, 'dm': 5236, 'sqlserver': 1433, 'tidb': 4000, 'ivorysql': 5432, 'yashandb': 1688, 'kingbase': 54321, 'gbase': 5258, 'oceanbase': 2881, 'clickhouse': 8123}.get(db_type, 3306)
 
 
 def _default_user(db_type):
-    return {'mysql': 'root', 'mariadb': 'root', 'pg': 'postgres', 'oracle': 'system', 'oracle_jdbc': 'system', 'dm': 'SYSDBA', 'sqlserver': 'sa', 'tidb': 'root', 'ivorysql': 'postgres', 'yashandb': 'sys', 'kingbase': 'kingbase', 'gbase': 'gbasedbt', 'oceanbase': 'root'}.get(db_type, 'root')
+    return {'mysql': 'root', 'mariadb': 'root', 'pg': 'postgres', 'oracle': 'system', 'oracle_jdbc': 'system', 'dm': 'SYSDBA', 'sqlserver': 'sa', 'tidb': 'root', 'ivorysql': 'postgres', 'yashandb': 'sys', 'kingbase': 'kingbase', 'gbase': 'gbasedbt', 'oceanbase': 'root', 'clickhouse': 'default'}.get(db_type, 'root')
 
 
 # ── 查询任务状态 ──────────────────────────────────────────────
