@@ -11,7 +11,7 @@ DBCheck 专业版是一款商业、跨平台的数据库自动化健康巡检工
 > Language: [English](./README.md) | 语言：[中文](./README_zh.md)
 
 [![Version](https://img.shields.io/badge/版本-v26.7.24.0-blue.svg)]()
-[![License](https://img.shields.io/badge/License-Proprietary-red.svg)]()
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)]()
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)]()
 [![AI](https://img.shields.io/badge/AI-Ollama+OpenAI-orange.svg)]()
 [![RAG](https://img.shields.io/badge/知识库增强-RAG-red.svg)]()

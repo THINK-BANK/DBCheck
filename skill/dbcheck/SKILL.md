@@ -1,7 +1,7 @@
 ---
 name: dbcheck
 description: 执行 MySQL、PostgreSQL、Oracle、SQL Server、DM8、TiDB、IvorySQL、GBase 8s、YashanDB、KingbaseES 数据库健康巡检，内置 130+ 条增强风险分析规则，一键生成专业 Word 巡检报告。适用于 DBA 和运维人员快速掌握数据库运行状况、排查风险。项目地址：https://github.com/fiyo/DBCheck
-license: MIT
+license: Apache-2.0
 metadata:
   {
     "openclaw":

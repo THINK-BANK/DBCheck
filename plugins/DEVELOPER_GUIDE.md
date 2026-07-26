@@ -26,7 +26,7 @@ my-plugin/
     "email": "you@example.com",
     "url": "https://github.com/you"
   },
-  "license": "MIT",
+  "license": "Apache-2.0",
   "keywords": ["oracle", "asm"],
   "categories": ["inspection"],
   "dbcheck": {
@@ -116,7 +116,7 @@ register(MyChecker())
      "keywords": ["oracle"],
      "db_types": ["oracle"],
      "min_dbcheck_version": "2.5.0",
-     "license": "MIT",
+     "license": "Apache-2.0",
      "verified": false
    }
    ```

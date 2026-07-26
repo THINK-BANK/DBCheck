@@ -1946,7 +1946,7 @@ KO.update({
     "tidb_slow_query_analyzing": "느린 쿼리 심층 분석 진행 중...",
     "tidb_slow_query_ok": "느린 쿼리 심층 분석 완료, 수집 {count} 상위 SQL",
     "tidb_slow_query_unavailable": "느린 쿼리 데이터 없음, 심층 분석 건너뛰기",
-    "webui.about_author": "저자: Jack Ge · 사유 소프트웨어 라이선스(Proprietary) · 공식 사이트: dbcheck.top",
+    "webui.about_author": "저자: Jack Ge · Apache License 2.0 · 공식 사이트: dbcheck.top",
     "webui.about_desc": "DBCheck는 MySQL, PostgreSQL, Oracle, SQL Server, 다몽(DM), TiDB, IvorySQL, YashanDB 등 주요 데이터베이스의 건강 점검과 AI 진단을 지원하는 오픈소스 데이터베이스 스마트 점검 도구입니다.",
     "webui.about_grayscale_note": "매년 <strong>5월 19일부터 5월 21일까지</strong>, DBCheck 인터페이스는 강제로 <strong>그레이스케일 모드</strong>로 표시되며 사용자는 테마를 전환할 수 없습니다.<br/><br/>이 설계를 존중하고 그레이스케일 모드를 수정하거나 우회하려 하지 마세요.",
     "webui.action": "작업",

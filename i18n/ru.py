@@ -1946,7 +1946,7 @@ RU.update({
     "tidb_slow_query_analyzing": "Выполняется медленный углубленный анализ запросов...",
     "tidb_slow_query_ok": "Углубленный анализ медленного запроса выполнен, собран {count} Верхний SQL",
     "tidb_slow_query_unavailable": "Никаких медленных данных запроса, пропустите углубленный анализ",
-    "webui.about_author": "Автор: Jack Ge · проприетарная лицензия (Proprietary) · сайт: dbcheck.top",
+    "webui.about_author": "Автор: Jack Ge · Apache License 2.0 · сайт: dbcheck.top",
     "webui.about_desc": "DBCheck — это открытый инструмент интеллектуальной проверки баз данных, поддерживающий проверку здоровья и ИИ-диагностику основных СУБД: MySQL, PostgreSQL, Oracle, SQL Server, DM (Dameng), TiDB, IvorySQL, YashanDB.",
     "webui.about_grayscale_note": "Каждый год с <strong>19 по 21 мая</strong> интерфейс DBCheck принудительно отображается в <strong>режиме оттенков серого</strong>, и пользователь не может переключить тему.<br/><br/>Пожалуйста, уважайте этот дизайн и не пытайтесь изменить или обойти режим оттенков серого.",
     "webui.action": "Действие",

@@ -2733,7 +2733,7 @@ EN = {
     # ── About Page ──
     "webui.nav_about": "About DBCheck",
     "webui.about_desc": "DBCheck is an open-source intelligent database inspection tool that supports health inspection and AI diagnostics for MySQL, PostgreSQL, Oracle, SQL Server, DM, TiDB, IvorySQL and other mainstream databases.",
-    "webui.about_author": "Author: Jack Ge · License: MIT · Website: dbcheck.top",
+    "webui.about_author": "Author: Jack Ge · Apache License 2.0 · Website: dbcheck.top",
     "webui.about_grayscale_note": "Every year from <strong>May 19 to May 21</strong>, the DBCheck interface will be forced to <strong>grayscale mode</strong> and users cannot switch themes.<br/><br/>Please respect this design and do not attempt to modify or bypass the grayscale mode.",
 
     # PG High-priority check items (2026-05-21)

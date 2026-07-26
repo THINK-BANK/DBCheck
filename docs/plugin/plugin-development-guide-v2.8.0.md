@@ -247,7 +247,7 @@ cd mongodb
   "db_type": "mongodb",
   "main_file": "main_plugin.py",
   "author": "DBCheck Team",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "dependencies": {
     "python": ["pymongo>=4.0"]
   },
@@ -894,7 +894,7 @@ cd mysql_innodb_cluster
   "extends_db_type": "mysql",
   "main_file": "main_plugin.py",
   "author": "DBCheck Team",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "dependencies": {
     "plugins": ["mysql"]
   },

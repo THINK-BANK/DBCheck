@@ -1969,7 +1969,7 @@ ZH_TW = { 'baseline.add': '添加基綫配置',
   'tidb_slow_query_analyzing': '正在進行慢查詢深度分析...',
   'tidb_slow_query_ok': '慢查詢深度分析完成，采集到 {count} 條 Top SQL',
   'tidb_slow_query_unavailable': '無慢查詢數據，跳過深度分析',
-  'webui.about_author': '作者：Jack Ge · 專有軟件許可（Proprietary）· 官網：dbcheck.top',
+  'webui.about_author': '作者：Jack Ge · Apache License 2.0 · 官網：dbcheck.top',
   'webui.about_desc': 'DBCheck 是一款開源數據庫智能巡檢工具，支持 MySQL、PostgreSQL、Oracle、SQL Server、達夢（DM）、TiDB、IvorySQL、YashanDB '
                       '等主流數據庫的健康巡檢與 AI 診斷。',
   'webui.about_grayscale_note': '每年 <strong>5月19日至5月21日</strong>，DBCheck '

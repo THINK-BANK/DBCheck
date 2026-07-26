@@ -1946,7 +1946,7 @@ JA.update({
     "tidb_slow_query_analyzing": "進行中の遅いクエリの詳細な分析...",
     "tidb_slow_query_ok": "スロー クエリの詳細分析が完了し、{count} 項目が収集されました。上位 SQL",
     "tidb_slow_query_unavailable": "遅いクエリ データはありません、詳細な分析はスキップします",
-    "webui.about_author": "著者: Jack Ge · プロプライエタリ · 公式ウェブサイト: dbcheck.top",
+    "webui.about_author": "著者: Jack Ge · Apache License 2.0 · 公式ウェブサイト: dbcheck.top",
     "webui.about_desc": "DBCheck は、MySQL、PostgreSQL、Oracle、SQL Server、DM、TiDB、IvorySQL、YashanDB などの主流データベースの健全性検査と AI 診断をサポートするオープンソース データベース インテリジェント検査ツールです。",
     "webui.about_grayscale_note": "毎年<strong>5月19日から5月21 日</strong>まで、DBCheck インターフェースは強制的に<strong>グレースケール モード</strong>で表示され、ユーザーはテーマを切り替えることができなくなります。 <br/><br/>この設計を尊重し、グレースケール モードを変更したりバイパスしたりしないでください。",
     "webui.action": "操作",

@@ -67,4 +67,4 @@ If you believe this skill was incorrectly flagged, please contact the author:
 - GitHub: https://github.com/Zhh9126/MySQLDBCHECK
 - ClawHub: fiyo
 
-This skill is MIT-licensed, fully open-source, and performs only what it claims to do.
+This skill is Apache-2.0 licensed, fully open-source, and performs only what it claims to do.

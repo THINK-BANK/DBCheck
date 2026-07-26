@@ -1946,7 +1946,7 @@ DE.update({
     "tidb_slow_query_analyzing": "Langsame Abfrage, eingehende Analyse läuft...",
     "tidb_slow_query_ok": "Langsame Abfrage-Tiefenanalyse abgeschlossen, gesammelt {count} Top SQL",
     "tidb_slow_query_unavailable": "Keine langsamen Abfragedaten, Tiefenanalyse überspringen",
-    "webui.about_author": "Autor: Jack Ge · Proprietäre Softwarelizenz (Proprietary) · Offizielle Website: dbcheck.top",
+    "webui.about_author": "Autor: Jack Ge · Apache License 2.0 · Offizielle Website: dbcheck.top",
     "webui.about_desc": "DBCheck ist ein Open-Source-Smart-Datenbank-Inspektionswerkzeug, das die Gesundheitsinspektion und KI-Diagnose führender Datenbanken wie MySQL, PostgreSQL, Oracle, SQL Server, Dameng (DM), TiDB, IvorySQL und YashanDB unterstützt.",
     "webui.about_grayscale_note": "Jeden Mai vom <strong>19. bis 21. Mai</strong> wird die DBCheck-Oberfläche zwingend im <strong>Graustufenmodus</strong> angezeigt und Benutzer können das Theme nicht wechseln.<br/><br/>Bitte respektieren Sie dieses Design und versuchen Sie nicht, den Graustufenmodus zu ändern oder zu umgehen.",
     "webui.action": "Aktion",

@@ -123,7 +123,7 @@ my-dbcheck-plugin/
   },
   "icon": "static/icon.png",
   "homepage": "https://github.com/fiyo/dbcheck-plugin-asm-health",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "keywords": ["oracle", "asm", "storage"],
   "categories": ["inspection"],
   "dbcheck": {
@@ -503,7 +503,7 @@ class OracleInspector:
       "category": "inspection",
       "db_types": ["oracle"],
       "min_dbcheck_version": "2.5.0",
-      "license": "MIT",
+      "license": "Apache-2.0",
       "downloads": 1280,
       "rating": 4.8,
       "reviews": 23,

@@ -10,7 +10,7 @@
     "url": "https://github.com/fiyo"
   },
   "homepage": "https://github.com/fiyo/dbcheck-plugins/tree/main/plugins/dbcheck-charset-audit",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "keywords": ["charset", "encoding", "collation", "utf8", "compatibility", "official"],
   "categories": ["inspection"],
   "dbcheck": {

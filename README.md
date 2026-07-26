@@ -11,7 +11,7 @@ DBCheck Professional is a commercial, cross-platform database health inspection 
 > Language: [English](./README.md) | 语言：[中文](./README_zh.md)
 
 [![Version](https://img.shields.io/badge/Version-v26.7.24.0-blue.svg)]()
-[![License](https://img.shields.io/badge/License-Proprietary-red.svg)]()
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)]()
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)]()
 [![AI](https://img.shields.io/badge/AI-Ollama+OpenAI-orange.svg)]()
 [![RAG](https://img.shields.io/badge/RAG-Knowledge_Base-red.svg)]()
