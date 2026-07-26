@@ -122,7 +122,7 @@ python web_ui.py         # Web interface
 | Feature | Description |
 |---------|-------------|
 | 🗄️ Data Source Manager | Unified management of all database instances, with grouping, batch inspection, CSV import/export |
-| 📋 Database Inspection | 17 database types covered, 160+ enhanced rules, auto-generates Word reports |
+| 📋 Database Inspection | 17 database types covered, 300+ inspection rules, auto-generates Word reports |
 | 🔌 Plugin System | Extensible plugin architecture with lifecycle management (install/uninstall), independent plugin data, plugin marketplace |
 | 🔍 Deep Slow Query Analysis | Correlates execution plans, I/O patterns, lock waits; AI-assisted root cause analysis |
 | 🔒 Lock Diagnostics | Blocking chain visualization, deadlock stats, long transaction detection, with executable fix scripts |
