@@ -1,4 +1,8 @@
 # -*- coding: utf-8 -*-
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2025-2026 fiyo (Jack Ge) <sdfiyon@gmail.com>
+# Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
+
 """TiDB 单库巡检过滤测试（与 MySQL/MariaDB 行为一致）。
 
 TiDB 复用 MySQL 协议，但其 index_stats / unused_indexes 使用

@@ -1,4 +1,8 @@
 # -*- coding: utf-8 -*-
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2025-2026 fiyo (Jack Ge) <sdfiyon@gmail.com>
+# Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
+
 """getData() 连接失败时应抛出真实错误（回归测试，对应 Bug 修复）。
 
 历史 Bug：三个巡检模块的 getData() 在 inspector.connect() 失败时，把

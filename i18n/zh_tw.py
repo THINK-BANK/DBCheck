@@ -1,4 +1,8 @@
 # -*- coding: utf-8 -*-
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2025-2026 fiyo (Jack Ge) <sdfiyon@gmail.com>
+# Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
+
 """繁體中文翻譯字典（由簡體 zh.py 經 hanziconv 繁化生成，待人工校對）"""
 
 ZH_TW = { 'baseline.add': '添加基綫配置',

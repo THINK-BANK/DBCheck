@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2025-2026 fiyo (Jack Ge) <sdfiyon@gmail.com>
+# Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
+
 """
 Oracle JDBC 插件 - 通过 JPype + JDBC 驱动连接 Oracle 数据库
 支持 Oracle 11g/12c/19c/21c+

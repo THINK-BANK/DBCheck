@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2025-2026 fiyo (Jack Ge) <sdfiyon@gmail.com>
+# Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
+
 """容灾备份调度器生命周期管理。
 
 在 DBCheck 启动时拉起 autobackup 的 Scheduler（croniter + 守护线程），

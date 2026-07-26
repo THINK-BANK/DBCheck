@@ -1,4 +1,8 @@
 # -*- coding: utf-8 -*-
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2025-2026 fiyo (Jack Ge) <sdfiyon@gmail.com>
+# Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
+
 """MySQL / MariaDB 单库巡检 SQL 过滤（scope_mysql_schema）测试。
 
 覆盖三类注入形态（information_schema.TABLES / mysql.db / performance_schema

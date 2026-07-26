@@ -1,5 +1,14 @@
-DBCheck Third-Party Notices
-============================
+DBCheck
+Copyright 2025-2026 fiyo (Jack Ge) <sdfiyon@gmail.com>
+Project: https://github.com/fiyo/DBCheck
+Website: https://dbcheck.top
+Email: sdfiyon@gmail.com
+Licensed under the Apache License, Version 2.0.
+This product includes original authorship and branding of fiyo (Jack Ge).
+
+==============================================================================
+Third-Party Notices
+==============================================================================
 
 This product bundles the following third-party open-source component:
 
@@ -36,3 +45,11 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+==============================================================================
+Redistribution / Derivative Works Notice
+==============================================================================
+
+Any redistribution or derivative work (including works modified using AI tools)
+must retain this NOTICE file and all copyright headers and attribution notices
+(including the author email sdfiyon@gmail.com) present in the source files.

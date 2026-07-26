@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2025-2026 fiyo (Jack Ge) <sdfiyon@gmail.com>
+# Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
+
 """容灾备份模块（基于 autobackup 引擎，in-process 集成）。
 
 autobackup 以 vendored 单文件形式存在于 vendor/autobackup.py，

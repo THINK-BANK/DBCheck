@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2025-2026 fiyo (Jack Ge) <sdfiyon@gmail.com>
+# Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
+
 """容灾备份 REST 接口（Blueprint: disaster_recovery, url_prefix=/api/dr）。
 
 接口契约（供前端 index.html 调用）：
