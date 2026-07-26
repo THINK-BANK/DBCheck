@@ -2,7 +2,7 @@
 
 ![logo](snapshot/dbcheck_logo_info.png)
 
-DBCheck 专业版是一款商业、跨平台的数据库自动化健康巡检工具，支持 **17 种数据库类型**（关系型 / 文档型 / KV 缓存），通过执行预定义的巡检 SQL 并采集系统资源，自动生成标准化的 Word 巡检报告。同时提供 SQL 编辑器、远程终端、可配置巡检章节、配置基线管理、历史趋势分析、AI 智能诊断、索引健康分析、慢查询深度分析、服务器巡检、分享链接、数据脱敏导出等高级功能。
+DBCheck 专业版是一款商业、跨平台的数据库自动化健康巡检工具，支持 **18 种数据库类型**（关系型 / 文档型 / KV 缓存），通过执行预定义的巡检 SQL 并采集系统资源，自动生成标准化的 Word 巡检报告。同时提供 SQL 编辑器、远程终端、可配置巡检章节、配置基线管理、历史趋势分析、AI 智能诊断、索引健康分析、慢查询深度分析、服务器巡检、分享链接、数据脱敏导出等高级功能。
 
 > **注意**：本文及 DBCheck 软件中包含第三方的软件名称、logo、商标、徽章等均为第三方公司或机构所有，本文以及 DBCheck 软件中展示仅表示本软件支持对接相应的数据库或平台，并不暗示与其有任何关联或合作。
 
@@ -10,7 +10,7 @@ DBCheck 专业版是一款商业、跨平台的数据库自动化健康巡检工
 > 
 > Language: [English](./README.md) | 语言：[中文](./README_zh.md)
 
-[![Version](https://img.shields.io/badge/版本-v26.7.24.0-blue.svg)]()
+[![Version](https://img.shields.io/badge/版本-v26.7.26.1-blue.svg)]()
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)]()
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)]()
 [![AI](https://img.shields.io/badge/AI-Ollama+OpenAI-orange.svg)]()
@@ -45,6 +45,7 @@ DBCheck 专业版是一款商业、跨平台的数据库自动化健康巡检工
 | OceanBase（MySQL 租户） | pymysql（MySQL 协议） | 2881 | 4.x+；兼容 MySQL；Oracle 租户预留 |
 | Redis | redis-py | 6379 | KV 缓存，3.0+（6.0+ 支持 ACL） |
 | Redis 集群 | redis-py（RedisCluster） | 6379 | 16384 槽位，种子节点自动发现 |
+| ClickHouse | clickhouse-jdbc（JPype1 + clickhouse-jdbc 驱动） | 8123 | 列式 OLAP，21.8+（单机/集群） |
 
 > **说明**：Oracle (JDBC) 是基于 JDBC (JPype) 连接的独立插件，提供与 Oracle 原生驱动相同的巡检能力，适合无法安装 Oracle 客户端的场景。
 
@@ -121,7 +122,7 @@ python web_ui.py         # Web 界面
 | 功能 | 说明 |
 |------|------|
 | 🗄️ 数据源管理 | 统一管理所有数据库实例，支持分组、批量巡检、CSV 导入导出 |
-| 📋 数据库巡检 | 覆盖 17 种数据库，300+ 条巡检规则，自动生成 Word 报告 |
+| 📋 数据库巡检 | 覆盖 18 种数据库，300+ 条巡检规则，自动生成 Word 报告 |
 | 🔌 插件系统 | 可扩展插件架构，支持生命周期管理（安装/卸载）、插件数据独立、插件市场 |
 | 🔍 慢查询深度分析 | 关联执行计划、I/O 模式、锁等待等维度，AI 辅助根因分析 |
 | 🔒 锁诊断 | 阻塞链可视化、死锁统计、长事务检测，含可执行修复脚本 |
@@ -359,6 +360,7 @@ Redis **3.0+** 通过两个独立插件提供支持——`redis`（单机）与 
 | OceanBase | 复用 MySQL 35+ + OB 专有 12 | 租户、参数、复制、资源、安全 |
 | Redis | 12 | 安全、内存、连接、持久化、复制、性能 |
 | Redis 集群 | 17 | 单机 12 + 集群 5（槽位 / 节点 / 故障转移） |
+| ClickHouse | 15 | 复制、内存、part/合并、慢查询、配置、磁盘 |
 
 ### 一键修复
 
@@ -390,7 +392,7 @@ python web_ui.py                # 启动后在 AI 设置页面配置
 
 ### SQL 编辑器
 
-Web UI 内置交互式 SQL 编辑器，支持全部 17 种数据库，语法高亮、结果表格、错误友好提示。
+Web UI 内置交互式 SQL 编辑器，支持全部 18 种数据库，语法高亮、结果表格、错误友好提示。
 
 ### 首页实时监控
 
@@ -441,8 +443,9 @@ Web UI 可视化编辑各库关键参数的推荐值、阈值和合规规则。�
 - KingbaseES：7 项参数（连接、缓冲、vacuum 等）
 - GBase 8s：9 项参数（MAXCONNECTIONS、SHMVIRTSIZE、BUFFERS、LOGSMAX 等）
 - MongoDB：8 项参数（最大连接数、缓存大小、复制集等）
+- ClickHouse：9 项参数（max_memory_usage、max_server_memory_usage、max_concurrent_queries、background_pool_size、max_execution_time、max_rows_to_read、max_insert_block_size、max_partitions_per_insert_block、background_merges_mutations_concurrency_ratio）
 
-以上为各库动态推荐参数示例；结合默认合规规则，全量基线配置参数共 260+ 项。
+以上为各库动态推荐参数示例；结合默认合规规则，全量基线配置参数共 260+ 项（新增 ClickHouse 9 项）。
 
 ### 巡检章节管理
 

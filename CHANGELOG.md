@@ -1,5 +1,9 @@
 # Changelog
 
+## v26.7.26.1 (2026-07-26)
+- **版本统一**：各源文件版本标记 v26.7.24.0 → v26.7.26.1（version.py / version.json / Dockerfile / README + README_zh 章节 / CHANGELOG 条目）；官网（website 分支）同步更新至 v26.7.26.1。
+- **新增 ClickHouse 巡检支持**：新增 `plugins/available/clickhouse_jdbc` 巡检插件（JPype1 + clickhouse-jdbc 驱动，默认端口 8123），覆盖库/表/对象查询与 SQL 在线执行；新增 `pro/rules/builtin/clickhouse.yaml`（15 条风险规则）与基线配置（9 项参数），复用 `pro.rule_engine` 智能风险分析，支持一键修复 SQL；SQL 编辑器支持 ClickHouse 语法高亮与执行。数据库类型 17 → 18，巡检规则 300+（含 ClickHouse 15 条）。
+
 ## v26.7.24.0 (2026-07-24)
 - **版本号统一**：各源文件版本标识 v26.7.21.1 → v26.7.24.0（version.py / version.json / Dockerfile / skill `dbcheck` `_meta` + `_skillhub_meta` + `scripts/version.py` / README + README_zh 徽章 / CHANGELOG 顶段）
 - **新增 Redis 单机与集群巡检**：新增 `plugins/available/redis` 与 `redis-cluster` 巡检插件（采集 11+ 章节、集群 seed-node 自动发现、规则引擎 `redis.yaml`/`redis-cluster.yaml`、智能分析 + AI 诊断接入），详见公众号文章《DBCheck v26.7.24.0：新增 Redis 单机与集群巡检，KV 版图正式补齐》

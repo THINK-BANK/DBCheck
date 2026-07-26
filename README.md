@@ -2,7 +2,7 @@
 
 ![logo](snapshot/dbcheck_logo_info.png)
 
-DBCheck Professional is a commercial, cross-platform database health inspection tool supporting **17 database types** (relational / document / KV cache). It automatically generates standardized Word inspection reports by executing predefined SQL checks and collecting system resources. Advanced features include a SQL editor, remote terminal, configurable inspection chapters, configuration baseline management, historical trend analysis, AI-powered smart diagnostics, index health analysis, in-depth slow query analysis, server inspection, shareable links, and masked data export.
+DBCheck Professional is a commercial, cross-platform database health inspection tool supporting **18 database types** (relational / document / KV cache). It automatically generates standardized Word inspection reports by executing predefined SQL checks and collecting system resources. Advanced features include a SQL editor, remote terminal, configurable inspection chapters, configuration baseline management, historical trend analysis, AI-powered smart diagnostics, index health analysis, in-depth slow query analysis, server inspection, shareable links, and masked data export.
 
 > **Note:** The software names, logos, trademarks, badges, etc. of third parties contained in this article and DBCheck software are the property of the third-party companies or organizations. The display of these items in this article and DBCheck software only indicates that the software supports connection to the corresponding database or platform, and does not imply any affiliation or cooperation with them.
 
@@ -10,7 +10,7 @@ DBCheck Professional is a commercial, cross-platform database health inspection 
 > 
 > Language: [English](./README.md) | 语言：[中文](./README_zh.md)
 
-[![Version](https://img.shields.io/badge/Version-v26.7.24.0-blue.svg)]()
+[![Version](https://img.shields.io/badge/Version-v26.7.26.1-blue.svg)]()
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)]()
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)]()
 [![AI](https://img.shields.io/badge/AI-Ollama+OpenAI-orange.svg)]()
@@ -45,6 +45,7 @@ DBCheck Professional is a commercial, cross-platform database health inspection 
 | OceanBase (MySQL tenant) | pymysql (MySQL protocol) | 2881 | 4.x+; MySQL-compatible; Oracle tenant reserved |
 | Redis | redis-py | 6379 | KV cache, 3.0+ (ACL from 6.0) |
 | Redis Cluster | redis-py (RedisCluster) | 6379 | 16384 slots, seed-node auto-discovery |
+| ClickHouse | clickhouse-jdbc (JPype1 + clickhouse-jdbc) | 8123 | Columnar OLAP, 21.8+ (single node / cluster) |
 
 > **Note:** Oracle (JDBC) 是基于 JDBC (JPype) 连接的独立插件，提供与 Oracle 原生驱动相同的巡检能力，适合无法安装 Oracle 客户端的场景。
 
@@ -122,7 +123,7 @@ python web_ui.py         # Web interface
 | Feature | Description |
 |---------|-------------|
 | 🗄️ Data Source Manager | Unified management of all database instances, with grouping, batch inspection, CSV import/export |
-| 📋 Database Inspection | 17 database types covered, 300+ inspection rules, auto-generates Word reports |
+| 📋 Database Inspection | 18 database types covered, 300+ inspection rules, auto-generates Word reports |
 | 🔌 Plugin System | Extensible plugin architecture with lifecycle management (install/uninstall), independent plugin data, plugin marketplace |
 | 🔍 Deep Slow Query Analysis | Correlates execution plans, I/O patterns, lock waits; AI-assisted root cause analysis |
 | 🔒 Lock Diagnostics | Blocking chain visualization, deadlock stats, long transaction detection, with executable fix scripts |
@@ -357,6 +358,7 @@ Automatically detects potential risks across all database types. **Each risk ite
 | OceanBase | 复用 MySQL 35+ + OB 12 | Tenant, params, replication, resources, security |
 | Redis | 12 | Security, memory, connections, persistence, replication, performance |
 | Redis Cluster | 17 | 12 single-node + 5 cluster (slots / nodes / failover) |
+| ClickHouse | 15 | Replication, memory, parts/merges, slow queries, config, disk |
 
 ### One-Click Fix
 
@@ -388,7 +390,7 @@ python web_ui.py                # Configure in AI Settings page after launching
 
 ### SQL Editor
 
-Built-in interactive SQL editor in Web UI, supporting all 17 database types with syntax highlighting, result tables, and friendly error messages.
+Built-in interactive SQL editor in Web UI, supporting all 18 database types with syntax highlighting, result tables, and friendly error messages.
 
 ### Homepage Live Monitoring
 
@@ -443,6 +445,7 @@ Web UI visual editor for recommended values, thresholds, and compliance rules fo
 - KingbaseES: 7 parameters (connections, buffers, vacuum, etc.)
 - GBase 8s: 9 parameters (MAXCONNECTIONS, SHMVIRTSIZE, BUFFERS, LOGSMAX, etc.)
 - MongoDB: 8 parameters (max connections, cache size, replication, etc.)
+- ClickHouse: 9 parameters (max_memory_usage, max_server_memory_usage, max_concurrent_queries, background_pool_size, max_execution_time, max_rows_to_read, max_insert_block_size, max_partitions_per_insert_block, background_merges_mutations_concurrency_ratio)
 
 ### Inspection Chapter Management
 
