@@ -2611,7 +2611,7 @@ ZI = {
     "webui.scheduler_db_name": "数据库名",
 
     # ── 其他 ──
-    "webui.pro_license_free": "专有软件 · 需授权激活",
+    "webui.pro_license_free": "Apache License 2.0 · 开源免费版",
     "webui.ds_manual_input": "-- 手动输入连接信息 --",
     "webui.scheduler_job_name": "任务名称",
     "webui.placeholder_job_name": "任务名称（用于报告命名）",
@@ -2762,7 +2762,7 @@ ZI = {
     "webui.nav_about": "关于 DBCheck",
     "webui.about_desc": "DBCheck 是一款开源数据库智能巡检工具，支持 MySQL、PostgreSQL、Oracle、SQL Server、达梦（DM）、TiDB、IvorySQL、YashanDB 等主流数据库的健康巡检与 AI 诊断。",
     "webui.about_author": "作者：Jack Ge · Apache License 2.0 · 官网：dbcheck.top",
-    "webui.about_grayscale_note": "每年 <strong>5月19日至5月21日</strong>，DBCheck 界面将强制以<strong>灰度模式</strong>显示，且用户无法切换主题。<br/><br/>请尊重这一设计，不要尝试修改或绕过灰度模式。",
+    "webui.about_grayscale_note": "纪念日灰度模式是 DBCheck 的原创设计，已写入上方开源协议。请勿修改或绕过该模式。",
 
     # PG 高优先级检查项（2026-05-21 新增）
     "report.pg_issue_tablespace_large": "表空间过大",

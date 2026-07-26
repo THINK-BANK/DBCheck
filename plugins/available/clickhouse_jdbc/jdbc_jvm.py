@@ -1,12 +1,8 @@
 # -*- coding: utf-8 -*-
 # SPDX-License-Identifier: Apache-2.0
-#
-# Copyright (c) 2025-2026 fiyo (Jack Ge) <sdfiyon@gmail.com>
-#
-# This file is part of DBCheck, an open-source database health inspection tool.
-# DBCheck Professional — 专有商业软件，保留一切权利（Proprietary Software, All Rights Reserved）.
-# See LICENSE for full license text.
-#
+# Copyright 2025-2026 fiyo (Jack Ge) <sdfiyon@gmail.com>
+# Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
+
 """ClickHouse JDBC 共享 JVM 管理模块（单例）。
 
 职责（与 db2_jdbc 同款，仅驱动注册函数改为 ClickHouse）：

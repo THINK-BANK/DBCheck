@@ -60,6 +60,10 @@ EXCLUDED_DIR_COMPONENTS = {
     "copyright_registration",
     "pro_data",
     "data",
+    # Throwaway local test/probe dirs (never committed; keep the checker clean).
+    ".acceptance_tmp",
+    ".pytest_tmp",
+    "_qa_tmp",
 }
 
 # Path fragments (forward-slash normalised) that mark vendored / bundled code

@@ -276,9 +276,9 @@ def _inject_grayscale(response):
 def _verify_agreement_integrity():
     import hashlib, base64, re, os, json, datetime
     _H = {
-        "529f397bf4e575409a55973abb5241995bdc68d1b92ddab675353aebc1113211",
-        "99ba9245b30f43d72c29f6b4ab6b108f0b3849394e2c884a3b8ef93762dd120e",
-        "3196cf07f6d8379855d0884ab440afb56d8f5aa0a0e18e82390d9c62f073b0af",
+        "68414d8168619c5d5c315a94ea6efd16c64935efe9a76b7ba169f7baa3b32457",
+        "79d7de3fc9ba834dc69b76513f0f62bf0fa4a5e3491b28f363590a9cf49683fa",
+        "aed50ad76e3761e55641c6cb973397d1acc3db01cbb4989886385415ff7dfe84",
     }
     _KEY = "x9K#pL2mQvR7tBnW"
     _C = "mqPrzMjDEoX80Lem/q3SzZ6ay8XFx9fl4VYWdTcqCzQTGaK69Km4zbT73d/a7Irv1d7Rp5PMvorr3LeIwaT58p+4+8bK6tTF8JPuuJfC47HlmK2PzqSQxrXJ/NHg+4jf7t7smJnVlo7R9LqYw6fe3ZG+xsb+09bQzZ7SspPY6r/Wh6ON0aiN8Lbjy9jIzojL1N/Es5foiInq87aK6KrD8Z+d8czMwNrQ/pLpgZD547L3lq2O06mK1bnJwt/Vzo3X+g=="

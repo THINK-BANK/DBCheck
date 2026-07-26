@@ -5645,7 +5645,7 @@ function formatBytes(bytes) {
               <span style="font-size:24px;" id="pro-edition-icon">🏠</span>
               <div>
                 <div style="font-weight:500;" id="pro-edition-name" data-i18n="webui.pro_edition_name">社区版</div>
-                <div style="font-size:12px;color:var(--text-muted);" id="pro-license-detail" data-i18n="webui.pro_license_free">专有软件 · 需授权激活</div>
+                <div style="font-size:12px;color:var(--text-muted);" id="pro-license-detail" data-i18n="webui.pro_license_free">Apache License 2.0 · 开源免费版</div>
               </div>
             </div>
           </div>
@@ -7305,6 +7305,11 @@ function applyI18N() {
     } else {
       el.textContent = i18n(key);
     }
+  });
+  // 应用含 HTML 的 i18n 文本（如灰度说明，保留内部 <strong>/<br> 标签，不转义）
+  document.querySelectorAll('[data-i18n-html]').forEach(el => {
+    const key = el.getAttribute('data-i18n-html');
+    if (key) el.innerHTML = i18n(key);
   });
   // 应用 data-i18n-title 属性的元素（翻译 title 提示）
   document.querySelectorAll('[data-i18n-title]').forEach(el => {
@@ -17507,6 +17512,12 @@ async function deleteBackupHistory(recordId) {
   .about-agreement-text {
     margin:0;font-size:12.5px;line-height:1.8;color:var(--text-muted);
   }
+  .about-grayscale-note {
+    background:rgba(120,120,120,0.08);border:1px solid var(--border);
+    border-left:3px solid #8a8a8a;border-radius:10px;
+    padding:10px 14px;margin-top:14px;font-size:12px;line-height:1.7;color:var(--text-muted);
+  }
+  .about-grayscale-note strong { color:var(--text); }
   .about-footer {
     text-align:center;padding:0 32px 20px;
     font-size:11px;color:var(--text-muted);opacity:0.6;
@@ -17794,12 +17805,13 @@ async function deleteBackupHistory(recordId) {
         <span class="about-db-chip"><img src="/oceanbase.png" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='inline'" style="width:16px;height:16px;object-fit:contain"><span class="db-emoji" style="display:none;">🐋</span> OceanBase <span style="font-size:10px;background:#4caf50;color:#fff;padding:1px 5px;border-radius:3px;font-weight:600">MySQL</span></span>
       </div>
 
-      <!-- 商业授权协议（Base64 encoded to prevent static search） -->
+      <!-- Apache License 2.0 开源协议（Base64 encoded to prevent static search） -->
       <div class="about-agreement" id="agreement-container">
         <div class="about-agreement-title" id="agreement-title"></div>
         <div class="about-agreement-text" id="agreement-zh" lang="zh"></div>
         <div class="about-agreement-text" id="agreement-en" lang="en" style="display:none;"></div>
       </div>
+      <div class="about-grayscale-note" data-i18n-html="webui.about_grayscale_note"></div>
     </div>
     <!-- Footer -->
     <div class="about-footer">
@@ -17831,13 +17843,13 @@ document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') closeAboutModal();
 });
 
-// ─── 商业授权协议内容解密 ───
+// ─── Apache License 2.0 开源协议内容解密 ───
 (function(){
   try {
     var _a=[
-      "5LiT5pyJ6L2v5Lu2IMK3IOWVhuS4muaOiOadg++8iFByb3ByaWV0YXJ5IFNvZnR3YXJlIMK3IENvbW1lcmNpYWwgTGljZW5zZe+8iQ==",
-      "5pys6L2v5Lu25Li6PHN0cm9uZz7kuJPmnInllYbkuJrova/ku7Y8L3N0cm9uZz7vvIzniYjmnYPlvZIgZml5b++8iEphY2sgR2XvvInmiYDmnInvvIzkv53nlZnkuIDliIfmnYPliKnjgII8YnIvPuacque7j+iRl+S9nOadg+S6uuS5pumdouaOiOadg++8jOS7u+S9leS6uuS4jeW+l+WkjeWItuOAgeS/ruaUueOAgeWPjee8luivkeOAgeWPjeaxh+e8luOAgeWIhuWPkeOAgeWHuuenn+OAgei9rOiuuOWPr+aIlueUqOS6juS7u+S9leWVhuS4muWGjeWIhuWPkeOAgjxici8+5q+P5bm0IDxzdHJvbmc+NeaciDE55pel6IezNeaciDIx5pelPC9zdHJvbmc+77yM55WM6Z2i5bCG5by65Yi25LulPHN0cm9uZz7ngbDluqbmqKHlvI88L3N0cm9uZz7mmL7npLrkuJTml6Dms5XliIfmjaLkuLvpopjvvIzor7flsIrph43ov5nkuIDorr7orqHjgII=",
-      "VGhpcyBzb2Z0d2FyZSBpcyBhIDxzdHJvbmc+cHJvcHJpZXRhcnkgY29tbWVyY2lhbCBwcm9kdWN0PC9zdHJvbmc+IG93bmVkIGJ5IGZpeW8gKEphY2sgR2UpLiBBbGwgcmlnaHRzIHJlc2VydmVkLjxici8+Tm8gY29weWluZywgbW9kaWZpY2F0aW9uLCBkZWNvbXBpbGluZywgZGlzYXNzZW1ibHksIGRpc3RyaWJ1dGlvbiwgc3VibGljZW5zaW5nLCBvciBjb21tZXJjaWFsIHJlZGlzdHJpYnV0aW9uIGlzIHBlcm1pdHRlZCB3aXRob3V0IHByaW9yIHdyaXR0ZW4gYXV0aG9yaXphdGlvbi48YnIvPkV2ZXJ5IHllYXIgZnJvbSA8c3Ryb25nPk1heSAxOSB0byBNYXkgMjE8L3N0cm9uZz4sIHRoZSBpbnRlcmZhY2UgaXMgZm9yY2VkIGludG8gPHN0cm9uZz5ncmF5c2NhbGUgbW9kZTwvc3Ryb25nPiBhbmQgdGhlbWUgc3dpdGNoaW5nIGlzIGRpc2FibGVkOyBwbGVhc2UgcmVzcGVjdCB0aGlzIGRlc2lnbi4="
+      "5byA5rqQ6L2v5Lu2IMK3IEFwYWNoZSBMaWNlbnNlIDIuMA==",
+      "5pys6L2v5Lu25Li65byA5rqQ6L2v5Lu277yM6YeH55SoIEFwYWNoZSBMaWNlbnNlIDIuMCDorrjlj6/or4HjgILmgqjlj6/oh6rnlLHkvb/nlKjjgIHkv67mlLnjgIHliIblj5HvvIzkvYbpobvkv53nlZnljp/lp4vniYjmnYPlo7DmmI7lj4rorrjlj6/or4Hlia/mnKzjgILor6bop4EgPGEgaHJlZj0iaHR0cHM6Ly93d3cuYXBhY2hlLm9yZy9saWNlbnNlcy9MSUNFTlNFLTIuMCIgdGFyZ2V0PSJfYmxhbmsiPkFwYWNoZSBMaWNlbnNlIDIuMDwvYT7jgILmr4/lubQgPHN0cm9uZz415pyIMTnml6Xoh7M15pyIMjHml6U8L3N0cm9uZz7vvIznlYzpnaLlsIblvLrliLbku6XngbDluqbmqKHlvI/mmL7npLrkuJTml6Dms5XliIfmjaLkuLvpopjjgILor7flsIrph43ov5nkuIDorr7orqHjgII=",
+      "VGhpcyBzb2Z0d2FyZSBpcyBvcGVuIHNvdXJjZSBzb2Z0d2FyZSBsaWNlbnNlZCB1bmRlciB0aGUgQXBhY2hlIExpY2Vuc2UgMi4wLiBZb3UgbWF5IHVzZSwgbW9kaWZ5LCBhbmQgZGlzdHJpYnV0ZSBpdCBmcmVlbHksIHByb3ZpZGVkIHRoYXQgeW91IHJldGFpbiB0aGUgb3JpZ2luYWwgY29weXJpZ2h0IG5vdGljZSBhbmQgYSBjb3B5IG9mIHRoZSBsaWNlbnNlLiBTZWUgPGEgaHJlZj0iaHR0cHM6Ly93d3cuYXBhY2hlLm9yZy9saWNlbnNlcy9MSUNFTlNFLTIuMCIgdGFyZ2V0PSJfYmxhbmsiPkFwYWNoZSBMaWNlbnNlIDIuMDwvYT4gZm9yIGRldGFpbHMuIEV2ZXJ5IHllYXIgZnJvbSA8c3Ryb25nPk1heSAxOSB0byBNYXkgMjE8L3N0cm9uZz4sIHRoZSBpbnRlcmZhY2UgaXMgZm9yY2VkIGludG8gZ3JheXNjYWxlIG1vZGUgYW5kIHRoZW1lIHN3aXRjaGluZyBpcyBkaXNhYmxlZDsgcGxlYXNlIHJlc3BlY3QgdGhpcyBkZXNpZ24u"
     ];
     var _d=function(s){var b=atob(s);var l=b.length;var a=new Uint8Array(l);for(var i=0;i<l;i++)a[i]=b.charCodeAt(i);return new TextDecoder('utf-8').decode(a);};
     var t=document.getElementById('agreement-title');
