@@ -48,7 +48,7 @@ DBCheck Professional is a commercial, cross-platform database health inspection 
 | Redis Cluster | redis-py (RedisCluster) | 6379 | 16384 slots, seed-node auto-discovery |
 | ClickHouse | clickhouse-jdbc (JPype1 + clickhouse-jdbc) | 8123 | Columnar OLAP, 21.8+ (single node / cluster) |
 
-> **Note:** Oracle (JDBC) 是基于 JDBC (JPype) 连接的独立插件，提供与 Oracle 原生驱动相同的巡检能力，适合无法安装 Oracle 客户端的场景。
+> **Note:** Oracle (JDBC) is an independent plugin based on JDBC (JPype) connections, providing the same inspection capabilities as Oracle native drivers, suitable for scenarios where Oracle clients cannot be installed.
 
 ---
 
