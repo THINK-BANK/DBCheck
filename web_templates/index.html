@@ -2826,7 +2826,131 @@ async function executeFixSql(taskId, sql) {
             border: 1px solid var(--border);
         }
         .intel-finding-avatar svg { width: 15px; height: 15px; stroke: var(--accent2); fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-        </style>
+        
+/* 首页统计大数字 + 实例分布环形图 */
+.stat-card-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 18px 8px;
+  min-height: 120px;
+}
+.stat-num { font-size: 34px; font-weight: 700; line-height: 1.1; }
+.stat-sub { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
+.db-type-donut {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  box-sizing: border-box;
+}
+.db-type-fallback {
+  flex: 1;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 13px;
+  text-align: center;
+}
+/* 左侧自定义 HTML 图例：支持自动换行（可多排），与右侧圆环严格分栏，互不重叠 */
+.db-type-legend {
+  flex: 0 0 42%;
+  max-width: 150px;
+  min-width: 96px;
+  align-self: stretch;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: center;
+  gap: 6px 10px;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.legend-dot {
+  flex: 0 0 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.legend-name {
+  color: #c9d1d9;
+}
+.legend-value {
+  margin-left: 2px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+/* 右侧纯圆环容器：占满剩余宽度并撑满高度，数字/圆环只在自身区域内居中 */
+.db-type-chart {
+  flex: 1;
+  min-width: 0;
+  align-self: stretch;
+  height: 100%;
+}
+
+/* 首页底部四张统计卡片：紧凑 + 数字渐变（作用域限定 #home-charts-grid，避免影响首页上方其它 .overview-card） */
+#home-charts-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+#home-charts-grid .overview-card {
+  padding: 10px 12px;
+  min-height: 0;
+}
+#home-charts-grid .overview-card .card-header {
+  margin-bottom: 8px;
+  gap: 8px;
+}
+#home-charts-grid .overview-card .card-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  font-size: 15px;
+}
+#home-charts-grid .overview-card .card-title {
+  font-size: 13px;
+}
+#home-charts-grid .overview-card .card-subtitle {
+  font-size: 10px;
+}
+#home-charts-grid .stat-card-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 0 0 0;
+  min-height: 0;
+}
+#home-charts-grid .stat-num {
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  background: linear-gradient(135deg, var(--text) 0%, var(--accent2) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+#home-charts-grid .stat-sub {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: var(--surface);
+  padding: 3px 8px;
+  border-radius: 10px;
+  margin-top: 0;
+  white-space: nowrap;
+}
+</style>
 
   <link rel="stylesheet" href="/static/codemirror/lib/codemirror.css">
   <link rel="stylesheet" href="/static/codemirror/theme/dracula.css">
@@ -3133,6 +3257,447 @@ async function showRagPage() {
   loadRagDocuments().catch(e => console.error('loadRagDocuments failed', e));
   checkEmbeddingStatus().catch(e => console.error('checkEmbeddingStatus failed', e));
 }
+
+// ─── 协同诊断中枢（智能诊断中心） ───────────────────────────────
+// 各专员角色匹配的 SVG（viewBox 0 0 24 24，线条随主题色）
+const INTEL_SPEC_SVG = {
+  monitor_sentinel: '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/><path d="M18.5 6.5a2.5 2.5 0 0 1 0 4"/></svg>',
+  inspection_expert: '<svg viewBox="0 0 24 24"><circle cx="10" cy="9" r="3.6"/><path d="M4.5 20c0-3.3 2.5-6 5.5-6s5.5 2.7 5.5 6"/><circle cx="16.5" cy="15.5" r="3"/><path d="M19 18l2.5 2.5"/></svg>',
+  rootcause_expert: '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/><circle cx="15.5" cy="15.5" r="2.2"/><path d="M15.5 12.5v6M12.5 15.5h6"/></svg>',
+  sql_governance: '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/><path d="M9.5 14l-2 2 2 2M14.5 14l2 2-2 2"/></svg>',
+  lock_analyst: '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/><path d="M15 13.5v-1.5a2.5 2.5 0 0 0-5 0v1.5"/><rect x="10" y="13.5" width="4" height="3.2" rx="1"/></svg>'
+};
+function intelSpecSvg(id) {
+  return INTEL_SPEC_SVG[id] || '<svg viewBox="0 0 24 24"><circle cx="7" cy="7" r="2.4"/><circle cx="17" cy="7" r="2.4"/><circle cx="12" cy="17" r="2.4"/><path d="M8.5 8.5 11 15M15.5 8.5 13 15M9 7h6"/></svg>';
+}
+
+async function loadIntelligencePage() {
+  const runBtn = document.getElementById('intel-run');
+  if (runBtn && !runBtn.dataset.bound) {
+    runBtn.dataset.bound = '1';
+    runBtn.addEventListener('click', runIntelligenceDiagnosis);
+  }
+  const ctBtn = document.getElementById('intel-create-ticket');
+  if (ctBtn && !ctBtn.dataset.bound) {
+    ctBtn.dataset.bound = '1';
+    ctBtn.addEventListener('click', createIntelligenceTicket);
+  }
+  loadIntelligenceCapabilities().catch(e => console.error('intelligence capabilities failed', e));
+  loadIntelligenceInstances().catch(e => console.error('intelligence instances failed', e));
+}
+
+async function loadIntelligenceCapabilities() {
+  const g = document.getElementById('intel-cap-grid');
+  const c = document.getElementById('intel-cap-count');
+  if (!g) return;
+  try {
+    const res = await fetch('/api/intelligence/capabilities');
+    const d = await res.json();
+    const caps = (d.capabilities || []);
+    if (c) c.textContent = caps.length;
+    window.__intelCaps = caps;
+    g.innerHTML = caps.map(cap => {
+      const tags = (cap.tags || []).map(t => `<span style="display:inline-block;background:rgba(56,139,253,.15);color:var(--accent2);font-size:11px;border-radius:6px;padding:1px 7px;margin:6px 4px 0 0">${escHtml(t)}</span>`).join('');
+      return `<div class="intel-cap" id="cap-${escHtml(cap.id)}" data-cap-id="${escHtml(cap.id)}">
+        <span class="cap-scan"></span>
+        <span class="cap-state" data-role="state">待命</span>
+        <div style="display:flex;align-items:flex-start;gap:11px">
+          <div class="cap-avatar">${intelSpecSvg(cap.id)}</div>
+          <div style="min-width:0">
+            <div style="font-weight:600;font-size:13.5px">${escHtml(cap.name || '')}</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:3px;line-height:1.5">${escHtml(cap.description || '')}</div>
+            <div>${tags}</div>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) { console.error('loadIntelligenceCapabilities failed', e); }
+}
+
+// 重置所有能力卡片状态
+function intelResetCapStates() {
+  document.querySelectorAll('#intel-cap-grid .intel-cap').forEach(el => {
+    el.classList.remove('is-working', 'is-done', 'is-waiting');
+    const st = el.querySelector('[data-role="state"]');
+    if (st) st.textContent = '待命';
+  });
+}
+function intelSetCapState(id, state) {
+  const el = document.getElementById('cap-' + id);
+  if (!el) return;
+  el.classList.remove('is-working', 'is-done', 'is-waiting');
+  const st = el.querySelector('[data-role="state"]');
+  if (state === 'working') { el.classList.add('is-working'); if (st) st.textContent = '工作中…'; el.scrollIntoView({block:'nearest', behavior:'smooth'}); }
+  else if (state === 'done') { el.classList.add('is-done'); if (st) st.textContent = '已完成'; }
+  else if (state === 'waiting') { el.classList.add('is-waiting'); if (st) st.textContent = '待命'; }
+}
+
+async function loadIntelligenceInstances() {
+  const sel = document.getElementById('intel-instance');
+  const noDs = document.getElementById('intel-no-ds');
+  if (!sel) return;
+  try {
+    const res = await fetch('/api/pro/datasources');
+    const data = await res.json();
+    const list = (data.ok && data.datasources) ? data.datasources : [];
+    sel.innerHTML = '<option value="" disabled selected>' + (i18n('intelligence.select_placeholder') || '请选择目标数据源') + '</option>';
+    if (list.length === 0) {
+      if (noDs) noDs.style.display = 'block';
+      return;
+    }
+    if (noDs) noDs.style.display = 'none';
+    const dbIcons = {mysql:'🐬',pg:'🐘',oracle:'🔴',oracle_jdbc:'🔴',dm:'🟡',sqlserver:'🟠',tidb:'🟢',ivorysql:'🐘',kingbase:'🐘',gbase:'🟢'};
+    list.forEach(ds => {
+      const icon = dbIcons[ds.db_type] || '🗄️';
+      const label = icon + ' ' + (ds.name || (ds.host + ':' + ds.port)) + ' · ' + (ds.db_type || '');
+      const opt = document.createElement('option');
+      opt.value = ds.id;
+      opt.textContent = label;
+      sel.appendChild(opt);
+    });
+  } catch(e) { console.error('loadIntelligenceInstances failed', e); }
+}
+
+function intelSetProgress(index, total, label) {
+  const wrap = document.getElementById('intel-progress-wrap');
+  const bar = document.getElementById('intel-progress-bar');
+  const cnt = document.getElementById('intel-progress-count');
+  const lbl = document.getElementById('intel-progress-label');
+  if (wrap) wrap.classList.add('on');
+  if (bar && total > 0) bar.style.width = Math.round((index / total) * 100) + '%';
+  if (cnt) cnt.textContent = index + ' / ' + total;
+  if (lbl && label) lbl.textContent = label;
+}
+
+function runIntelligenceDiagnosis() {
+  const sel = document.getElementById('intel-instance');
+  const goal = document.getElementById('intel-goal');
+  const id = sel ? sel.value : '';
+  if (!id) { toastError(i18n('intelligence.select_instance') || '请选择目标数据源'); return; }
+  const g = goal ? goal.value.trim() : '';
+  const running = document.getElementById('intel-running');
+  const runBtn = document.getElementById('intel-run');
+  if (running) running.style.display = 'inline';
+  if (runBtn) runBtn.disabled = true;
+
+  // 重置能力卡片与进度
+  intelResetCapStates();
+  document.querySelectorAll('#intel-cap-grid .intel-cap').forEach(el => intelSetCapState(el.dataset.capId, 'waiting'));
+  intelSetProgress(0, (window.__intelCaps || []).length || 0, i18n('intelligence.running') || '协同诊断进行中…');
+
+  const finish = () => { if (running) running.style.display = 'none'; if (runBtn) runBtn.disabled = false; };
+  const fail = (msg) => {
+    finish();
+    const wrap = document.getElementById('intel-progress-wrap');
+    if (wrap) wrap.classList.remove('on');
+    toastError(msg);
+  };
+
+  let total = 0, gotResult = false;
+  let es;
+  try {
+    es = new EventSource(`/api/intelligence/diagnose/stream?instance_id=${encodeURIComponent(id)}&goal=${encodeURIComponent(g)}`);
+  } catch(e) {
+    return runIntelligenceDiagnosisFallback(id, g, finish, fail);
+  }
+
+  es.onmessage = (ev) => {
+    let evt;
+    try { evt = JSON.parse(ev.data); } catch(_) { return; }
+    if (evt.type === 'sequence') {
+      total = evt.total || 0;
+      intelSetProgress(0, total, i18n('intelligence.running') || '协同诊断进行中…');
+    } else if (evt.type === 'progress') {
+      total = evt.total || total; // 若后端中途扩充专员，同步最新总数
+      if (evt.phase === 'start') {
+        intelSetCapState(evt.current, 'working');
+        intelSetProgress(evt.index - 1, total, (evt.name || '') + ' 正在分析…');
+      } else if (evt.phase === 'done') {
+        intelSetCapState(evt.current, 'done');
+        intelSetProgress(evt.index, total, (evt.name || '') + ' 已完成');
+      }
+    } else if (evt.type === 'result') {
+      gotResult = true;
+      const d = Object.assign({ ok: true }, evt.result || {});
+      window.__intelLastResult = d;
+      window.__intelCurrentInstance = id;
+      intelSetProgress(total, total, i18n('intelligence.done') || '诊断完成');
+      renderIntelligenceResult(d);
+      loadIntelligenceTickets(id);
+      setTimeout(() => { const w = document.getElementById('intel-progress-wrap'); if (w) w.classList.remove('on'); }, 1200);
+      es.close();
+      finish();
+    } else if (evt.type === 'error') {
+      es.close();
+      fail(evt.msg || 'error');
+    }
+  };
+  es.onerror = () => {
+    es.close();
+    if (gotResult) { finish(); return; }
+    // 流式不可用时回退到一次性接口
+    runIntelligenceDiagnosisFallback(id, g, finish, fail);
+  };
+}
+
+async function runIntelligenceDiagnosisFallback(id, g, finish, fail) {
+  try {
+    const res = await fetch(`/api/intelligence/diagnose?instance_id=${encodeURIComponent(id)}&goal=${encodeURIComponent(g)}`);
+    const d = await res.json();
+    if (!d.ok) { fail(d.msg || 'error'); return; }
+    document.querySelectorAll('#intel-cap-grid .intel-cap').forEach(el => intelSetCapState(el.dataset.capId, 'done'));
+    window.__intelLastResult = d;
+    window.__intelCurrentInstance = id;
+    renderIntelligenceResult(d);
+    loadIntelligenceTickets(id);
+    const w = document.getElementById('intel-progress-wrap'); if (w) w.classList.remove('on');
+    finish();
+  } catch(e) {
+    fail('请求失败：' + e.message);
+  }
+}
+
+function renderIntelligenceResult(d) {
+  const card = document.getElementById('intel-result-card');
+  if (card) card.style.display = 'block';
+  renderDiagResultInto(d, 'intel-findings', 'intel-plan', 'intel-plan-validation');
+  const notes = document.getElementById('intel-notes');
+  if (notes) {
+    const arr = Array.isArray(d.notes) ? d.notes : [];
+    const text = arr.map(n => typeof n === 'string' ? n : JSON.stringify(n)).join('；');
+    notes.textContent = text ? ('备注：' + text) : '';
+  }
+}
+
+function createIntelligenceTicket() {
+  const d = window.__intelLastResult;
+  const id = window.__intelCurrentInstance;
+  if (!d || !id) { toastError(i18n('intelligence.run_first') || '请先完成一次协同诊断'); return; }
+  const instName = (d.target_meta && d.target_meta.instance_name) || '';
+  const btn = document.getElementById('intel-create-ticket');
+  if (btn) btn.disabled = true;
+  fetch('/api/intelligence/ticket', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      instance_id: id,
+      instance_name: instName,
+      goal: d.goal || '',
+      findings: d.findings || [],
+      plan: d.plan || [],
+      plan_validation: d.plan_validation || {}
+    })
+  }).then(r => r.json()).then(r => {
+    if (!r.ok) { toastError(r.msg || '创建工单失败'); return; }
+    toastSuccess('工单 ' + (r.ticket && r.ticket.ticket_no || '') + ' 已创建');
+    loadIntelligenceTickets(id);
+  }).catch(e => toastError('创建失败：' + e.message)).finally(() => { if (btn) btn.disabled = false; });
+}
+
+function loadIntelligenceTickets(instanceId) {
+  const box = document.getElementById('intel-tickets');
+  if (!box || !instanceId) return;
+  fetch('/api/intelligence/tickets?instance_id=' + encodeURIComponent(instanceId))
+    .then(r => r.json())
+    .then(r => {
+      const list = (r.ok && r.tickets) ? r.tickets : [];
+      const statusMap = { open: '待处理', in_progress: '处理中', resolved: '已解决', closed: '已关闭' };
+      const sevMap = { critical: '严重', warning: '警告', info: '提示' };
+      const sevColor = { critical: 'var(--danger)', warning: 'var(--warn)', info: 'var(--info)' };
+      if (!list.length) {
+        box.innerHTML = '<div style="font-size:12px;color:var(--text-muted)" data-i18n="intelligence.no_ticket">暂无工单，可点击「生成处置工单」将本次诊断转为待办。</div>';
+        return;
+      }
+      box.innerHTML = list.map(tk => {
+        const fb = (tk.feedback || []).map(f =>
+          `<div style="font-size:11.5px;color:var(--text-muted);margin-top:3px">· ${escHtml(f.note || '')} <span style="opacity:.7">(${escHtml(f.time || '')}${f.status ? ' · ' + (statusMap[f.status] || f.status) : ''})</span></div>`
+        ).join('');
+        const opts = ['open', 'in_progress', 'resolved', 'closed'].map(s =>
+          `<option value="${s}" ${s === tk.status ? 'selected' : ''}>${statusMap[s] || s}</option>`).join('');
+        return `<div style="border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin:10px 0;background:var(--surface2)">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="font-weight:600">${escHtml(tk.ticket_no || '')}</span>
+            <span style="font-size:11px;padding:1px 8px;border-radius:6px;background:rgba(56,139,253,.15);color:var(--accent2)">${statusMap[tk.status] || tk.status}</span>
+            <span style="font-size:11px;padding:1px 8px;border-radius:6px;color:${sevColor[tk.severity] || 'var(--text-muted)'}">${sevMap[tk.severity] || tk.severity}</span>
+            <span style="font-size:11px;color:var(--text-muted)">${escHtml(tk.created_at || '')}</span>
+          </div>
+          <div style="font-size:12.5px;color:var(--text-muted);margin-top:4px">${escHtml(tk.instance_name || '')} · ${escHtml(tk.goal || '')}</div>
+          ${fb}
+          <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
+            <select class="form-input" style="width:auto;font-size:12px;padding:4px 8px" id="tk-status-${tk.id}">${opts}</select>
+            <input class="form-input" style="flex:1;min-width:150px;font-size:12px;padding:4px 8px" id="tk-note-${tk.id}" placeholder="${(i18n('intelligence.ticket_feedback') || '处理反馈（可选）')}" />
+            <button class="btn btn-ghost" style="font-size:12px;padding:4px 10px" onclick="updateIntelligenceTicket(${tk.id})" data-i18n="intelligence.ticket_update">更新</button>
+          </div>
+        </div>`;
+      }).join('');
+    })
+    .catch(e => { console.error('loadIntelligenceTickets failed', e); });
+}
+
+function updateIntelligenceTicket(id) {
+  const statusSel = document.getElementById('tk-status-' + id);
+  const noteEl = document.getElementById('tk-note-' + id);
+  const status = statusSel ? statusSel.value : '';
+  const note = noteEl ? noteEl.value.trim() : '';
+  fetch('/api/intelligence/ticket/' + id + '/update', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status: status || undefined, note: note || undefined })
+  }).then(r => r.json()).then(r => {
+    if (!r.ok) { toastError(r.msg || '更新失败'); return; }
+    toastSuccess(i18n('intelligence.ticket_updated') || '工单已更新');
+    loadIntelligenceTickets(window.__intelCurrentInstance);
+  }).catch(e => toastError('更新失败：' + e.message));
+}
+
+// ═══ 诊断历史 ═══
+async function loadDiagHistoryPage() {
+  // 填充数据源筛选下拉
+  const sel = document.getElementById('dh-instance');
+  if (sel && !sel.dataset.loaded) {
+    try {
+      const res = await fetch('/api/pro/datasources');
+      const data = await res.json();
+      const list = (data.ok && data.datasources) ? data.datasources : [];
+      const dbIcons = {mysql:'🐬',pg:'🐘',oracle:'🔴',oracle_jdbc:'🔴',dm:'🟡',sqlserver:'🟠',tidb:'🟢',ivorysql:'🐘',kingbase:'🐘',gbase:'🟢'};
+      list.forEach(ds => {
+        const opt = document.createElement('option');
+        opt.value = ds.id;
+        opt.textContent = (dbIcons[ds.db_type] || '🗄️') + ' ' + (ds.name || (ds.host + ':' + ds.port));
+        sel.appendChild(opt);
+      });
+      sel.dataset.loaded = '1';
+    } catch(e) { console.error('dh datasources failed', e); }
+  }
+  loadDiagHistory();
+}
+
+function loadDiagHistory() {
+  const sel = document.getElementById('dh-instance');
+  const box = document.getElementById('dh-list');
+  const cnt = document.getElementById('dh-count');
+  if (!box) return;
+  const iid = sel ? sel.value : '';
+  fetch('/api/intelligence/history' + (iid ? ('?instance_id=' + encodeURIComponent(iid)) : ''))
+    .then(r => r.json())
+    .then(r => {
+      const list = (r.ok && r.history) ? r.history : [];
+      if (cnt) cnt.textContent = list.length;
+      const sevMap = { critical: '严重', warning: '警告', info: '提示' };
+      const sevColor = { critical: 'var(--danger)', warning: 'var(--warn)', info: 'var(--info)' };
+      if (!list.length) {
+        box.innerHTML = '<div style="font-size:12px;color:var(--text-muted)" data-i18n="diag_history.empty">暂无诊断历史，先到「智能诊断中心」跑一次协同诊断。</div>';
+        return;
+      }
+      box.innerHTML = list.map(h => `
+        <div class="dh-item" data-id="${h.id}" onclick="viewDiagHistory(${h.id})" style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin:8px 0;background:var(--surface2);cursor:pointer;transition:border-color .2s">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="font-weight:600;font-size:12.5px">${escHtml(h.diag_no || ('#' + h.id))}</span>
+            <span style="font-size:11px;padding:1px 8px;border-radius:6px;color:${sevColor[h.severity] || 'var(--text-muted)'}">${sevMap[h.severity] || h.severity || ''}</span>
+          </div>
+          <div style="font-size:12px;color:var(--text);margin-top:4px">${escHtml(h.instance_name || h.instance_id || '')} · ${escHtml(h.db_type || '')}</div>
+          <div style="font-size:11.5px;color:var(--text-muted);margin-top:2px">${escHtml(h.goal || '协同诊断')}</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px">${escHtml(h.created_at || '')} · 发现 ${h.finding_count || 0} · 方案 ${h.plan_count || 0}</div>
+        </div>`).join('');
+    })
+    .catch(e => { console.error('loadDiagHistory failed', e); });
+}
+
+function viewDiagHistory(id) {
+  document.querySelectorAll('#dh-list .dh-item').forEach(el => {
+    el.style.borderColor = (String(el.dataset.id) === String(id)) ? 'var(--accent2)' : 'var(--border)';
+  });
+  fetch('/api/intelligence/history/' + id)
+    .then(r => r.json())
+    .then(r => {
+      if (!r.ok || !r.record) { toastError(r.msg || '记录不存在'); return; }
+      const rec = r.record;
+      const d = rec.result || {};
+      window.__dhCurrent = { id: rec.id, instance_id: rec.instance_id, instance_name: rec.instance_name, result: d };
+      document.getElementById('dh-detail-empty').style.display = 'none';
+      document.getElementById('dh-detail').style.display = 'block';
+      document.getElementById('dh-detail-meta').textContent =
+        (rec.diag_no || '') + ' · ' + (rec.instance_name || rec.instance_id || '') + ' · ' + (rec.db_type || '') + ' · ' + (rec.created_at || '');
+      renderDiagResultInto(d, 'dh-findings', 'dh-plan', 'dh-plan-validation');
+    })
+    .catch(e => toastError('加载失败：' + e.message));
+}
+
+// 通用诊断结果渲染（供实时诊断与历史详情复用）
+function renderDiagResultInto(d, findingsId, planId, pvId) {
+  const specMap = d.specialists || {};
+  const sevColor = { critical: 'var(--danger)', warning: 'var(--warn)', info: 'var(--info)', fatal: 'var(--danger)' };
+  const sevLabel = { critical: '严重', warning: '警告', info: '提示', fatal: '致命', high: '高', medium: '中', low: '低' };
+  const f = document.getElementById(findingsId);
+  if (f) f.innerHTML = (d.findings || []).map(x => {
+    const color = sevColor[x.severity] || 'var(--border)';
+    const srcLabel = specMap[x.source] || x.source;
+    const sev = sevLabel[x.severity] || x.severity || '';
+    return `<div style="display:flex;gap:10px;border-left:4px solid ${color};padding:8px 12px;margin:10px 0;background:var(--surface2);border-radius:0 8px 8px 0">
+      <span class="intel-finding-avatar" title="${escHtml(srcLabel)}">${intelSpecSvg(x.source)}</span>
+      <div style="min-width:0;flex:1">
+        <div style="font-weight:600">${escHtml(x.title || '')} <span style="font-size:12px;color:var(--text-muted)">[${escHtml(srcLabel)} · ${escHtml(sev)}]</span></div>
+        ${x.detail ? `<div style="font-size:12px;color:var(--text-muted);margin-top:2px;line-height:1.6">${_markdownToHtml(x.detail)}</div>` : ''}
+        ${x.suggestion ? `<div style="font-size:13px;margin-top:4px;line-height:1.6">建议：${_markdownToHtml(x.suggestion)}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('') || '<div style="font-size:12px;color:var(--text-muted)">未发现明确风险。</div>';
+  const p = document.getElementById(planId);
+  if (p) p.innerHTML = (d.plan || []).map(s => `<div style="border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin:10px 0;background:var(--surface2)">
+    <div style="font-weight:700;color:var(--accent2)">步骤 ${escHtml(String(s.step || ''))} · ${escHtml(s.focus || '')}</div>
+    <div style="font-size:12px;color:var(--text-muted);margin-top:2px;line-height:1.6">关联现象：${_markdownToHtml(s.evidence || '—')}</div>
+    ${(s.actions && s.actions.length) ? '<ul style="margin:6px 0 0;padding-left:20px;font-size:13px;line-height:1.7">' + s.actions.map(a => `<li>${_markdownToHtml(a)}</li>`).join('') + '</ul>' : ''}
+  </div>`).join('') || '<div style="font-size:12px;color:var(--text-muted)">本次无处置方案。</div>';
+  const pv = document.getElementById(pvId);
+  if (pv) {
+    const v = d.plan_validation || {};
+    const validations = v.validations || [];
+    if (validations.length) {
+      const costLabel = { low: '低', medium: '中', high: '高' };
+      const feasLabel = { auto: '可自动', manual: '需人工', window: '需维护窗口', high: '高', medium: '中', low: '低' };
+      const prioLabel = { high: '高', medium: '中', low: '低' };
+      const colOf = (val) => (val === 'high' || val === 'low') ? 'var(--danger)' : (val === 'medium' ? 'var(--warn)' : 'var(--info)');
+      pv.innerHTML = validations.map(vs => {
+        const feas = vs.feasibility || '', cost = vs.cost || '';
+        return `<div style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin:8px 0;background:var(--surface2)">
+          <div style="font-weight:600;font-size:13px">步骤 ${escHtml(String(vs.step || ''))} · ${escHtml(vs.focus || '')}</div>
+          <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;margin-top:6px">
+            <span style="color:${colOf(cost)}">代价：${costLabel[cost] || cost}</span>
+            <span style="color:${colOf(feas)}">可行性：${feasLabel[feas] || feas}</span>
+            <span style="color:var(--text-muted)">优先级：${prioLabel[vs.priority] || vs.priority || '—'}</span>
+          </div>
+          ${vs.benefit ? `<div style="font-size:12.5px;color:var(--text-muted);margin-top:4px;line-height:1.6">${_markdownToHtml(vs.benefit)}</div>` : ''}
+        </div>`;
+      }).join('') + (v.summary ? `<div style="font-size:12px;color:var(--text-muted);margin-top:6px;line-height:1.6">${_renderPlanSummary(v.summary)}</div>` : '');
+    } else {
+      pv.innerHTML = '<div style="font-size:12px;color:var(--text-muted)">本次无明确处置方案可供验证。</div>';
+    }
+  }
+}
+
+function createTicketFromHistory() {
+  const cur = window.__dhCurrent;
+  if (!cur || !cur.result) { toastError('请先选择一条诊断记录'); return; }
+  const d = cur.result;
+  const btn = document.getElementById('dh-create-ticket');
+  if (btn) btn.disabled = true;
+  fetch('/api/intelligence/ticket', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      instance_id: cur.instance_id,
+      instance_name: cur.instance_name || '',
+      goal: d.goal || '',
+      findings: d.findings || [],
+      plan: d.plan || [],
+      plan_validation: d.plan_validation || {}
+    })
+  }).then(r => r.json()).then(r => {
+    if (!r.ok) { toastError(r.msg || '创建工单失败'); return; }
+    toastSuccess('工单 ' + (r.ticket && r.ticket.ticket_no || '') + ' 已由历史记录生成');
+  }).catch(e => toastError('创建失败：' + e.message)).finally(() => { if (btn) btn.disabled = false; });
+}
+
 
 async function loadRagDocuments() {
   try {
@@ -4086,7 +4651,7 @@ function formatBytes(bytes) {
         // 根据数据库类型更新 database 输入框的 placeholder
         var dbInput = document.getElementById('ds-database');
         if (dbInput) {
-          var _ph = {'pg':'postgres','ivorysql':'postgres','kingbase':'kingbase','gbase':'sysmaster','oceanbase':'oceanbase','mongodb':'admin','db2':'testdb','mysql':'mysql','mariadb':'mysql','tidb':'mysql','clickhouse':'default'};
+          var _ph = {'pg':'postgres','ivorysql':'postgres','kingbase':'kingbase','gbase':'sysmaster','oceanbase':'oceanbase','mongodb':'admin','db2':'testdb','mysql':'mysql','mariadb':'mysql','tidb':'mysql','clickhouse':'default','uxdb':'uxdb'};
           dbInput.placeholder = _ph[dbType] || 'mysql';
           // OceanBase 不预填数据库名（仅为占位提示），由用户在 DBeaver 风格界面自行填写
           if (dbType === 'oceanbase' && !dbInput.value) dbInput.value = '';
@@ -4122,7 +4687,7 @@ function formatBytes(bytes) {
         const user = document.getElementById('ds-user').value.trim();
         const svcName = document.getElementById('ds-service-name')?.value || '';
         let dbName = (document.getElementById('ds-database')?.value || '').trim();
-        if (!dbName && (dbType === 'pg' || dbType === 'ivorysql')) dbName = 'postgres';
+        if (!dbName && (dbType === 'pg' || dbType === 'ivorysql' || dbType === 'uxdb')) dbName = (dbType === 'uxdb' ? 'uxdb' : 'postgres');
         if (!dbName && dbType === 'kingbase') dbName = 'kingbase';
         if (!dbName && dbType === 'gbase') dbName = 'sysmaster';
         if (!dbName && dbType === 'oceanbase') dbName = 'oceanbase';
@@ -4453,8 +5018,8 @@ function formatBytes(bytes) {
       <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9.5 12 3l9 6.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg></span> <span data-i18n="webui.nav_home">首页</span>
     </div>
 
-    <!-- ── 巡检 ── -->
-    <div class="nav-section" data-i18n="webui.nav_section_inspect">巡检</div>
+    <!-- ── 即时巡检 ── -->
+    <div class="nav-section" data-i18n="webui.nav_section_immediate">即时巡检</div>
     <div class="nav-item" onclick="showPage('wizard')" id="nav-wizard">
       <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></span> <span data-i18n="webui.nav_wizard">数据库巡检</span>
     </div>
@@ -4467,9 +5032,27 @@ function formatBytes(bytes) {
     <div class="nav-item" onclick="showPage('dm8-offline')" id="nav-dm8-offline">
       <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.66 3.58 3 8 3s8-1.34 8-3V5"/><path d="M4 12c0 1.66 3.58 3 8 3s8-1.34 8-3"/></svg></span> <span data-i18n="webui.nav_dm8_offline">达梦离线存储检查</span>
     </div>
+
     <div class="nav-item" onclick="showPage('awr')" id="nav-awr">
       <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18"/><path d="M7 21v-6M12 21V8M17 21v-3"/></svg></span> <span data-i18n="webui.awr_nav">AWR 报告分析</span>
     </div>
+
+    <!-- ── AI协同诊断 ── -->
+    <div class="nav-section" data-i18n="webui.nav_section_ai">AI协同诊断</div>
+    <div class="nav-item" onclick="showPage('intelligence')" id="nav-intelligence">
+      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M7.6 7.6 11 16M16.4 7.6 13 16M8 6h8"/></svg></span> <span data-i18n="webui.nav_intelligence">智能诊断中心</span>
+    </div>
+    <div class="nav-item" onclick="showPage('ai')" id="nav-ai">
+      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg></span> <span data-i18n="webui.nav_ai">AI 诊断设置</span>
+    </div>
+
+    <!-- ── 巡检编排(Pro) ── -->
+    {% if pro_available %}
+    <div class="nav-section" data-i18n="webui.nav_section_orchestrate">巡检编排</div>
+    <div class="nav-item" onclick="showPage('flow')" id="nav-flow">
+      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><path d="M10 6.5h4a3 3 0 0 1 3 3v4.5"/></svg></span> <span data-i18n="webui.nav_flow">巡检编排</span>
+    </div>
+    {% endif %}
 
     <!-- ── 历史 ── -->
     <div class="nav-section" data-i18n="webui.nav_section_history">历史</div>
@@ -4479,6 +5062,10 @@ function formatBytes(bytes) {
     <div class="nav-item" onclick="showPage('server-history')" id="nav-server-history">
       <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9 9 0 0 0-6.7 3L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3.5 2"/></svg></span> <span data-i18n="webui.nav_server_history">服务器巡检历史</span>
     </div>
+    <div class="nav-item" onclick="showPage('diag-history')" id="nav-diag-history">
+      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v6h6"/><path d="M3.5 9a9 9 0 1 1-1 5"/><path d="M12 8v4l3 2"/></svg></span> <span data-i18n="webui.nav_diag_history">诊断历史</span>
+    </div>
+
     <div class="nav-item" onclick="showPage('trend')" id="nav-trend">
       <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"/><path d="M17 7h4v4"/></svg></span> <span data-i18n="webui.trend_title">历史趋势分析</span>
     </div>
@@ -4535,9 +5122,6 @@ function formatBytes(bytes) {
 
     <!-- ── 系统 ── -->
     <div class="nav-section" data-i18n="webui.nav_section_system">系统</div>
-    <div class="nav-item" onclick="showPage('ai')" id="nav-ai">
-      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg></span> <span data-i18n="webui.nav_ai">AI 诊断设置</span>
-    </div>
     <!-- Oracle Client 设置：支持一键自动下载 Instant Client，无需手动去 Oracle 官网 -->
     <div class="nav-item" onclick="showPage('oracle-client')" id="nav-oracle-client">
       <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span> <span data-i18n="webui.nav_oracle_client">Oracle Client</span>
@@ -4717,9 +5301,7 @@ function formatBytes(bytes) {
                   <div class="card-subtitle" data-i18n="webui.home_instance_dist_sub">各类型数据库数量</div>
                 </div>
               </div>
-              <div class="db-type-list" id="home-db-type-list">
-                <!-- 动态加载 -->
-              </div>
+              <div class="db-type-donut" id="home-db-type-list" style="height:230px;"></div>
             </div>
 
             <!-- 定时任务 -->
@@ -4785,7 +5367,7 @@ function formatBytes(bytes) {
                   <div class="card-subtitle" data-i18n="webui.home_template_stats_sub">各模板章节数</div>
                 </div>
               </div>
-              <div class="chart-card-body" id="home-template-chart"></div>
+              <div class="stat-card-body"><div class="stat-num" id="home-template-num">--</div><div class="stat-sub" id="home-template-sub"></div></div>
             </div>
             <!-- 巡检统计 -->
             <div class="overview-card">
@@ -4796,7 +5378,7 @@ function formatBytes(bytes) {
                   <div class="card-subtitle" data-i18n="webui.home_inspection_stats_sub">各数据库巡检次数</div>
                 </div>
               </div>
-              <div class="chart-card-body" id="home-inspection-chart"></div>
+              <div class="stat-card-body"><div class="stat-num" id="home-inspection-num">--</div></div>
             </div>
             <!-- 基线统计 -->
             <div class="overview-card">
@@ -4807,7 +5389,7 @@ function formatBytes(bytes) {
                   <div class="card-subtitle" data-i18n="webui.home_baseline_stats_sub">各数据库基线数</div>
                 </div>
               </div>
-              <div class="chart-card-body" id="home-baseline-chart"></div>
+              <div class="stat-card-body"><div class="stat-num" id="home-baseline-num">--</div></div>
             </div>
             <!-- 规则统计 -->
             <div class="overview-card">
@@ -4818,7 +5400,7 @@ function formatBytes(bytes) {
                   <div class="card-subtitle" data-i18n="webui.home_rule_stats_sub">各数据库规则数</div>
                 </div>
               </div>
-              <div class="chart-card-body" id="home-rule-chart"></div>
+              <div class="stat-card-body"><div class="stat-num" id="home-rule-num">--</div></div>
             </div>
           </div>
           <!-- 数据库类型图标墙 -->
@@ -4864,6 +5446,26 @@ function formatBytes(bytes) {
                 <img src="/mysql.png" alt="MariaDB" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="db-icon-fallback" style="display:none;">🐬</span>
                 <span class="db-icon-label">MariaDB</span>
               </div>
+              <div class="db-icon-item" title="UXDB">
+                <img src="/uxdb.png" alt="UXDB" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="db-icon-fallback" style="display:none;">🛡️</span>
+                <span class="db-icon-label">优炫 UXDB</span>
+              </div>
+              <div class="db-icon-item" title="Redis">
+                <img src="/redis.png" alt="Redis" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="db-icon-fallback" style="display:none;">🔴</span>
+                <span class="db-icon-label">Redis</span>
+              </div>
+              <div class="db-icon-item" title="MongoDB">
+                <img src="/mongodb.png" alt="MongoDB" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="db-icon-fallback" style="display:none;">🍃</span>
+                <span class="db-icon-label">MongoDB</span>
+              </div>
+              <div class="db-icon-item" title="ClickHouse">
+                <img src="/clickhouse.png" alt="ClickHouse" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="db-icon-fallback" style="display:none;">⚡</span>
+                <span class="db-icon-label">ClickHouse</span>
+              </div>
+              <!-- <div class="db-icon-item" title="IBM Db2">
+                <img src="/db2.png" alt="IBM Db2" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="db-icon-fallback" style="display:none;">📦</span>
+                <span class="db-icon-label">IBM Db2</span>
+              </div> -->
             </div>
           </div>
 
@@ -7099,6 +7701,122 @@ curl -H "X-API-Key: YOUR_API_KEY" http://localhost:5003/api/v1/inspect/{task_id}
         </div>
       </div>
 
+      <div class="page" id="page-intelligence">
+        <div class="card intel-hero">
+          <div class="card-title">
+            <svg viewBox="0 0 24 24" width="18" height="18" style="stroke:var(--accent2);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M7.6 7.6 11 16M16.4 7.6 13 16M8 6h8"/></svg>
+            <span data-i18n="webui.nav_intelligence">智能诊断中心</span>
+          </div>
+          <div style="color:var(--text-muted);font-size:12.5px;margin-bottom:18px" data-i18n="intelligence.subtitle">多专业能力协同，主动发现、定位与处置数据库风险。</div>
+
+          <div class="form-group" style="margin-bottom:14px">
+            <label data-i18n="intelligence.instance">目标数据源</label>
+            <select id="intel-instance" class="form-input" style="width:100%">
+              <option value="" disabled selected data-i18n="intelligence.select_placeholder">请选择目标数据源</option>
+            </select>
+            <div id="intel-no-ds" style="display:none;font-size:12px;color:var(--warn);margin-top:6px" data-i18n="intelligence.no_datasource">暂无数据源，请先在「数据源管理」中添加</div>
+          </div>
+          <div class="form-group" style="margin-bottom:18px">
+            <label data-i18n="intelligence.goal">诊断目标（可选）</label>
+            <input id="intel-goal" class="form-input" data-i18n="intelligence.goal_placeholder" placeholder="例如 排查昨晚 CPU 飙高原因" />
+          </div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <button id="intel-run" class="btn btn-primary">🔍 <span data-i18n="intelligence.start">开始协同诊断</span></button>
+            <span id="intel-running" style="display:none;color:var(--text-muted);font-size:13px" data-i18n="intelligence.running">协同诊断进行中…</span>
+          </div>
+          <div class="intel-progress-wrap" id="intel-progress-wrap">
+            <div class="intel-progress-head">
+              <span id="intel-progress-label">准备中…</span>
+              <span id="intel-progress-count">0 / 0</span>
+            </div>
+            <div class="intel-progress-track"><div class="intel-progress-bar" id="intel-progress-bar"></div></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title"><span data-i18n="intelligence.capabilities">协同能力</span><span class="badge" id="intel-cap-count">0</span></div>
+          <div id="intel-cap-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px"></div>
+        </div>
+
+        <div class="card" id="intel-result-card" style="display:none">
+          <div class="card-title"><span data-i18n="intelligence.result">诊断结果</span></div>
+          <div id="intel-findings"></div>
+          <div style="font-weight:600;margin:18px 0 8px;font-size:14px" data-i18n="intelligence.plan">处置方案</div>
+          <div id="intel-plan"></div>
+          <div style="font-weight:600;margin:18px 0 8px;font-size:14px" data-i18n="intelligence.plan_validation">方案验证（代价 / 收益）</div>
+          <div id="intel-plan-validation"></div>
+          <div id="intel-notes" style="color:var(--text-muted);font-size:13px;margin-top:8px"></div>
+          <div style="margin-top:20px;border-top:1px solid var(--border);padding-top:16px">
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+              <div style="font-weight:600;font-size:14px" data-i18n="intelligence.ticket_title">工单执行闭环</div>
+              <button id="intel-create-ticket" class="btn btn-primary" style="font-size:12px;padding:5px 10px" data-i18n="intelligence.create_ticket">生成处置工单</button>
+            </div>
+            <div id="intel-tickets"></div>
+          </div>
+        </div>
+      </div><!-- /page-intelligence -->
+
+
+      <!-- ══ Page: Diagnosis History (诊断历史) ══ -->
+      <div class="page" id="page-diag-history">
+        <div class="card intel-hero">
+          <div class="card-title">
+            <svg viewBox="0 0 24 24" width="18" height="18" style="stroke:var(--accent2);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round"><path d="M3 3v6h6"/><path d="M3.5 9a9 9 0 1 1-1 5"/><path d="M12 8v4l3 2"/></svg>
+            <span data-i18n="webui.nav_diag_history">诊断历史</span>
+          </div>
+          <div style="color:var(--text-muted);font-size:12.5px;margin-bottom:16px" data-i18n="diag_history.subtitle">回看历次协同诊断结果，选中条目可查看完整报告并一键回填工单。</div>
+          <div class="form-group" style="margin-bottom:0;max-width:420px">
+            <label data-i18n="diag_history.filter">按数据源筛选</label>
+            <select id="dh-instance" class="form-input" style="width:100%" onchange="loadDiagHistory()">
+              <option value="" selected data-i18n="diag_history.all">全部数据源</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:minmax(300px,380px) 1fr;gap:14px;align-items:start">
+          <div class="card" style="max-height:70vh;overflow:auto">
+            <div class="card-title"><span data-i18n="diag_history.list">历史记录</span><span class="badge" id="dh-count">0</span></div>
+            <div id="dh-list"></div>
+          </div>
+          <div class="card" id="dh-detail-card" style="min-height:200px">
+            <div class="card-title"><span data-i18n="diag_history.detail">诊断详情</span></div>
+            <div id="dh-detail-empty" style="color:var(--text-muted);font-size:13px" data-i18n="diag_history.pick">请从左侧选择一条诊断记录查看详情。</div>
+            <div id="dh-detail" style="display:none">
+              <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+                <div id="dh-detail-meta" style="font-size:12.5px;color:var(--text-muted)"></div>
+                <button id="dh-create-ticket" class="btn btn-primary" style="font-size:12px;padding:5px 10px" onclick="createTicketFromHistory()" data-i18n="diag_history.backfill">回填生成工单</button>
+              </div>
+              <div style="font-weight:600;margin:6px 0 8px;font-size:14px" data-i18n="intelligence.result">诊断结果</div>
+              <div id="dh-findings"></div>
+              <div style="font-weight:600;margin:18px 0 8px;font-size:14px" data-i18n="intelligence.plan">处置方案</div>
+              <div id="dh-plan"></div>
+              <div style="font-weight:600;margin:18px 0 8px;font-size:14px" data-i18n="intelligence.plan_validation">方案验证（代价 / 收益）</div>
+              <div id="dh-plan-validation"></div>
+            </div>
+          </div>
+        </div>
+      </div><!-- /page-diag-history -->
+
+      <!-- ══ Page: Flow Orchestration (巡检编排) ══ -->
+      <div class="page" id="page-flow" style="display:none;">
+        <div class="card" style="text-align:center;padding:64px 32px;max-width:720px;margin:auto;">
+          <div style="font-size:64px;margin-bottom:20px">🚀</div>
+          <div class="card-title" style="justify-content:center;font-size:22px;margin-bottom:12px" data-i18n="webui.flow_title">巡检编排</div>
+          <div style="color:var(--text-muted);font-size:14px;margin-bottom:32px;max-width:520px;margin-left:auto;margin-right:auto;line-height:1.7" data-i18n="webui.flow_desc">可视化编排数据库巡检流程，支持节点画布、条件分支与自动化调度。</div>
+
+          <div style="background:var(--surface2);border:1px dashed var(--border);border-radius:12px;padding:28px 24px;margin-bottom:28px;">
+            <div style="display:inline-flex;align-items:center;gap:8px;background:var(--warn);color:#fff;font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px;margin-bottom:14px" data-i18n="webui.flow_pro_badge">专业版功能</div>
+            <div style="font-size:15px;color:var(--text);margin-bottom:10px" data-i18n="webui.flow_pro_title">巡检编排为 DBCheck 专业版功能</div>
+            <div style="font-size:13px;color:var(--text-muted);line-height:1.7" data-i18n="webui.flow_pro_desc">社区版暂不支持可视化画布、节点编排与自动化调度。如需使用，请升级至 DBCheck 专业版。</div>
+          </div>
+
+          <div style="display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;">
+            <button class="btn btn-primary" disabled style="display:none" data-i18n="webui.flow_pro_action_disabled">立即使用（需专业版）</button>
+            <a href="https://dbcheck.top" target="_blank" rel="noopener" class="btn" style="text-decoration:none" data-i18n="webui.flow_pro_learn">了解专业版</a>
+          </div>
+        </div>
+      </div><!-- /page-flow -->
+
       <!-- AWR 报告分析页面 -->
       <div class="page" id="page-awr" style="display:none;">
         <div class="page-content" id="awr-content">
@@ -7719,6 +8437,10 @@ function showPage(name) {
     'plugin-market': [i18n('webui.plugin_market_title') || '插件市场', ''],
     'rag': [i18n('webui.rag_page_title') || 'RAG 知识库', ''],
     'dm8-offline': [i18n('webui.dm8_offline_title') || '💿 DM8 离线存储健康检查', i18n('webui.dm8_offline_desc_short') || '扫描 DM8 数据文件目录，检查存储完整性'],
+
+    'intelligence': [i18n('webui.nav_intelligence') || '智能诊断中心', i18n('intelligence.subtitle') || '多专业能力协同，主动发现、定位与处置数据库风险。'],
+    'diag-history': [i18n('webui.nav_diag_history') || '诊断历史', i18n('diag_history.subtitle') || '回看历次协同诊断结果。'],
+    'flow': [i18n('webui.flow_title') || '巡检编排', i18n('webui.flow_desc') || ''],
   };
   const t = titles[name] || [name, ''];
   document.getElementById('topbar-title').textContent = t[0];
@@ -7762,6 +8484,9 @@ function showPage(name) {
     if (name === 'server-thresholds') {
         loadServerThresholds();
     }
+  if (name === 'intelligence') loadIntelligencePage();
+  if (name === 'diag-history') loadDiagHistoryPage();
+
   if (name === 'sql-editor') {
     loadSqlTree();
     setTimeout(initSqlEditor, 80);
@@ -10010,141 +10735,37 @@ function drawLineChart(canvasId, labels, values, cfg) {
   });
 }
 
-// ─── 首页四个统计图表（ECharts）───
-const homeCharts = {};
+// ─── 首页四个统计大数字 ───
 function renderHomeCharts(stats, dbTypeMap) {
-  if (typeof echarts === 'undefined') {
-    console.warn('[HomeCharts] ECharts not loaded, fallback to canvas');
-    if (stats.template_chapters && stats.template_chapters.length > 0) {
-      const labels = stats.template_chapters.map(t => t.name || '模板' + t.id);
-      const values = stats.template_chapters.map(t => t.chapters || 0);
-      drawBarChart('home-template-chart', labels, values, ['#3b82f6','#2563eb','#1d4fed','#1e40af','#1e3a8f']);
-    }
-    if (stats.inspection_by_db && Object.keys(stats.inspection_by_db).length > 0) {
-      const labels = Object.keys(stats.inspection_by_db).map(k => dbTypeMap[k] || k);
-      const values = Object.values(stats.inspection_by_db);
-      drawPieChart('home-inspection-chart', labels, values, ['#f97316','#ea580c','#dc2626','#b91c1c','#991b1b','#7f1d1d']);
-    }
-    if (stats.baseline_by_db && Object.keys(stats.baseline_by_db).length > 0) {
-      const labels = Object.keys(stats.baseline_by_db).map(k => dbTypeMap[k] || k);
-      const values = Object.values(stats.baseline_by_db);
-      drawPieChart('home-baseline-chart', labels, values, ['#22c55e','#16a34a','#15803d','#166534','#14532d','#14451f']);
-    }
-    if (stats.rule_engine_by_db && Object.keys(stats.rule_engine_by_db).length > 0) {
-      const labels = Object.keys(stats.rule_engine_by_db).map(k => dbTypeMap[k] || k);
-      const values = Object.values(stats.rule_engine_by_db);
-      drawPieChart('home-rule-chart', labels, values, ['#a855f7','#9333ea','#7e22ce','#6b21a8','#581c87','#3b0764']);
-    }
-    return;
+  stats = stats || {};
+
+  // 1. 模板统计：模板数量 + 章节总数
+  const templateNumEl = document.getElementById('home-template-num');
+  const templateSubEl = document.getElementById('home-template-sub');
+  const templateChapters = Array.isArray(stats.template_chapters) ? stats.template_chapters : [];
+  const templateTotalChapters = templateChapters.reduce((sum, t) => sum + (Number(t && t.chapters) || 0), 0);
+  if (templateNumEl) templateNumEl.textContent = templateChapters.length;
+  if (templateSubEl) templateSubEl.textContent = '共 ' + templateTotalChapters + ' 章';
+
+  // 2. 巡检统计：各数据库巡检次数之和
+  const inspectionNumEl = document.getElementById('home-inspection-num');
+  if (inspectionNumEl) {
+    inspectionNumEl.textContent = Object.values(stats.inspection_by_db || {}).reduce((a, b) => a + (Number(b) || 0), 0);
   }
 
-  const textColor = '#c9d1d9';
-  const mutedColor = '#8b949e';
-  const axisColor = '#30363d';
-  const tooltipBg = 'rgba(22,27,34,0.95)';
-  const tooltipBorder = '#30363d';
-
-  // 释放旧实例，避免内存泄漏和重复渲染
-  Object.keys(homeCharts).forEach(k => {
-    if (homeCharts[k]) { try { homeCharts[k].dispose(); } catch(e) {} homeCharts[k] = null; }
-  });
-
-  // 1. 模板统计：横向条形图（带渐变 + 数值标签）
-  if (stats.template_chapters && stats.template_chapters.length > 0) {
-    const labels = stats.template_chapters.map(t => t.name || '模板' + t.id).slice(0, 10);
-    const values = stats.template_chapters.map(t => t.chapters || 0).slice(0, 10);
-    const el = document.getElementById('home-template-chart');
-    if (el) {
-      homeCharts.template = echarts.init(el);
-      homeCharts.template.setOption({
-        backgroundColor: 'transparent',
-        grid: { left: '2%', right: '14%', top: '5%', bottom: '2%', containLabel: true },
-        tooltip: { trigger: 'axis', backgroundColor: tooltipBg, borderColor: tooltipBorder, textStyle: { color: textColor } },
-        xAxis: { type: 'value', splitLine: { lineStyle: { color: axisColor } }, axisLabel: { color: mutedColor, fontSize: 10 } },
-        yAxis: { type: 'category', data: labels, axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: textColor, fontSize: 11 } },
-        series: [{
-          type: 'bar', data: values, barWidth: 14,
-          itemStyle: { borderRadius: [0, 7, 7, 0], color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [{ offset: 0, color: '#3b82f6' }, { offset: 1, color: '#06b6d4' }]) },
-          label: { show: true, position: 'right', color: textColor, fontSize: 10 }
-        }]
-      });
-    }
+  // 3. 基线统计：各数据库基线数之和
+  const baselineNumEl = document.getElementById('home-baseline-num');
+  if (baselineNumEl) {
+    baselineNumEl.textContent = Object.values(stats.baseline_by_db || {}).reduce((a, b) => a + (Number(b) || 0), 0);
   }
 
-  // 2. 巡检统计：环形图（带右侧图例）
-  if (stats.inspection_by_db && Object.keys(stats.inspection_by_db).length > 0) {
-    const entries = Object.entries(stats.inspection_by_db).map(([k, v]) => ({ name: dbTypeMap[k] || k, value: v })).sort((a, b) => b.value - a.value);
-    const el = document.getElementById('home-inspection-chart');
-    if (el) {
-      const colors = ['#f97316', '#fb923c', '#fbbf24', '#f87171', '#ef4444', '#b91c1c'];
-      homeCharts.inspection = echarts.init(el);
-      homeCharts.inspection.setOption({
-        backgroundColor: 'transparent',
-        color: colors,
-        tooltip: { trigger: 'item', backgroundColor: tooltipBg, borderColor: tooltipBorder, textStyle: { color: textColor }, formatter: '{b}: {c} ({d}%)' },
-        legend: { orient: 'vertical', right: '2%', top: 'center', textStyle: { color: mutedColor, fontSize: 10 }, itemWidth: 10, itemHeight: 10 },
-        series: [{
-          type: 'pie', radius: ['42%', '68%'], center: ['36%', '50%'], data: entries,
-          label: { show: false },
-          itemStyle: { borderRadius: 5, borderColor: '#0d1117', borderWidth: 2 }
-        }]
-      });
-    }
-  }
-
-  // 3. 基线统计：雷达图（与饼图/环形图区分）
-  if (stats.baseline_by_db && Object.keys(stats.baseline_by_db).length > 0) {
-    const entries = Object.entries(stats.baseline_by_db).map(([k, v]) => ({ name: dbTypeMap[k] || k, value: v }));
-    const labels = entries.map(e => e.name);
-    const values = entries.map(e => e.value);
-    const max = Math.max(...values, 1);
-    const el = document.getElementById('home-baseline-chart');
-    if (el) {
-      homeCharts.baseline = echarts.init(el);
-      homeCharts.baseline.setOption({
-        backgroundColor: 'transparent',
-        tooltip: { trigger: 'item', backgroundColor: tooltipBg, borderColor: tooltipBorder, textStyle: { color: textColor } },
-        radar: {
-          indicator: labels.map(l => ({ name: l, max: max })),
-          center: ['45%', '50%'], radius: '62%',
-          axisName: { color: mutedColor, fontSize: 10 },
-          splitArea: { areaStyle: { color: ['rgba(34,197,94,0.06)', 'rgba(34,197,94,0.10)', 'rgba(34,197,94,0.14)', 'rgba(34,197,94,0.18)'] } },
-          axisLine: { lineStyle: { color: 'rgba(34,197,94,0.3)' } },
-          splitLine: { lineStyle: { color: 'rgba(34,197,94,0.2)' } }
-        },
-        series: [{
-          type: 'radar', data: [{ value: values, name: '基线数', areaStyle: { color: 'rgba(34,197,94,0.25)' }, lineStyle: { color: '#22c55e' }, itemStyle: { color: '#22c55e' } }]
-        }]
-      });
-    }
-  }
-
-  // 4. 规则统计：玫瑰图（南丁格尔玫瑰图，与巡检环形图区分）
-  if (stats.rule_engine_by_db && Object.keys(stats.rule_engine_by_db).length > 0) {
-    const entries = Object.entries(stats.rule_engine_by_db).map(([k, v]) => ({ name: dbTypeMap[k] || k, value: v })).sort((a, b) => b.value - a.value);
-    const el = document.getElementById('home-rule-chart');
-    if (el) {
-      const colors = ['#a855f7', '#c084fc', '#d8b4fe', '#7e22ce', '#6b21a8', '#581c87'];
-      homeCharts.rules = echarts.init(el);
-      homeCharts.rules.setOption({
-        backgroundColor: 'transparent',
-        color: colors,
-        tooltip: { trigger: 'item', backgroundColor: tooltipBg, borderColor: tooltipBorder, textStyle: { color: textColor }, formatter: '{b}: {c} ({d}%)' },
-        legend: { orient: 'vertical', right: '2%', top: 'center', textStyle: { color: mutedColor, fontSize: 10 }, itemWidth: 10, itemHeight: 10 },
-        series: [{
-          type: 'pie', radius: [18, 68], center: ['36%', '50%'], roseType: 'area', data: entries,
-          label: { show: false },
-          itemStyle: { borderRadius: 5, borderColor: '#0d1117', borderWidth: 2 }
-        }]
-      });
-    }
+  // 4. 规则统计：各数据库规则数之和
+  const ruleNumEl = document.getElementById('home-rule-num');
+  if (ruleNumEl) {
+    ruleNumEl.textContent = Object.values(stats.rule_engine_by_db || {}).reduce((a, b) => a + (Number(b) || 0), 0);
   }
 }
 
-// 首页统计图表随窗口自适应
-window.addEventListener('resize', () => {
-  Object.values(homeCharts).forEach(c => c && c.resize && c.resize());
-});
 
 // ─── 横向条形图（模板统计：每个模板章节数）───
 function drawBarChart(canvasId, labels, values, colors) {
@@ -12713,23 +13334,103 @@ async function loadHomeStats() {
       }
     }
 
-    // 2. 处理统计数据 - 实例分布
+    // 2. 处理统计数据 - 实例分布（左侧自定义 HTML 图例 + 右侧 ECharts 大圆环，彻底避免重叠）
     const dbTypeList = document.getElementById('home-db-type-list');
     if (dataStats.ok && dataStats.statistics && dbTypeList) {
       const byType = dataStats.statistics.by_type || {};
       const totalInstances = dataStats.statistics.total_instances || 0;
 
-      if (Object.keys(byType).length > 0) {
-        dbTypeList.innerHTML = Object.entries(byType).map(([type, count]) => {
-          const info = dbTypeMap[type] || { icon: '🗄️', name: type };
-          return `<div class="db-type-item">
-            <span class="db-icon">${info.icon}</span>
-            <span class="db-name">${info.name}</span>
-            <span class="db-count">${count}</span>
-          </div>`;
+      // 与 GitHub 暗色主题协调的颜色序列（HTML 图例圆点与圆环扇区一一对应）
+      const DB_TYPE_PALETTE = [
+        '#58a6ff', '#3fb950', '#d29922', '#f85149', '#a371f7',
+        '#56d4dd', '#f0883e', '#79c0ff', '#ff7b72', '#d2a8ff'
+      ];
+
+      if (typeof echarts === 'undefined') {
+        dbTypeList.innerHTML = '<div class="db-type-fallback">ECharts 未加载</div>';
+      } else if (Object.keys(byType).length > 0) {
+        // 局部 dbTypeMap，避免依赖外层作用域
+        const dbTypeMap = {
+          'mysql': 'MySQL',
+          'pg': 'PostgreSQL',
+          'oracle': 'Oracle',
+          'dm': 'DM8',
+          'sqlserver': 'SQL Server',
+          'tidb': 'TiDB',
+          'ivorysql': 'IvorySQL',
+          'yashandb': 'YashanDB',
+          'clickhouse': 'ClickHouse',
+          'gbase': 'GBase',
+          'db2': 'DB2',
+          'kingbase': 'KingBase',
+          'mariadb': 'MariaDB'
+        };
+        const entries = Object.entries(byType)
+          .map(([type, count]) => ({ name: dbTypeMap[type] || type, value: count }))
+          .sort((a, b) => b.value - a.value);
+        // 类型过多时聚合为 Top5 + 其他，避免图例拥挤/文字截断
+        let pieData = entries;
+        if (entries.length > 6) {
+          const top5 = entries.slice(0, 5);
+          const otherSum = entries.slice(5).reduce((sum, e) => sum + e.value, 0);
+          pieData = top5.concat([{ name: '其他', value: otherSum }]);
+        }
+        // 为每个扇区绑定对应颜色，确保圆环与左侧图例颜色一致
+        const coloredData = pieData.map((d, i) => ({
+          name: d.name,
+          value: d.value,
+          itemStyle: { color: DB_TYPE_PALETTE[i % DB_TYPE_PALETTE.length] }
+        }));
+        // 复用/释放旧的 ECharts 实例（绑定在右侧 .db-type-chart 容器上）
+        const oldChartEl = dbTypeList.querySelector('.db-type-chart');
+        if (oldChartEl) {
+          const __ex = echarts.getInstanceByDom(oldChartEl);
+          if (__ex) __ex.dispose();
+        }
+        // 左侧自定义 HTML 图例（支持自动换行，可多排）
+        const legendHtml = pieData.map((d, i) => {
+          const color = DB_TYPE_PALETTE[i % DB_TYPE_PALETTE.length];
+          return '<div class="legend-item">' +
+            '<span class="legend-dot" style="background:' + color + '"></span>' +
+            '<span class="legend-name">' + d.name + '</span>' +
+            '<span class="legend-value">' + d.value + '</span>' +
+            '</div>';
         }).join('');
+        dbTypeList.innerHTML =
+          '<div class="db-type-legend">' + legendHtml + '</div>' +
+          '<div class="db-type-chart"></div>';
+        const chartEl = dbTypeList.querySelector('.db-type-chart');
+        const chart = echarts.init(chartEl);
+        chart.setOption({
+          backgroundColor: 'transparent',
+          tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+          title: {
+            text: String(totalInstances),
+            subtext: '实例',
+            left: 'center',
+            top: '38%',
+            textAlign: 'center',
+            textStyle: { color: '#c9d1d9', fontSize: 24, fontWeight: 700 },
+            subtextStyle: { color: '#8b949e', fontSize: 11 }
+          },
+          series: [{
+            type: 'pie',
+            radius: ['46%', '72%'],
+            center: ['50%', '50%'],
+            data: coloredData,
+            label: { show: false },
+            labelLine: { show: false },
+            itemStyle: { borderRadius: 5, borderColor: '#0d1117', borderWidth: 2 },
+            emphasis: { scale: true, scaleSize: 6 }
+          }]
+        });
+        // 容器初始可能未获得宽度（概览区隐藏时即初始化），下一帧强制重算尺寸
+        requestAnimationFrame(() => { try { chart.resize(); } catch (e) {} });
+        window.addEventListener('resize', () => chart && chart.resize());
+        // 供概览区显示后统一 resize（见下方 overviewSection 显示处）
+        dbTypeList._chart = chart;
       } else {
-        dbTypeList.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-muted);font-size:13px;">暂无实例</div>';
+        dbTypeList.innerHTML = '<div class="db-type-fallback">暂无实例</div>';
       }
     }
 
@@ -12798,6 +13499,7 @@ async function loadHomeStats() {
     // 显示概览区域
     overviewSection.style.display = '';
     // 大屏容器此刻才获得宽度，重算 ECharts 尺寸
+    if (dbTypeList && dbTypeList._chart) { try { dbTypeList._chart.resize(); } catch (e) {} }
     Object.values(healthCharts).forEach(c => c && c.resize());
     // 实时监控区（v2.10）：概览可见即初始化采集器推送与图表
     try { initMonitor(); } catch(e) { console.error('initMonitor failed:', e); }
@@ -19713,19 +20415,34 @@ function mkdirRemote() {
     const wall = document.querySelector('.db-icon-wall-inner');
     if (!wall) return;
 
-    // 收集已有的内置项 title，用于去重（避免插件与内置项或插件之间重复）
-    const existingTitles = new Set();
+    // 归一化：转小写、去括号后缀（兼容全角（）与半角()）、去 _jdbc 后缀、去首尾空格
+    function norm(s) {
+      if (!s) return '';
+      return String(s)
+        .toLowerCase()
+        .replace(/[（(].*?[)）]/g, '')
+        .replace(/_jdbc$/, '')
+        .trim();
+    }
+
+    // 收集已有的内置项（title 与 .db-icon-label 文本均归一化加入），用于去重
+    const existing = new Set();
     wall.querySelectorAll('.db-icon-item').forEach(item => {
       const t = item.getAttribute('title');
-      if (t) existingTitles.add(t);
+      if (t) existing.add(norm(t));
+      const labelEl = item.querySelector('.db-icon-label');
+      if (labelEl && labelEl.textContent) existing.add(norm(labelEl.textContent));
     });
 
     (window.dbTypes || []).forEach(dbType => {
       if (dbType.is_plugin !== true) return;
       const label = dbType.label || dbType.value || '';
       const value = dbType.value || label;
-      // 若图标墙内已存在 title 等于该插件的 label 或 value，跳过（去重）
-      if (existingTitles.has(label) || existingTitles.has(value)) return;
+      // 归一化后判重：插件 label/value 命中墙内已有项则跳过（避免 JDBC 变体等重复追加）
+      if (existing.has(norm(label)) || existing.has(norm(value))) return;
+      // 追加前把新项归一化 label/value 也加入集合，防止插件之间重复追加
+      existing.add(norm(label));
+      existing.add(norm(value));
 
       const item = document.createElement('div');
       item.className = 'db-icon-item';

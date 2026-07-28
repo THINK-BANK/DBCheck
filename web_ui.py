@@ -343,6 +343,10 @@ def _verify_agreement_integrity():
 from api_v1 import api_v1, _ADMIN_TOKEN
 app.register_blueprint(api_v1)
 
+# ── 智能诊断中心（自专业版同步，社区常显）──
+from intelligence.views import intelligence_bp
+app.register_blueprint(intelligence_bp)
+
 def get_admin_token():
     return _ADMIN_TOKEN
 
@@ -571,6 +575,12 @@ def run_inspection_task(task_id, db_info, inspector_name, template_id=None):
         _db = db_info.get('database') or ''
         if _db in ('', 'postgres'):
             db_info['database'] = 'kingbase'
+
+    # UXDB 数据库名修正：若未设置或为 postgres（从 PG 复制而来），则改为 uxdb
+    if db_type == 'uxdb':
+        _db = db_info.get('database') or ''
+        if _db in ('', 'postgres'):
+            db_info['database'] = 'uxdb'
 
     task_configs = {
         'mysql': dict(
@@ -938,7 +948,15 @@ def run_inspection_task(task_id, db_info, inspector_name, template_id=None):
         # 智能分析
         try:
             _analyzer_mod = __import__('analyzer')
-            auto_analyze = getattr(_analyzer_mod, cfg['smart_analyze'])(context)
+            # 保留 checkdb()/基线检查已产生的风险，避免被 analyzer 空结果覆盖
+            existing_auto = context.get('auto_analyze') or []
+            analyzer_issues = getattr(_analyzer_mod, cfg['smart_analyze'])(context) or []
+            seen = {item.get('col1', '') for item in existing_auto if isinstance(item, dict)}
+            auto_analyze = list(existing_auto)
+            for item in analyzer_issues:
+                if isinstance(item, dict) and item.get('col1', '') not in seen:
+                    auto_analyze.append(item)
+                    seen.add(item.get('col1', ''))
             # ── 插件系统：执行插件 SQL + 分析 ──
             try:
                 from plugin_core import run_plugin_inspections_for_db
@@ -963,7 +981,10 @@ def run_inspection_task(task_id, db_info, inspector_name, template_id=None):
                 plugin_issues = run_plugin_inspections_for_db(
                     cfg['history_db_type'], context, execute_sql=_exec_plugin_sql)
                 if plugin_issues:
-                    auto_analyze = list(auto_analyze) + plugin_issues
+                    for item in plugin_issues:
+                        if isinstance(item, dict) and item.get('col1', '') not in seen:
+                            auto_analyze.append(item)
+                            seen.add(item.get('col1', ''))
                     _emit('log', {'msg': f"[插件] {len(plugin_issues)} 个插件发现附加风险"})
             except Exception as e:
                 _emit('log', {'msg': f"[插件] 执行跳过: {e}"})
@@ -971,8 +992,11 @@ def run_inspection_task(task_id, db_info, inspector_name, template_id=None):
                 task['auto_analyze'] = auto_analyze
             _emit('log', {'msg': f"[智能分析] 完成，发现 {len(auto_analyze)} 个可优化项"})
         except Exception as e:
-            auto_analyze = []
-            _emit('log', {'msg': f"[警告] 智能分析失败: {e}"})
+            # 即使 analyzer 调用失败，也尝试保留 context 中已有的 auto_analyze
+            auto_analyze = context.get('auto_analyze') or []
+            if task:
+                task['auto_analyze'] = auto_analyze
+            _emit('log', {'msg': f"[警告] 智能分析失败: {e}；保留已有 {len(auto_analyze)} 项"})
 
         # 历史快照
         try:

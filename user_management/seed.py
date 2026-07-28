@@ -48,6 +48,8 @@ menus_data = [
     ('notifier',         'menu.notifier',        0, 55),
     ('apikey',           'menu.apikey',          0, 56),
     ('shares',           'menu.shares',          0, 57),
+    ('intelligence',      'menu.intelligence',     0, 58),
+    ('diag-history',      'menu.diag-history',     0, 59),
     ('data-management',  'menu.data-management', 0, 66),
     ('about',            'menu.about',           0, 67),
     ('disaster-recovery','menu.disaster-recovery',0, 65),

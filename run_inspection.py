@@ -220,7 +220,7 @@ def run_mariadb(db_info, inspector_name, ssh_info=None):
     # 保存巡检记录到 Pro 模块
     _record_inspection('mariadb', db_info, ret, ofile)
 
-    return ofile, file_name
+    return ofile, file_name, ret
 
 
 def run_oceanbase(db_info, inspector_name, ssh_info=None):
@@ -280,7 +280,7 @@ def run_oceanbase(db_info, inspector_name, ssh_info=None):
     # 保存巡检记录到 Pro 模块
     _record_inspection('oceanbase', db_info, ret, ofile)
 
-    return ofile, file_name
+    return ofile, file_name, ret
 
 
 def run_pg(db_info, inspector_name, ssh_info=None):

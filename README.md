@@ -2,7 +2,7 @@
 
 ![logo](snapshot/dbcheck_logo_info.png)
 
-DBCheck Professional is a commercial, cross-platform database health inspection tool supporting **18 database types** (relational / document / KV cache). It automatically generates standardized Word inspection reports by executing predefined SQL checks and collecting system resources. Advanced features include a SQL editor, remote terminal, configurable inspection chapters, configuration baseline management, historical trend analysis, AI-powered smart diagnostics, index health analysis, in-depth slow query analysis, server inspection, shareable links, and masked data export.
+DBCheck Professional is a commercial, cross-platform database health inspection tool supporting **19 database types** (relational / document / KV cache). It automatically generates standardized Word inspection reports by executing predefined SQL checks and collecting system resources. Advanced features include a SQL editor, remote terminal, configurable inspection chapters, configuration baseline management, historical trend analysis, AI-powered smart diagnostics, index health analysis, in-depth slow query analysis, server inspection, shareable links, and masked data export.
 
 > **Note:** The software names, logos, trademarks, badges, etc. of third parties contained in this article and DBCheck software are the property of the third-party companies or organizations. The display of these items in this article and DBCheck software only indicates that the software supports connection to the corresponding database or platform, and does not imply any affiliation or cooperation with them.
 
@@ -40,6 +40,7 @@ DBCheck Professional is a commercial, cross-platform database health inspection 
 | YashanDB | yashandb | 1688 | Oracle-compatible, Chinese domestic DB |
 | KingbaseES | psycopg2 (PG protocol) | 54321 | Chinese domestic DB |
 | GBase 8s | JDBC (jaydebeapi + JDK) | 9088 | Chinese domestic DB |
+| UXDB (YouXuan) | uxdb_jdbc (JDBC) | 33060 | Chinese domestic DB, PostgreSQL-compatible |
 | MongoDB | pymongo | 27017 | 4.0+ |
 | DB2 (LUW) | JDBC (JPype1 + db2jcc4) | 50000 | 11.5+ / 12.x (LUW) |
 | OceanBase (MySQL tenant) | pymysql (MySQL protocol) | 2881 | 4.x+; MySQL-compatible; Oracle tenant reserved |
@@ -123,7 +124,7 @@ python web_ui.py         # Web interface
 | Feature | Description |
 |---------|-------------|
 | 🗄️ Data Source Manager | Unified management of all database instances, with grouping, batch inspection, CSV import/export |
-| 📋 Database Inspection | 18 database types covered, 300+ inspection rules, auto-generates Word reports |
+| 📋 Database Inspection | 19 database types covered, 330+ inspection rules, auto-generates Word reports |
 | 🔌 Plugin System | Extensible plugin architecture with lifecycle management (install/uninstall), independent plugin data, plugin marketplace |
 | 🔍 Deep Slow Query Analysis | Correlates execution plans, I/O patterns, lock waits; AI-assisted root cause analysis |
 | 🔒 Lock Diagnostics | Blocking chain visualization, deadlock stats, long transaction detection, with executable fix scripts |
@@ -247,6 +248,7 @@ For detailed plugin development guide, see [Plugin Development Documentation](do
 | DB2 (JDBC) | DB2 LUW 11.5+ / 12.x | JDBC (JPype1 + db2jcc4) LUW inspection, 42 rules, system-catalog SQL |
 | Redis | Redis 3.0+ | KV cache inspection: connection, version, memory, clients, persistence, performance, replication, keyspace, slow queries, config baseline |
 | Redis Cluster | Redis Cluster | Cluster topology (CLUSTER INFO / NODES), slot distribution and node health on top of single-node capabilities |
+| UXDB (JDBC) | UXDB 2.x | PostgreSQL-compatible Chinese domestic DB inspection plugin, 12 rules based on ux_catalog system catalog |
 
 > **Note:** Plugins are completely independent. Installing a plugin automatically initializes its data; uninstalling a plugin automatically cleans up all associated data.
 
@@ -359,6 +361,7 @@ Automatically detects potential risks across all database types. **Each risk ite
 | Redis | 12 | Security, memory, connections, persistence, replication, performance |
 | Redis Cluster | 17 | 12 single-node + 5 cluster (slots / nodes / failover) |
 | ClickHouse | 15 | Replication, memory, parts/merges, slow queries, config, disk |
+| UXDB | 12 | Connections, shared memory, backup readiness, lock waits, dead tuples, password encryption, superusers, instance memory |
 
 ### One-Click Fix
 
@@ -390,7 +393,7 @@ python web_ui.py                # Configure in AI Settings page after launching
 
 ### SQL Editor
 
-Built-in interactive SQL editor in Web UI, supporting all 18 database types with syntax highlighting, result tables, and friendly error messages.
+Built-in interactive SQL editor in Web UI, supporting all 19 database types with syntax highlighting, result tables, and friendly error messages.
 
 ### Homepage Live Monitoring
 
