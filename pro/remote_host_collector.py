@@ -2,7 +2,6 @@
 # Copyright 2025-2026 fiyo (Jack Ge) <sdfiyon@gmail.com>
 # Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
 
-# -*- coding: utf-8 -*-
 """远端宿主资源采集器（自包含，可在目标机直接运行）。
 
 本模块把「宿主级资源采集」做成一站式、可独立运行的单元：

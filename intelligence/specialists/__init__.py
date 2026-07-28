@@ -2,7 +2,6 @@
 # Copyright 2025-2026 fiyo (Jack Ge) <sdfiyon@gmail.com>
 # Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
 
-# -*- coding: utf-8 -*-
 """专家能力清单：注册所有内置专家能力。"""
 
 from __future__ import annotations

@@ -2,7 +2,6 @@
 # Copyright 2025-2026 fiyo (Jack Ge) <sdfiyon@gmail.com>
 # Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
 
-# -*- coding: utf-8 -*-
 """协同诊断 · 诊断历史存储。
 
 每一次协同诊断的完整结果都会落库（本仓库内 SQLite），

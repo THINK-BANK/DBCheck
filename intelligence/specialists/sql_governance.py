@@ -2,7 +2,6 @@
 # Copyright 2025-2026 fiyo (Jack Ge) <sdfiyon@gmail.com>
 # Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
 
-# -*- coding: utf-8 -*-
 """SQL 治理专员：针对 SQL 相关风险给出改写与索引建议。"""
 
 from __future__ import annotations

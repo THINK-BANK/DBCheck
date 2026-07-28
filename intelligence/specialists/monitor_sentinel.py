@@ -2,7 +2,6 @@
 # Copyright 2025-2026 fiyo (Jack Ge) <sdfiyon@gmail.com>
 # Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
 
-# -*- coding: utf-8 -*-
 """运行监控哨兵：第一时间发现实时监控异常。
 
 指标底座分两层：

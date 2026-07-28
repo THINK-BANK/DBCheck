@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # SPDX-License-Identifier: Apache-2.0
-# Copyright 2025-2026 DBCheck Team
-# Author: DBCheck Team
-#
+# Copyright 2025-2026 fiyo (Jack Ge) <sdfiyon@gmail.com>
+# Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
+
 """
 UXDB JDBC 巡检插件 —— 通过 JPype + uxdbjdbc.jar + 共享 jdbc_jvm 连接优炫数据库 UXDB。
 

@@ -2,7 +2,6 @@
 # Copyright 2025-2026 fiyo (Jack Ge) <sdfiyon@gmail.com>
 # Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
 
-# -*- coding: utf-8 -*-
 """协同诊断中枢 · 实时巡检引擎调度。
 
 让「深度巡检分析专员」直接调用 DBCheck 巡检引擎，为目标数据源

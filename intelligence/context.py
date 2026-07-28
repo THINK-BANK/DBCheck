@@ -2,7 +2,6 @@
 # Copyright 2025-2026 fiyo (Jack Ge) <sdfiyon@gmail.com>
 # Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
 
-# -*- coding: utf-8 -*-
 """协同诊断共享上下文（黑板）。
 
 一次协同诊断的所有中间结论、专家发现与最终处置方案都写入此处，

@@ -2,7 +2,6 @@
 # Copyright 2025-2026 fiyo (Jack Ge) <sdfiyon@gmail.com>
 # Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
 
-# -*- coding: utf-8 -*-
 """DBCheck 专业版：协同诊断中枢层。
 
 将监控、巡检、根因、SQL 治理、锁分析等既有专业能力组织为一支

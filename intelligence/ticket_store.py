@@ -2,7 +2,6 @@
 # Copyright 2025-2026 fiyo (Jack Ge) <sdfiyon@gmail.com>
 # Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
 
-# -*- coding: utf-8 -*-
 """协同诊断 · 工单执行闭环。
 
 轻量工单模型（本仓库内 SQLite，不依赖外部系统）：

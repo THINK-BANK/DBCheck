@@ -1,29 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # SPDX-License-Identifier: Apache-2.0
-# Copyright 2025-2026 DBCheck Team
-# Author: DBCheck Team
-#
-# UXDB JDBC 共享 JVM 管理模块（单例）。
-#
-# 职责：
-#   - 在项目根目录 drivers/**/*.jar 中一次性收集所有 JDBC 驱动 jar；
-#   - 首次调用 ensure_jvm() 时启动 JVM，并将全部驱动 jar 加入 classpath；
-#   - 若 JVM 已由其它插件（如 db2_jdbc / oracle_jdbc）先行启动，则通过反射把
-#     缺失的 jar 动态追加到系统类加载器的 classpath，无需重启 JVM；
-#   - 提供统一的 UXDB 驱动注册入口，供 main_plugin 在 connect() 时调用。
-#
-# 设计要点（镜像 db2_jdbc/jdbc_jvm.py，已验证配方）：
-#   - 单一事实来源：所有 JDBC 驱动统一放在 <root>/drivers/ 下，
-#     ensure_jvm() 用 glob 一次性收集（含 drivers/uxdb/*.jar），避免各插件
-#     单独指定 jar 导致冲突。
-#   - JVM 进程级单例：jpype.isJVMStarted() 守护，重复调用 ensure_jvm() 安全。
-#   - 目标 JDK 为 1.8（plugin.json min_java_version=1.8）：
-#     AppClassLoader 为 URLClassLoader，反射 addURL 追加 classpath 可行。
-#
-# 该模块被设计为“自包含 + 可复用”：既被 uxdb_jdbc 自身使用，也可被其它
-# JDBC 类插件复用，避免多处各起 JVM 导致冲突。
-# ---------------------------------------------------------------------------
+# Copyright 2025-2026 fiyo (Jack Ge) <sdfiyon@gmail.com>
+# Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
 
 import glob
 import os

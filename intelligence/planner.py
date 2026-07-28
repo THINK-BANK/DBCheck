@@ -2,7 +2,6 @@
 # Copyright 2025-2026 fiyo (Jack Ge) <sdfiyon@gmail.com>
 # Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
 
-# -*- coding: utf-8 -*-
 """任务分解：把一句目标拆成专家能力的协同顺序。
 
 不做层级转发，各能力直接读写共享上下文，保持结论完整、

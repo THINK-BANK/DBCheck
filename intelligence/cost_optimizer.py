@@ -2,7 +2,6 @@
 # Copyright 2025-2026 fiyo (Jack Ge) <sdfiyon@gmail.com>
 # Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
 
-# -*- coding: utf-8 -*-
 """协同诊断 · 方案验证（Cost Optimizer 思路）。
 
 对根因定位专员产出的处置方案逐条做「代价 / 收益 / 可行性」评估，

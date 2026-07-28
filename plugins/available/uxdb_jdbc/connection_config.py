@@ -1,15 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # SPDX-License-Identifier: Apache-2.0
-# Copyright 2025-2026 DBCheck Team
-# Author: DBCheck Team
-#
-# UXDB 连接配置数据类 + JDBC URL 构建器。
-#
-# 字段对齐 web_ui / inspection_dal 透传给插件的实例字典
-# （host / port / user / password / database / jdbc_url）。
-# UXDB 为 PostgreSQL 兼容系，JDBC URL 前缀为 jdbc:uxdb。
-# ---------------------------------------------------------------------------
+# Copyright 2025-2026 fiyo (Jack Ge) <sdfiyon@gmail.com>
+# Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
 
 from dataclasses import dataclass
 from typing import Dict
