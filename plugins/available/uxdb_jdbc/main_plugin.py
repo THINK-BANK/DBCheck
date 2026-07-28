@@ -534,10 +534,20 @@ class UxdbJdbcInspector(BaseInspectionEngine):
         # 智能分析（复用 PG 兼容分析器，异常降级空列表）
         try:
             from analyzer import smart_analyze_pg
-            self.context['auto_analyze'] = smart_analyze_pg(self.context)
+            self.context['auto_analyze'] = smart_analyze_pg(self.context) or []
         except Exception as e:
             print(f"[UXDB] 智能分析失败: {e}")
             self.context['auto_analyze'] = []
+        # 规则引擎（YAML 规则，pro/rules/builtin/uxdb.yaml）—— UXDB 专属检查
+        try:
+            from pro.rule_engine import analyze_with_plugins
+            rule_issues = analyze_with_plugins('uxdb', self.context)
+            if rule_issues:
+                if not isinstance(self.context.get('auto_analyze'), list):
+                    self.context['auto_analyze'] = []
+                self.context['auto_analyze'].extend(rule_issues)
+        except Exception as e:
+            print(f"[UXDB] 规则引擎检查跳过: {e}")
 
         print(f"[UXDB] 数据采集完成，context keys: {list(self.context.keys())}")
         return self.context
