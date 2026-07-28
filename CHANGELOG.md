@@ -1,5 +1,11 @@
 # Changelog
 
+## v26.7.28.1 (2026-07-28)
+- **版本统一**：各源文件版本标记 v26.7.26.1 → v26.7.28.1（version.py / version.json / Dockerfile / skill `dbcheck` `_meta` + `_skillhub_meta` + `scripts/version.py` / README + README_zh 徽章 / CHANGELOG 顶段）
+- **智能诊断能力下沉社区版**：智能诊断中心、诊断历史、eBPF 内核级监控由专业版下沉至社区版免费提供（多专员协作诊断、诊断结论落库溯源、块设备 IO/CPU 内核级归因）
+- **新增优炫数据库（UXDB）巡检**：新增 `plugins/available/uxdb_jdbc` 巡检插件（PostgreSQL 兼容系，JDBC 接入，默认端口 33060，复用 PG 模板与规则引擎），数据库类型 18 → 19
+- **其它优化**：首页实例分布图重设计（左侧自定义图例 + 右侧独立圆环）、菜单与权限配置 `menu.flow` 国际化补全、浅色主题打磨、9 语言 i18n 对齐、社区版全面开源（Apache-2.0 + 强化署名）、CI license-header 校验与 GitHub Actions 运行环境升级至 Node 24
+
 ## v26.7.26.1 (2026-07-26)
 - **版本统一**：各源文件版本标记 v26.7.24.0 → v26.7.26.1（version.py / version.json / Dockerfile / README + README_zh 章节 / CHANGELOG 条目）；官网（website 分支）同步更新至 v26.7.26.1。
 - **新增 ClickHouse 巡检支持**：新增 `plugins/available/clickhouse_jdbc` 巡检插件（JPype1 + clickhouse-jdbc 驱动，默认端口 8123），覆盖库/表/对象查询与 SQL 在线执行；新增 `pro/rules/builtin/clickhouse.yaml`（15 条风险规则）与基线配置（9 项参数），复用 `pro.rule_engine` 智能风险分析，支持一键修复 SQL；SQL 编辑器支持 ClickHouse 语法高亮与执行。数据库类型 17 → 18，巡检规则 300+（含 ClickHouse 15 条）。
