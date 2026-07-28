@@ -1,6 +1,8 @@
 # coding: utf-8
 # SPDX-License-Identifier: Apache-2.0
-# -*- test-case-name: tests.test_hgdb_sql_editor -*-
+# Copyright 2025-2026 fiyo (Jack Ge) <sdfiyon@gmail.com>
+# Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
+
 """
 HGDB SQL 编辑器 Bug 修复回归测试（离线静态 + mock 方式）
 

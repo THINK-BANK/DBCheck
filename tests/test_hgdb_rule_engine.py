@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
 # SPDX-License-Identifier: Apache-2.0
+# Copyright 2025-2026 fiyo (Jack Ge) <sdfiyon@gmail.com>
+# Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
+
 """
 HGDB 规则引擎回归测试 —— 验证「规则引擎缺少 HGDB 数据」Bug 修复。
 
