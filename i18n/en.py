@@ -396,6 +396,7 @@ EN = {
     "webui.db_kingbase_ver": "KingbaseES V8+",
     "webui.db_gbase_name": "GBase 8s",
     "webui.db_gbase_desc": "For GBase 8s V8+ instances — connects via JDBC, supports tablespace, sessions, locks and other core metrics inspection.",
+    "webui.db_hgdb_desc": "For HighGo HGDB V9 (PostgreSQL compatible) instances — connects via JDBC (org.postgresql.Driver), reusing PG inspection templates.",
     "webui.db_tidb_desc": "For TiDB 6.5+ / MySQL 8.0 compatible clusters — collects cluster topology, storage, transactions, SQL stats and other core metrics.",
     "webui.db_tidb_beta": "(Beta)",
     "webui.db_type_tidb": "TiDB",
@@ -1783,6 +1784,9 @@ EN = {
     "webui.uxdb_report_filename": "UXDB Inspection Report_{ip}_{name}_{ts}",
     "webui.log_uxdb_start": "[{ts}] [UXDB] Starting inspection...",
     "webui.err_uxdb_module": "UXDB module not installed",
+    "webui.hgdb_report_filename": "HGDB Inspection Report_{ip}_{name}_{ts}",
+    "webui.log_hgdb_start": "[{ts}] [HGDB] Starting inspection...",
+    "webui.err_hgdb_module": "HGDB module not installed",
     "webui.oracle_jdbc_report_filename": "Oracle_JDBC_Inspection_{ip}_{name}_{ts}",
 
     # SQL Server CLI i18n

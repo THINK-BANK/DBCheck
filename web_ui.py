@@ -2821,7 +2821,7 @@ def api_start_inspection():
                 'user':      instance.get('user', ''),
                 'tenant':    instance.get('tenant', '') or '',
                 'password':  instance.get('password', ''),
-                'database':  instance.get('database') or ('admin' if db_type == 'mongodb' else ('master' if db_type == 'sqlserver' else ('DAMENG' if db_type == 'dm' else ('testdb' if db_type == 'gbase' else ('default' if db_type == 'clickhouse' else ('' if db_type in ('tidb', 'oceanbase', 'mysql', 'mariadb', 'redis', 'redis-cluster') else 'postgres')))))),
+                'database':  instance.get('database') or ('highgo' if db_type == 'hgdb' else ('admin' if db_type == 'mongodb' else ('master' if db_type == 'sqlserver' else ('DAMENG' if db_type == 'dm' else ('testdb' if db_type == 'gbase' else ('default' if db_type == 'clickhouse' else ('' if db_type in ('tidb', 'oceanbase', 'mysql', 'mariadb', 'redis', 'redis-cluster') else 'postgres'))))))),
                 'service_name': instance.get('service_name', None),
                 'sysdba':    bool(instance.get('sysdba', False)),  # ← 新增（确保是布尔值）
                 'name':      instance.get('name', ''),
@@ -2844,7 +2844,7 @@ def api_start_inspection():
                 'user':      data.get('user', ''),
                 'tenant':    data.get('tenant', '') or '',
                 'password':  data.get('password', ''),
-                'database':  data.get('database') or ('admin' if db_type == 'mongodb' else ('master' if db_type == 'sqlserver' else ('DAMENG' if db_type == 'dm' else ('testdb' if db_type == 'gbase' else ('default' if db_type == 'clickhouse' else ('' if db_type in ('tidb', 'oceanbase', 'mysql', 'mariadb', 'redis', 'redis-cluster') else 'postgres')))))),
+                'database':  data.get('database') or ('highgo' if db_type == 'hgdb' else ('admin' if db_type == 'mongodb' else ('master' if db_type == 'sqlserver' else ('DAMENG' if db_type == 'dm' else ('testdb' if db_type == 'gbase' else ('default' if db_type == 'clickhouse' else ('' if db_type in ('tidb', 'oceanbase', 'mysql', 'mariadb', 'redis', 'redis-cluster') else 'postgres'))))))),
                 'service_name': data.get('service_name', None),
                 'sysdba':    bool(data.get('sysdba', False)),  # ← 新增（确保是布尔值）
                 'sid':       data.get('sid', None),
@@ -5564,10 +5564,10 @@ def api_ds_databases(ds_id):
             cur.execute("SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME")
             databases = [r[0] for r in cur.fetchall()]
             conn.close()
-        elif db_type in ('postgresql', 'ivorysql', 'kingbase'):
+        elif db_type in ('postgresql', 'ivorysql', 'kingbase', 'hgdb'):
             import psycopg2
-            # kingbase 默认库名为 kingbase，PG/IvorySQL 为 postgres
-            _pg_default_db = 'kingbase' if db_type == 'kingbase' else 'postgres'
+            # kingbase 默认库名为 kingbase，HGDB 默认库名为 highgo，PG/IvorySQL 为 postgres
+            _pg_default_db = 'kingbase' if db_type == 'kingbase' else ('highgo' if db_type == 'hgdb' else 'postgres')
             conn = psycopg2.connect(host=host, port=port, user=user, password=pwd,
                                     dbname=_pg_default_db, connect_timeout=timeout)
             cur = conn.cursor()
@@ -5811,7 +5811,7 @@ def api_ds_objects(ds_id):
                 elif row[1] == 'VIEW':
                     views.append(row[0])
             conn.close()
-        elif db_type in ('postgresql', 'ivorysql', 'kingbase'):
+        elif db_type in ('postgresql', 'ivorysql', 'kingbase', 'hgdb'):
             import psycopg2
             conn = psycopg2.connect(host=host, port=port, user=user, password=pwd,
                                     dbname=database, connect_timeout=timeout)
@@ -6171,9 +6171,9 @@ def api_execute_sql():
             rows = cursor.fetchmany(200)
             has_more = len(rows) >= 200
 
-        elif db_type in ('postgresql', 'ivorysql', 'kingbase'):
+        elif db_type in ('postgresql', 'ivorysql', 'kingbase', 'hgdb'):
             import psycopg2
-            db_name = database or 'postgres'
+            db_name = database or ('highgo' if db_type == 'hgdb' else 'postgres')
             conn = psycopg2.connect(
                 host=host, port=port, user=user, password=pwd,
                 dbname=db_name, connect_timeout=10
@@ -7917,7 +7917,7 @@ def _stream_inspection_response(data, message, session_id, chat_context):
         'port': int(ds.get('port', 3306)),
         'user': ds.get('user', ''),
         'password': ds.get('password', ''),
-        'database': ds.get('database') or ('postgres' if db_type == 'pg' else ('DAMENG' if db_type == 'dm' else '')),
+        'database': ds.get('database') or ('highgo' if db_type == 'hgdb' else ('postgres' if db_type == 'pg' else ('DAMENG' if db_type == 'dm' else ''))),
         'service_name': ds.get('service_name') or ds.get('sid'),
         'name': ds.get('name', db_name or ds.get('host', '')),
     }
@@ -8301,7 +8301,7 @@ def api_chat():
                 'port': int(ds.get('port', 3306)),
                 'user': ds.get('user', ''),
                 'password': ds.get('password', ''),
-                'database': ds.get('database') or ('postgres' if db_type == 'pg' else ('DAMENG' if db_type == 'dm' else '')),
+                'database': ds.get('database') or ('highgo' if db_type == 'hgdb' else ('postgres' if db_type == 'pg' else ('DAMENG' if db_type == 'dm' else ''))),
                 'service_name': ds.get('service_name') or ds.get('sid'),
                 'name': ds.get('name', db_name or ds.get('host', '')),
             }
