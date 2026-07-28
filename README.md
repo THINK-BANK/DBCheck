@@ -1,4 +1,4 @@
-# DBCheck Professional — Commercial Intelligent Database Inspection Tool
+﻿# DBCheck Professional — Commercial Intelligent Database Inspection Tool
 
 ![logo](snapshot/dbcheck_logo_info.png)
 
@@ -10,7 +10,7 @@ DBCheck Professional is a commercial, cross-platform database health inspection 
 > 
 > Language: [English](./README.md) | 语言：[中文](./README_zh.md)
 
-[![Version](https://img.shields.io/badge/Version-v26.7.28.1-blue.svg)]()
+[![Version](https://img.shields.io/badge/Version-v26.7.29.1-blue.svg)]()
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)]()
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)]()
 [![AI](https://img.shields.io/badge/AI-Ollama+OpenAI-orange.svg)]()
@@ -41,6 +41,7 @@ DBCheck Professional is a commercial, cross-platform database health inspection 
 | KingbaseES | psycopg2 (PG protocol) | 54321 | Chinese domestic DB |
 | GBase 8s | JDBC (jaydebeapi + JDK) | 9088 | Chinese domestic DB |
 | UXDB (YouXuan) | uxdb_jdbc (JDBC) | 33060 | Chinese domestic DB, PostgreSQL-compatible |
+| HGDB (HighGo) | hgdb_jdbc (JDBC, PG protocol) | 5866 | Chinese domestic DB, PostgreSQL-compatible (V9 = PG 14.20) |
 | MongoDB | pymongo | 27017 | 4.0+ |
 | DB2 (LUW) | JDBC (JPype1 + db2jcc4) | 50000 | 11.5+ / 12.x (LUW) |
 | OceanBase (MySQL tenant) | pymysql (MySQL protocol) | 2881 | 4.x+; MySQL-compatible; Oracle tenant reserved |
@@ -249,6 +250,7 @@ For detailed plugin development guide, see [Plugin Development Documentation](do
 | Redis | Redis 3.0+ | KV cache inspection: connection, version, memory, clients, persistence, performance, replication, keyspace, slow queries, config baseline |
 | Redis Cluster | Redis Cluster | Cluster topology (CLUSTER INFO / NODES), slot distribution and node health on top of single-node capabilities |
 | UXDB (JDBC) | UXDB 2.x | PostgreSQL-compatible Chinese domestic DB inspection plugin, 12 rules based on ux_catalog system catalog |
+| HGDB (JDBC) | HGDB V9 | PostgreSQL-compatible (PG 14.20) Chinese domestic DB inspection plugin, 12 rules based on standard PG catalogs |
 
 > **Note:** Plugins are completely independent. Installing a plugin automatically initializes its data; uninstalling a plugin automatically cleans up all associated data.
 
@@ -258,27 +260,27 @@ For detailed plugin development guide, see [Plugin Development Documentation](do
 
 ### Inspection Coverage by Database
 
-| Category | MySQL | PG | Oracle | Oracle (JDBC) | SQL Server | DM8 | TiDB | IvorySQL | YashanDB | KingbaseES | GBase 8s | MongoDB |
-|----------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| Basic Info (version/instance/DB) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Sessions & Connections | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Memory & Cache | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — |
-| Tablespaces | — | — | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | — | ✅ | — |
-| SGA / PGA Memory | — | — | ✅ | ✅ | — | ✅ | — | — | ✅ | — | — | — |
-| Redo Logs | — | — | ✅ | ✅ | — | ✅ | — | ✅ | — | — | — | — |
-| Archive & Backup | — | — | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | — | — | — |
-| Key Parameter Config | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Invalid Objects | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — |
-| User Security Audit | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Top SQL / Slow Queries | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Replication / Data Guard | ✅ | ✅ | — | — | — | — | ✅ | ✅ | — | ✅ | — | ✅ |
-| RAC Cluster | — | — | ✅ | ✅ | — | — | — | — | — | — | — | — |
-| Lock & Blocking Detection | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — |
-| Object Statistics | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | — |
-| Partitioned Tables | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | — | — |
-| Chunks / Disk Storage | — | — | — | — | — | — | — | — | — | — | — | — |
-| Logical Logs / Checkpoints | — | — | — | — | — | — | — | — | — | — | — | — |
-| Database Status & Stats | — | — | — | — | — | — | — | — | — | — | — | ✅ |
+| Category | MySQL | PG | Oracle | Oracle (JDBC) | SQL Server | DM8 | TiDB | IvorySQL | YashanDB | KingbaseES | GBase 8s | MongoDB | HGDB |
+|----------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| Basic Info (version/instance/DB) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Sessions & Connections | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Memory & Cache | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ |
+| Tablespaces | — | — | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | — | ✅ | — | — |
+| SGA / PGA Memory | — | — | ✅ | ✅ | — | ✅ | — | — | ✅ | — | — | — | — |
+| Redo Logs | — | — | ✅ | ✅ | — | ✅ | — | ✅ | — | — | — | — | — |
+| Archive & Backup | — | — | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | — | — | — | — |
+| Key Parameter Config | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Invalid Objects | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ |
+| User Security Audit | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Top SQL / Slow Queries | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Replication / Data Guard | ✅ | ✅ | — | — | — | — | ✅ | ✅ | — | ✅ | — | ✅ | ✅ |
+| RAC Cluster | — | — | ✅ | ✅ | — | — | — | — | — | — | — | — | — |
+| Lock & Blocking Detection | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ |
+| Object Statistics | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | — |
+| Partitioned Tables | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | — | — | — |
+| Chunks / Disk Storage | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| Logical Logs / Checkpoints | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| Database Status & Stats | — | — | — | — | — | — | — | — | — | — | — | ✅ | — |
 
 ### Word Report Structure (Oracle Example)
 
@@ -335,6 +337,11 @@ The Word report includes the unified **System Resource** chapter (CPU / memory /
 > **Note:** OceanBase (MySQL tenant) reuses the MySQL inspection engine and rule set (port **2881**, pymysql). Oracle-tenant support is reserved for a future release.
 
 ---
+
+
+### HGDB Inspection (JDBC)
+
+HighGo **HGDB V9** (PostgreSQL 14.20 kernel) is supported through the JDBC plugin (`hgdb_jdbc`), connecting via the standard **PostgreSQL protocol** (driver `org.postgresql.Driver` + `postgresql-42.2.2.jar`, default port **5866**, default database **highgo**). It runs a data-driven inspection with **8 chapters** and **21 queries** based on standard PG system catalogs and views (`pg_settings`, `pg_stat_activity`, `pg_locks`, `pg_roles`, `pg_stat_user_tables`, `pg_hba_file_rules`, etc.), and ships **12 built-in rules** (`pro/rules/builtin/hgdb.yaml`) covering connection, memory, backup, lock, maintenance, security and system dimensions — all merged into the unified **Risks & Recommendations** chapter. The SQL Editor also fully supports HGDB (list databases / objects / run queries) via the psycopg2 path.
 
 ## Intelligent Risk Analysis
 

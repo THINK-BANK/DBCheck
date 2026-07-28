@@ -1,4 +1,4 @@
-# DBCheck 专业版 — 商业数据库智能巡检工具
+﻿# DBCheck 专业版 — 商业数据库智能巡检工具
 
 ![logo](snapshot/dbcheck_logo_info.png)
 
@@ -10,7 +10,7 @@ DBCheck 专业版是一款商业、跨平台的数据库自动化健康巡检工
 > 
 > Language: [English](./README.md) | 语言：[中文](./README_zh.md)
 
-[![Version](https://img.shields.io/badge/版本-v26.7.28.1-blue.svg)]()
+[![Version](https://img.shields.io/badge/版本-v26.7.29.1-blue.svg)]()
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)]()
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)]()
 [![AI](https://img.shields.io/badge/AI-Ollama+OpenAI-orange.svg)]()
@@ -41,6 +41,7 @@ DBCheck 专业版是一款商业、跨平台的数据库自动化健康巡检工
 | KingbaseES（人大金仓） | psycopg2（PG 协议） | 54321 | 国产数据库 |
 | GBase 8s | JDBC（jaydebeapi + JDK） | 9088 | 国产数据库 |
 | 优炫 UXDB | uxdb_jdbc（JDBC） | 33060 | 国产数据库，PostgreSQL 兼容 |
+| 瀚高 HGDB | hgdb_jdbc（JDBC，PG 协议） | 5866 | 国产数据库，PostgreSQL 兼容（V9 = PG 14.20） |
 | MongoDB | pymongo | 27017 | 4.0+ |
 | DB2（LUW） | JDBC（JPype1 + db2jcc4） | 50000 | 11.5+ / 12.x（LUW） |
 | OceanBase（MySQL 租户） | pymysql（MySQL 协议） | 2881 | 4.x+；兼容 MySQL；Oracle 租户预留 |
@@ -250,6 +251,7 @@ plugins/available/your_plugin/
 | Redis | Redis 3.0+ | KV 缓存巡检：连接、版本、内存、客户端、持久化、性能、复制、键空间、慢查询、配置基线 |
 | Redis 集群 | Redis Cluster | 在单机能力基础上增加集群拓扑（CLUSTER INFO / NODES）、槽位分布与节点健康 |
 | 优炫 UXDB（JDBC） | UXDB 2.x | PostgreSQL 兼容的国产库巡检插件，12 条规则，基于 ux_catalog 系统目录编写 |
+| 瀚高 HGDB（JDBC） | HGDB V9 | PostgreSQL 兼容（PG 14.20）的国产库巡检插件，12 条规则，基于标准 PG 系统目录编写 |
 
 > **说明**：插件完全独立。安装插件时自动初始化数据；卸载插件时自动清理所有关联数据。
 
@@ -259,27 +261,27 @@ plugins/available/your_plugin/
 
 ### 各库巡检覆盖
 
-| Category | MySQL | PG | Oracle | Oracle (JDBC) | SQL Server | DM8 | TiDB | IvorySQL | YashanDB | KingbaseES | GBase 8s | MongoDB |
-|----------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| Basic Info (version/instance/DB) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Sessions & Connections | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Memory & Cache | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — |
-| Tablespaces | — | — | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | — | ✅ | — |
-| SGA / PGA Memory | — | — | ✅ | ✅ | — | ✅ | — | — | ✅ | — | — | — |
-| Redo Logs | — | — | ✅ | ✅ | — | ✅ | — | ✅ | — | — | — | — |
-| Archive & Backup | — | — | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | — | — | — |
-| Key Parameter Config | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Invalid Objects | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — |
-| User Security Audit | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Top SQL / Slow Queries | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Replication / Data Guard | ✅ | ✅ | — | — | — | — | ✅ | ✅ | — | ✅ | — | ✅ |
-| RAC Cluster | — | — | ✅ | ✅ | — | — | — | — | — | — | — | — |
-| Lock & Blocking Detection | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — |
-| Object Statistics | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | — |
-| Partitioned Tables | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | — | — |
-| Chunks / Disk Storage | — | — | — | — | — | — | — | — | — | — | — | — |
-| Logical Logs / Checkpoints | — | — | — | — | — | — | — | — | — | — | — | — |
-| Database Status & Stats | — | — | — | — | — | — | — | — | — | — | — | ✅ |
+| Category | MySQL | PG | Oracle | Oracle (JDBC) | SQL Server | DM8 | TiDB | IvorySQL | YashanDB | KingbaseES | GBase 8s | MongoDB | HGDB |
+|----------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| Basic Info (version/instance/DB) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Sessions & Connections | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Memory & Cache | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ |
+| Tablespaces | — | — | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | — | ✅ | — | — |
+| SGA / PGA Memory | — | — | ✅ | ✅ | — | ✅ | — | — | ✅ | — | — | — | — |
+| Redo Logs | — | — | ✅ | ✅ | — | ✅ | — | ✅ | — | — | — | — | — |
+| Archive & Backup | — | — | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | — | — | — | — |
+| Key Parameter Config | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Invalid Objects | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ |
+| User Security Audit | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Top SQL / Slow Queries | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Replication / Data Guard | ✅ | ✅ | — | — | — | — | ✅ | ✅ | — | ✅ | — | ✅ | ✅ |
+| RAC Cluster | — | — | ✅ | ✅ | — | — | — | — | — | — | — | — | — |
+| Lock & Blocking Detection | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ |
+| Object Statistics | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | — |
+| Partitioned Tables | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | — | — | — |
+| Chunks / Disk Storage | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| Logical Logs / Checkpoints | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| Database Status & Stats | — | — | — | — | — | — | — | — | — | — | — | ✅ | — |
 
 
 ### Word 报告结构（Oracle 示例）
@@ -337,6 +339,11 @@ Redis **3.0+** 通过两个独立插件提供支持——`redis`（单机）与 
 > **说明**：OceanBase（MySQL 租户）复用 MySQL 巡检引擎与规则集（端口 **2881**，pymysql）；Oracle 租户支持预留，将在后续版本提供。
 
 ---
+
+
+### 瀚高 HGDB 巡检（JDBC）
+
+瀚高 **HGDB V9**（PostgreSQL 14.20 内核）通过 JDBC 插件（`hgdb_jdbc`）提供支持，采用标准 **PostgreSQL 协议**连接（驱动 `org.postgresql.Driver` + `postgresql-42.2.2.jar`，默认端口 **5866**，默认库 **highgo**）。采用数据驱动巡检，共 **8 个章节**、**21 个查询**，基于标准 PG 系统目录与视图（`pg_settings`、`pg_stat_activity`、`pg_locks`、`pg_roles`、`pg_stat_user_tables`、`pg_hba_file_rules` 等）编写，并内置 **12 条规则**（`pro/rules/builtin/hgdb.yaml`），覆盖连接、内存、备份、锁、维护、安全与系统维度，统一并入 **风险与建议** 章节。SQL 编辑器亦通过 psycopg2 路径完整支持 HGDB（列库 / 列表视图 / 执行 SQL）。
 
 ## 智能风险分析
 

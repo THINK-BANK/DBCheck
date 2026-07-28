@@ -1,5 +1,10 @@
 # Changelog
 
+## v26.7.29.1 (2026-07-29)
+- **新增瀚高 HGDB 巡检（JDBC）**：新增 `plugins/available/hgdb_jdbc` 巡检插件（PostgreSQL 14.20 内核，JDBC 接入，默认端口 5866，默认库 highgo，复用 PG 模板与规则引擎），数据库类型 19 → 20；新增 `pro/rules/builtin/hgdb.yaml`（12 条风险规则），SQL 编辑器 psycopg2 路径接入 HGDB（列库 / 列表视图 / 执行 SQL）；中英文 README 补充 HGDB 支持说明、内置插件表与巡检覆盖表。
+- **优炫 UXDB 规则引擎生效修复**：`uxdb_jdbc` 的 `collect_data` 接入 `analyze_with_plugins('uxdb', context)`，使既有 `uxdb.yaml` 规则在巡检时真正触发（此前规则存在但不触发）。
+- **版本统一**：各源文件版本标记 v26.7.28.1 → v26.7.29.1（version.py / version.json / Dockerfile / skill `dbcheck` `_meta` + `_skillhub_meta` + `scripts/version.py` / README + README_zh 徽章 / CHANGELOG 顶段），官网（website 分支）同步更新至 v26.7.29.1。
+
 ## v26.7.28.1 (2026-07-28)
 - **版本统一**：各源文件版本标记 v26.7.26.1 → v26.7.28.1（version.py / version.json / Dockerfile / skill `dbcheck` `_meta` + `_skillhub_meta` + `scripts/version.py` / README + README_zh 徽章 / CHANGELOG 顶段）
 - **智能诊断能力下沉社区版**：智能诊断中心、诊断历史、eBPF 内核级监控由专业版下沉至社区版免费提供（多专员协作诊断、诊断结论落库溯源、块设备 IO/CPU 内核级归因）
