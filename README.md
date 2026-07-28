@@ -32,7 +32,7 @@ DBCheck Professional is a commercial, cross-platform database health inspection 
 | MariaDB | pymysql (MySQL protocol) | 3306 | 10.3+ |
 | PostgreSQL | psycopg2 | 5432 | 10+ |
 | Oracle | oracledb (pure Python, no client needed) | 1521 | 11g R2 / 12c / 19c / 21c+ |
-| Oracle (JDBC) | JDBC (JPype1 + ojdbc) | 1521 | 11g / 12c / 19c / 21c+，完整移植 Oracle 11g 巡检模板 |
+| Oracle (JDBC) | JDBC (JPype1 + ojdbc) | 1521 | 11g / 12c / 19c / 21c+，Complete migration of Oracle 11g inspection template |
 | SQL Server | pyodbc + ODBC Driver 17 | 1433 | 2012+ |
 | DM8 (Dameng) | dmpython | 5236 | Chinese domestic DB |
 | TiDB | pymysql (MySQL protocol) | 4000 | 6.5+ |
