@@ -1,5 +1,9 @@
 # Changelog
 
+## v26.7.29.2 (2026-07-29)
+- **修复容灾备份（DR）模块镜像依赖缺失**：`requirements-docker.txt` 补回 `requests` 与 `croniter` 两个 DR 模块的硬依赖，修复因镜像 venv 缺包导致 DR 蓝图被静默吞掉、`POST /api/dr/plans` 报 405（前端保存备份计划失败）的问题。
+- **版本统一**：各源文件版本标记 v26.7.29.1 → v26.7.29.2（version.py / version.json / Dockerfile / skill `dbcheck` `_meta` + `_skillhub_meta` + `scripts/version.py` / README + README_zh 徽章 / CHANGELOG 顶段）。
+
 ## v26.7.29.1 (2026-07-29)
 - **新增瀚高 HGDB 巡检（JDBC）**：新增 `plugins/available/hgdb_jdbc` 巡检插件（PostgreSQL 14.20 内核，JDBC 接入，默认端口 5866，默认库 highgo，复用 PG 模板与规则引擎），数据库类型 19 → 20；新增 `pro/rules/builtin/hgdb.yaml`（12 条风险规则），SQL 编辑器 psycopg2 路径接入 HGDB（列库 / 列表视图 / 执行 SQL）；中英文 README 补充 HGDB 支持说明、内置插件表与巡检覆盖表。
 - **优炫 UXDB 规则引擎生效修复**：`uxdb_jdbc` 的 `collect_data` 接入 `analyze_with_plugins('uxdb', context)`，使既有 `uxdb.yaml` 规则在巡检时真正触发（此前规则存在但不触发）。
