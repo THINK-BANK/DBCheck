@@ -168,7 +168,7 @@ Hand a single goal plus one data source to a team of five specialized **diagnost
 - **Fault tolerance** — one specialist failing doesn't abort the diagnosis; the error is noted in context and collaboration continues.
 - **Streaming collaboration** — the hub schedules specialists one by one and emits progress events; the Web UI shows "who is analyzing now" via SSE in real time.
 - **Cost Optimizer** — ranks each remediation by cost / benefit / feasibility, recommends an *easy-before-hard* order, and flags whether a step needs a maintenance window or can be auto-executed.
-- **Ticket closed-loop** — one-click create tickets tracked through `待处理 / 处理中 / 已解决 / 已关闭 / 已取消`, with execution feedback written back — a diagnosis → dispatch → fix → feedback loop.
+- **Ticket closed-loop** — one-click create tickets tracked through `Pending/Processing/Resolved/Closed/Cancelled`, with execution feedback written back — a diagnosis → dispatch → fix → feedback loop.
 - **Diagnosis history** — every collaborative diagnosis is persisted (local SQLite) with a diagnosis number (`diag_no`); filterable by data source, viewable in full, and one-click linkable to a ticket.
 
 ### eBPF Kernel-Level Host Collection
@@ -364,7 +364,7 @@ Automatically detects potential risks across all database types. **Each risk ite
 | GBase 8s | 6+ | Connections, dbspace, logs, memory, password policies |
 | MongoDB | 10+ | Connections, memory, operations, replication, security |
 | DB2 (LUW) | 42 | Tablespaces, buffer pools, locks, memory, config, top SQL, security |
-| OceanBase | 复用 MySQL 35+ + OB 12 | Tenant, params, replication, resources, security |
+| OceanBase | Reuse MySQL 35+ + OB 12 | Tenant, params, replication, resources, security |
 | Redis | 12 | Security, memory, connections, persistence, replication, performance |
 | Redis Cluster | 17 | 12 single-node + 5 cluster (slots / nodes / failover) |
 | ClickHouse | 15 | Replication, memory, parts/merges, slow queries, config, disk |
@@ -434,7 +434,7 @@ Supports Cron expressions with quick presets (daily / weekdays / weekly / monthl
 
 ### Disaster Recovery Backup
 
-Built-in disaster recovery backup module powered by the MIT-licensed **autobackup** engine (vendored in-process — no Docker / sidecar required). Supports scheduled backups for **MySQL / MariaDB / PostgreSQL / files** with Cron scheduling, retention-day cleanup, and webhook notifications (DingTalk / WeCom / Feishu / email). Backup history, health scoring (freshness + success rate), and one-click restore points are available from the "容灾备份" page in the Web UI. Database passwords are encrypted at rest (Fernet) and masked in API responses.
+Built-in disaster recovery backup module powered by the MIT-licensed **autobackup** engine (vendored in-process — no Docker / sidecar required). Supports scheduled backups for **MySQL / MariaDB / PostgreSQL / files** with Cron scheduling, retention-day cleanup, and webhook notifications (DingTalk / WeCom / Feishu / email). Backup history, health scoring (freshness + success rate), and one-click restore points are available from the "Disaster recovery backup" page in the Web UI. Database passwords are encrypted at rest (Fernet) and masked in API responses.
 
 ### Shareable Links
 
@@ -483,7 +483,7 @@ Upload PDF / Word / Markdown / TXT documents for automatic vectorization. AI ret
 
 ### Multi-Language & Themes
 
-- **9 languages supported**: Simplified Chinese (默认), English, Traditional Chinese (繁體中文), Japanese (日本語), Korean (한국어), Spanish (Español), French (Français), German (Deutsch), Russian (Русский)
+- **9 languages supported**: 中文 (default), English, Traditional Chinese (繁體中文), Japanese (日本語), Korean (한국어), Spanish (Español), French (Français), German (Deutsch), Russian (Русский)
 - Switch anytime via the Web UI language selector (top-right) or the CLI argument (`python main.py --lang <code>`)
 - UI text, menus, report templates, and AI diagnostic labels are all localized
 - Dark / Light theme support with automatic preference saving
