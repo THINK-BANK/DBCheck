@@ -2,7 +2,7 @@
 
 ![logo](snapshot/dbcheck_logo_info.png)
 
-DBCheck 专业版是一款商业、跨平台的数据库自动化健康巡检工具，支持 **19 种数据库类型**（关系型 / 文档型 / KV 缓存），通过执行预定义的巡检 SQL 并采集系统资源，自动生成标准化的 Word 巡检报告。同时提供 SQL 编辑器、远程终端、可配置巡检章节、配置基线管理、历史趋势分析、AI 智能诊断、索引健康分析、慢查询深度分析、服务器巡检、分享链接、数据脱敏导出等高级功能。
+DBCheck 专业版是一款商业、跨平台的数据库自动化健康巡检工具，支持 **21 种数据库类型**（关系型 / 文档型 / KV 缓存），通过执行预定义的巡检 SQL 并采集系统资源，自动生成标准化的 Word 巡检报告。同时提供 SQL 编辑器、远程终端、可配置巡检章节、配置基线管理、历史趋势分析、AI 智能诊断、索引健康分析、慢查询深度分析、服务器巡检、分享链接、数据脱敏导出等高级功能。
 
 > **注意**：本文及 DBCheck 软件中包含第三方的软件名称、logo、商标、徽章等均为第三方公司或机构所有，本文以及 DBCheck 软件中展示仅表示本软件支持对接相应的数据库或平台，并不暗示与其有任何关联或合作。
 
@@ -45,6 +45,7 @@ DBCheck 专业版是一款商业、跨平台的数据库自动化健康巡检工
 | MongoDB | pymongo | 27017 | 4.0+ |
 | DB2（LUW） | JDBC（JPype1 + db2jcc4） | 50000 | 11.5+ / 12.x（LUW） |
 | OceanBase（MySQL 租户） | pymysql（MySQL 协议） | 2881 | 4.x+；兼容 MySQL；Oracle 租户预留 |
+| TDSQL-C MySQL | pymysql（MySQL 协议） | 3306 | 腾讯云云原生 MySQL 兼容数据库（TDSQL-C） |
 | Redis | redis-py | 6379 | KV 缓存，3.0+（6.0+ 支持 ACL） |
 | Redis 集群 | redis-py（RedisCluster） | 6379 | 16384 槽位，种子节点自动发现 |
 | ClickHouse | clickhouse-jdbc（JPype1 + clickhouse-jdbc 驱动） | 8123 | 列式 OLAP，21.8+（单机/集群） |
@@ -124,7 +125,7 @@ python web_ui.py         # Web 界面
 | 功能 | 说明 |
 |------|------|
 | 🗄️ 数据源管理 | 统一管理所有数据库实例，支持分组、批量巡检、CSV 导入导出 |
-| 📋 数据库巡检 | 覆盖 19 种数据库，330+ 条巡检规则，自动生成 Word 报告 |
+| 📋 数据库巡检 | 覆盖 21 种数据库，330+ 条巡检规则，自动生成 Word 报告 |
 | 🔌 插件系统 | 可扩展插件架构，支持生命周期管理（安装/卸载）、插件数据独立、插件市场 |
 | 🔍 慢查询深度分析 | 关联执行计划、I/O 模式、锁等待等维度，AI 辅助根因分析 |
 | 🔒 锁诊断 | 阻塞链可视化、死锁统计、长事务检测，含可执行修复脚本 |
@@ -252,6 +253,7 @@ plugins/available/your_plugin/
 | Redis 集群 | Redis Cluster | 在单机能力基础上增加集群拓扑（CLUSTER INFO / NODES）、槽位分布与节点健康 |
 | 优炫 UXDB（JDBC） | UXDB 2.x | PostgreSQL 兼容的国产库巡检插件，12 条规则，基于 ux_catalog 系统目录编写 |
 | 瀚高 HGDB（JDBC） | HGDB V9 | PostgreSQL 兼容（PG 14.20）的国产库巡检插件，12 条规则，基于标准 PG 系统目录编写 |
+| TDSQL-C MySQL（插件） | TDSQL-C MySQL | 腾讯云 MySQL 兼容巡检插件；复用 MySQL 采集引擎与 20 条规则集 |
 
 > **说明**：插件完全独立。安装插件时自动初始化数据；卸载插件时自动清理所有关联数据。
 
@@ -261,27 +263,27 @@ plugins/available/your_plugin/
 
 ### 各库巡检覆盖
 
-| Category | MySQL | PG | Oracle | Oracle (JDBC) | SQL Server | DM8 | TiDB | IvorySQL | YashanDB | KingbaseES | GBase 8s | MongoDB | HGDB |
-|----------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| Basic Info (version/instance/DB) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Sessions & Connections | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Memory & Cache | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ |
-| Tablespaces | — | — | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | — | ✅ | — | — |
-| SGA / PGA Memory | — | — | ✅ | ✅ | — | ✅ | — | — | ✅ | — | — | — | — |
-| Redo Logs | — | — | ✅ | ✅ | — | ✅ | — | ✅ | — | — | — | — | — |
-| Archive & Backup | — | — | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | — | — | — | — |
-| Key Parameter Config | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Invalid Objects | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ |
-| User Security Audit | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Top SQL / Slow Queries | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Replication / Data Guard | ✅ | ✅ | — | — | — | — | ✅ | ✅ | — | ✅ | — | ✅ | ✅ |
-| RAC Cluster | — | — | ✅ | ✅ | — | — | — | — | — | — | — | — | — |
-| Lock & Blocking Detection | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ |
-| Object Statistics | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | — |
-| Partitioned Tables | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | — | — | — |
-| Chunks / Disk Storage | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| Logical Logs / Checkpoints | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| Database Status & Stats | — | — | — | — | — | — | — | — | — | — | — | ✅ | — |
+| Category | MySQL | PG | Oracle | Oracle (JDBC) | SQL Server | DM8 | TiDB | IvorySQL | YashanDB | KingbaseES | GBase 8s | MongoDB | HGDB | TDSQL-C |
+| ---------- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| Basic Info (version/instance/DB) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Sessions & Connections | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Memory & Cache | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ |
+| Tablespaces | — | — | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | — | ✅ | — | — | — |
+| SGA / PGA Memory | — | — | ✅ | ✅ | — | ✅ | — | — | ✅ | — | — | — | — | — |
+| Redo Logs | — | — | ✅ | ✅ | — | ✅ | — | ✅ | — | — | — | — | — | — |
+| Archive & Backup | — | — | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | — | — | — | — | — |
+| Key Parameter Config | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Invalid Objects | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ |
+| User Security Audit | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Top SQL / Slow Queries | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Replication / Data Guard | ✅ | ✅ | — | — | — | — | ✅ | ✅ | — | ✅ | — | ✅ | ✅ | ✅ |
+| RAC Cluster | — | — | ✅ | ✅ | — | — | — | — | — | — | — | — | — | — |
+| Lock & Blocking Detection | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ |
+| Object Statistics | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | — | — |
+| Partitioned Tables | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | — | — | — | — |
+| Chunks / Disk Storage | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| Logical Logs / Checkpoints | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| Database Status & Stats | — | — | — | — | — | — | — | — | — | — | — | ✅ | — | — |
 
 
 ### Word 报告结构（Oracle 示例）
@@ -345,6 +347,10 @@ Redis **3.0+** 通过两个独立插件提供支持——`redis`（单机）与 
 
 瀚高 **HGDB V9**（PostgreSQL 14.20 内核）通过 JDBC 插件（`hgdb_jdbc`）提供支持，采用标准 **PostgreSQL 协议**连接（驱动 `org.postgresql.Driver` + `postgresql-42.2.2.jar`，默认端口 **5866**，默认库 **highgo**）。采用数据驱动巡检，共 **8 个章节**、**21 个查询**，基于标准 PG 系统目录与视图（`pg_settings`、`pg_stat_activity`、`pg_locks`、`pg_roles`、`pg_stat_user_tables`、`pg_hba_file_rules` 等）编写，并内置 **12 条规则**（`pro/rules/builtin/hgdb.yaml`），覆盖连接、内存、备份、锁、维护、安全与系统维度，统一并入 **风险与建议** 章节。SQL 编辑器亦通过 psycopg2 路径完整支持 HGDB（列库 / 列表视图 / 执行 SQL）。
 
+### TDSQL-C MySQL 巡检（插件）
+
+**TDSQL-C MySQL**（腾讯云数据库，100% 兼容 MySQL 协议）通过独立插件（`tdsqlc_mysql`）提供支持，复用核心 **MySQL 巡检引擎**（`main_mysql.MySQLInspector`）与 **MySQL 规则集**（`pro/rules/builtin/mysql.yaml`，现已打上 `tdsqlc_mysql` 标签）。通过 **PyMySQL** 连接（默认端口 **3306**，默认库 **mysql**），执行与 MySQL 完全一致的 MySQL 数据驱动巡检（8 个章节 / 21 个查询），并统一并入 **风险与建议** 章节。SQL 编辑器亦通过 PyMySQL 路径完整支持 TDSQL-C MySQL（列库 / 列表视图 / 执行 SQL）。
+
 ## 智能风险分析
 
 自动检测各类数据库潜在风险，**每条风险附带可执行修复 SQL，支持一键执行**。
@@ -402,7 +408,7 @@ python web_ui.py                # 启动后在 AI 设置页面配置
 
 ### SQL 编辑器
 
-Web UI 内置交互式 SQL 编辑器，支持全部 19 种数据库，语法高亮、结果表格、错误友好提示。
+Web UI 内置交互式 SQL 编辑器，支持全部 21 种数据库，语法高亮、结果表格、错误友好提示。
 
 ### 首页实时监控
 

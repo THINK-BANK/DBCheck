@@ -1783,6 +1783,7 @@ ZI = {
     "webui.log_report_ok": "报告已生成: {fname}",
     "webui.mariadb_report_filename": "MariaDB巡检报告_{ip}_{name}_{ts}",
     "webui.mysql_report_filename": "MySQL巡检报告_{ip}_{name}_{ts}",
+    "webui.tdsqlc_mysql_report_filename": "TDSQL-C MySQL巡检报告_{ip}_{name}_{ts}",
     "webui.oceanbase_report_filename": "OceanBase巡检报告_{ip}_{name}_{ts}",
     "webui.pg_report_filename": "PostgreSQL巡检报告_{ip}_{name}_{ts}",
     "webui.kingbase_report_filename": "KingbaseES巡检报告_{ip}_{name}_{ts}",

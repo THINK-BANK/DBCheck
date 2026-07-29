@@ -8,7 +8,10 @@
   "author": "DBCheck Team",
   "main_file": "main_plugin.py",
   "main_class": "ClickHouseJdbcInspector",
-  "dependencies": ["jpype1", "clickhouse-jdbc.jar"],
+  "dependencies": [
+    "jpype1",
+    "clickhouse-jdbc.jar"
+  ],
   "min_java_version": "1.8",
   "min_python_version": "3.6",
   "default_port": 8123,
@@ -16,7 +19,17 @@
   "compat_tag": "OLAP",
   "emoji": "🧊",
   "cleanup": {
-    "db_types": ["clickhouse"],
-    "data_types": ["template", "baseline"]
-  }
+    "db_types": [
+      "clickhouse"
+    ],
+    "data_types": [
+      "template",
+      "baseline"
+    ]
+  },
+  "default_database": "default",
+  "protocol": "clickhouse",
+  "sql_editor": true,
+  "show_database_field": true,
+  "baseline": null
 }

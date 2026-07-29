@@ -8,7 +8,10 @@
   "author": "DBCheck Team",
   "main_file": "main_plugin.py",
   "main_class": "UxdbJdbcInspector",
-  "dependencies": ["jpype1", "uxdbjdbc-2.1.2.3p.jre8.jar"],
+  "dependencies": [
+    "jpype1",
+    "uxdbjdbc-2.1.2.3p.jre8.jar"
+  ],
   "min_java_version": "1.8",
   "min_python_version": "3.6",
   "default_port": 33060,
@@ -16,7 +19,19 @@
   "compat_tag": "Relational",
   "emoji": "🛡️",
   "cleanup": {
-    "db_types": ["uxdb"],
-    "data_types": ["template", "baseline"]
+    "db_types": [
+      "uxdb"
+    ],
+    "data_types": [
+      "template",
+      "baseline"
+    ]
+  },
+  "default_database": "uxdb",
+  "protocol": "pg",
+  "sql_editor": true,
+  "show_database_field": true,
+  "baseline": {
+    "reuse": "pg"
   }
 }

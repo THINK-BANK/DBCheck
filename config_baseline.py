@@ -19,7 +19,15 @@ DBCheck 配置基线与合规检查模块
 
 import os
 import sys
+import logging
 import importlib
+
+# 真插件化基础设施：基线检查注册表
+from dbtype_registry import (
+    register_baseline_checker,
+    get_db_meta,
+    resolve_baseline_checker,
+)
 
 # ── i18n setup ──────────────────────────────────────────────────────
 try:
@@ -1788,48 +1796,52 @@ def check_yashandb_config_baseline(conn):
 # ═══════════════════════════════════════════════════════
 # ═══════════════════════════════════════════════════════
 
+# 注册内置类型的基线检查器（与既有 elif 分发完全等价，仅改为注册表）
+register_baseline_checker('mysql', check_mysql_config_baseline)
+register_baseline_checker('mariadb', check_mysql_config_baseline)
+register_baseline_checker('oceanbase', check_mysql_config_baseline)
+register_baseline_checker('pg', check_pg_config_baseline)
+register_baseline_checker('ivorysql', check_pg_config_baseline)
+register_baseline_checker('kingbase', check_pg_config_baseline)
+register_baseline_checker('oracle', check_oracle_config_baseline)
+register_baseline_checker('dm', check_dm_config_baseline)
+register_baseline_checker('sqlserver', check_sqlserver_config_baseline)
+register_baseline_checker('tidb', check_tidb_config_baseline)
+register_baseline_checker('yashandb', check_yashandb_config_baseline)
+
+
 def get_config_baseline(db_type, conn):
     """
-    统一配置基线检查入口。
+    统一配置基线检查入口（真插件化：注册表 + 插件 baseline 复用/自定义）。
 
-    参数:
-        db_type: 数据库类型 ('mysql', 'pg', 'oracle', 'dm', 'sqlserver', 'tidb')
-        conn: 数据库连接对象
+    优先级：
+      1) 插件自定义 baseline.check 函数（模块级，(conn)->report）
+      2) 插件/内置 baseline.reuse 复用内置检查器
+      3) db_type 直接命中内置注册表
+      4) 均未命中返回 None
 
-    返回:
-        配置基线报告字典
+    新增复用内置协议（如 PG / MySQL）的插件，只需在 plugin.json 写
+    ``baseline: {"reuse": "pg"}`` 即可接入基线检查，无需修改本函数。
     """
-    if db_type == 'mysql':
-        return check_mysql_config_baseline(conn)
-    elif db_type == 'mariadb':
-        # MariaDB 与 MySQL 协议/参数高度兼容，直接复用 MySQL 配置基线检查（含 5.x/8.x 差异化）
-        return check_mysql_config_baseline(conn)
-    elif db_type == 'oceanbase':
-        # OceanBase MySQL 租户与 MySQL 协议/参数高度兼容，
-        # 直接复用 MySQL 配置基线检查（含 5.x/8.x 差异化）。
-        # 专有参数（memstore_limit_percentage 等）走 OB 语法的 SHOW PARAMETERS，
-        # 已在 check_mysql_config_baseline 的 SHOW VARIABLES 之外由 oceanbase 基线块补充。
-        return check_mysql_config_baseline(conn)
-    elif db_type in ('pg', 'postgresql'):
-        return check_pg_config_baseline(conn)
-    elif db_type == 'ivorysql':
-        # IvorySQL 基于 PostgreSQL，复用 PG 基线检查
-        return check_pg_config_baseline(conn)
-    elif db_type == 'oracle':
-        return check_oracle_config_baseline(conn)
-    elif db_type in ('dm', 'dm8'):
-        return check_dm_config_baseline(conn)
-    elif db_type == 'sqlserver':
-        return check_sqlserver_config_baseline(conn)
-    elif db_type == 'tidb':
-        return check_tidb_config_baseline(conn)
-    elif db_type == 'yashandb':
-        return check_yashandb_config_baseline(conn)
-    elif db_type == 'kingbase':
-        # KingbaseES 基于 PostgreSQL，复用 PG 基线检查
-        return check_pg_config_baseline(conn)
-    else:
+    meta = get_db_meta(db_type)
+    res = resolve_baseline_checker(meta)
+    if res is None:
         return None
+    kind, val = res
+    if kind == "builtin":
+        return val(conn)
+    if kind == "plugin":
+        # val 为插件自定义函数名（模块级，(conn)->report）
+        try:
+            from plugin_loader import get_plugin_instance
+            plugin = get_plugin_instance(db_type)
+            if plugin and hasattr(plugin, val):
+                return getattr(plugin, val)(conn)
+        except Exception as e:
+            logging.getLogger(__name__).warning(
+                f"调用插件 {db_type} 基线检查 {val}() 失败: {e}")
+        return None
+    return None
 
 
 def format_config_baseline_report(report, db_type='mysql'):

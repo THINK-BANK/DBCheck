@@ -8,7 +8,10 @@
   "author": "DBCheck Team",
   "main_file": "main_plugin.py",
   "main_class": "Db2JdbcInspector",
-  "dependencies": ["jpype1", "db2jcc4.jar"],
+  "dependencies": [
+    "jpype1",
+    "db2jcc4.jar"
+  ],
   "min_java_version": "1.8",
   "min_python_version": "3.6",
   "default_port": 50000,
@@ -16,7 +19,18 @@
   "compat_tag": "Relational",
   "emoji": "🗄️",
   "cleanup": {
-    "db_types": ["db2"],
-    "data_types": ["template", "baseline"]
-  }
+    "db_types": [
+      "db2"
+    ],
+    "data_types": [
+      "template",
+      "baseline"
+    ]
+  },
+  "default_database": "",
+  "protocol": "other",
+  "sql_editor": false,
+  "show_database_field": true,
+  "connect_test": "db2",
+  "baseline": null
 }

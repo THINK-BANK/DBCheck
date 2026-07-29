@@ -2432,6 +2432,7 @@ DE.update({
     "webui.mariadb_report_filename": "MariaDBInspektionsbericht_{ip}_{name}_{ts}",
     "webui.mongodb_report_filename": "MongoDBInspektionsbericht_{ip}_{name}_{ts}",
     "webui.mysql_report_filename": "MySQLInspektionsbericht_{ip}_{name}_{ts}",
+    "webui.tdsqlc_mysql_report_filename": "TDSQLCMySQLInspektionsbericht_{ip}_{name}_{ts}",
     "webui.nav_about": "Über DBCheck",
     "webui.nav_account": "Benutzerzentrum",
     "webui.nav_ai": "KI-Diagnoseeinstellungen",

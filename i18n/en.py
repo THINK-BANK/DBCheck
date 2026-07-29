@@ -1756,6 +1756,7 @@ EN = {
     "webui.log_report_ok": "Report generated: {fname}",
     "webui.mariadb_report_filename": "MariaDBInspection_{ip}_{name}_{ts}",
     "webui.mysql_report_filename": "MySQLInspection_{ip}_{name}_{ts}",
+    "webui.tdsqlc_mysql_report_filename": "TDSQLCMySQLInspection_{ip}_{name}_{ts}",
     "webui.oceanbase_report_filename": "OceanBaseInspection_{ip}_{name}_{ts}",
     "webui.pg_report_filename": "PostgreSQLInspection_{ip}_{name}_{ts}",
     "webui.kingbase_report_filename": "KingbaseESInspection_{ip}_{name}_{ts}",

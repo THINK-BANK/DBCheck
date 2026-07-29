@@ -2432,6 +2432,7 @@ FR.update({
     "webui.mariadb_report_filename": "RapportInspectionMariaDB_{ip}_{name}_{ts}",
     "webui.mongodb_report_filename": "RapportInspectionMongoDB_{ip}_{name}_{ts}",
     "webui.mysql_report_filename": "RapportInspectionMySQL_{ip}_{name}_{ts}",
+    "webui.tdsqlc_mysql_report_filename": "RapportInspectionTDSQLCMySQL_{ip}_{name}_{ts}",
     "webui.nav_about": "À propos de DBCheck",
     "webui.nav_account": "Centre utilisateur",
     "webui.nav_ai": "Paramètres de diagnostic IA",

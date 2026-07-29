@@ -6,7 +6,9 @@
   "author": "DBCheck Team",
   "main_file": "main_plugin.py",
   "main_class": "RedisInspector",
-  "requirements": ["redis>=5.0.0"],
+  "requirements": [
+    "redis>=5.0.0"
+  ],
   "sql_templates": "sql_templates.json",
   "emoji": "🔴",
   "category": "db",
@@ -14,5 +16,11 @@
   "default_user": "",
   "min_version": "5.0",
   "baseline_version": "1.0.0",
-  "compat_tag": "KV"
+  "compat_tag": "KV",
+  "default_database": "",
+  "protocol": "redis",
+  "sql_editor": false,
+  "show_database_field": true,
+  "connect_test": "redis",
+  "baseline": null
 }

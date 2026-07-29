@@ -2432,6 +2432,7 @@ RU.update({
     "webui.mariadb_report_filename": "MariaDB отчёт_{ip}_{name}_{ts}",
     "webui.mongodb_report_filename": "MongoDB отчёт_{ip}_{name}_{ts}",
     "webui.mysql_report_filename": "MySQL отчёт_{ip}_{name}_{ts}",
+    "webui.tdsqlc_mysql_report_filename": "TDSQL-C MySQL отчёт_{ip}_{name}_{ts}",
     "webui.nav_about": "О DBCheck",
     "webui.nav_account": "Личный кабинет",
     "webui.nav_ai": "Настройки ИИ-диагностики",

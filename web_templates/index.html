@@ -3346,7 +3346,7 @@ async function loadIntelligenceInstances() {
       return;
     }
     if (noDs) noDs.style.display = 'none';
-    const dbIcons = {mysql:'🐬',pg:'🐘',oracle:'🔴',oracle_jdbc:'🔴',dm:'🟡',sqlserver:'🟠',tidb:'🟢',ivorysql:'🐘',kingbase:'🐘',gbase:'🟢'};
+    const dbIcons = window.DB_ICONS;
     list.forEach(ds => {
       const icon = dbIcons[ds.db_type] || '🗄️';
       const label = icon + ' ' + (ds.name || (ds.host + ':' + ds.port)) + ' · ' + (ds.db_type || '');
@@ -3559,7 +3559,7 @@ async function loadDiagHistoryPage() {
       const res = await fetch('/api/pro/datasources');
       const data = await res.json();
       const list = (data.ok && data.datasources) ? data.datasources : [];
-      const dbIcons = {mysql:'🐬',pg:'🐘',oracle:'🔴',oracle_jdbc:'🔴',dm:'🟡',sqlserver:'🟠',tidb:'🟢',ivorysql:'🐘',kingbase:'🐘',gbase:'🟢'};
+      const dbIcons = window.DB_ICONS;
       list.forEach(ds => {
         const opt = document.createElement('option');
         opt.value = ds.id;
@@ -4314,7 +4314,7 @@ function formatBytes(bytes) {
               return;
             }
             listEl.innerHTML = list.map(ds => {
-              const dbIcons = {mysql:'🐬', mariadb:'🐬', oceanbase:'🐋', pg:'🐘', oracle:'🔴', oracle_jdbc:'🔴', dm:'🟡', sqlserver:'🟠', tidb:'🟢', ivorysql:'🐘', kingbase:'🐘', gbase:'🟢', clickhouse:'🧊'};
+              const dbIcons = window.DB_ICONS;
               const icon = dbIcons[ds.db_type] || '🗄️';
               const dbLogos = {oceanbase:'/oceanbase.png'};
               const logo = dbLogos[ds.db_type];
@@ -4586,8 +4586,8 @@ function formatBytes(bytes) {
         // 优先从 data 属性读取（插件类型），其次用硬编码映射
         const defaultPort = opt?.getAttribute('data-port') || '';
         const defaultUser = opt?.getAttribute('data-user') || '';
-        const portMap = {mysql:3306, mariadb:3306, oceanbase:2881, pg:5432, dm:5236, oracle:1521, oracle_jdbc:1521, sqlserver:1433, tidb:4000, ivorysql:5432, yashandb:1688, kingbase:54321, gbase:9088, db2:50000, redis:6379, 'redis-cluster':6379, clickhouse:8123};
-        const userMap = {mysql:'root', mariadb:'root', oceanbase:'root@test', pg:'postgres', dm:'SYSDBA', oracle:'system', oracle_jdbc:'system', sqlserver:'sa', tidb:'root', ivorysql:'postgres', yashandb:'sys', kingbase:'kingbase', gbase:'gbasedbt', db2:'db2inst1', redis:'', 'redis-cluster':'', clickhouse:'default'};
+        const portMap = window.PORT_MAP;
+        const userMap = window.USER_MAP;
         document.getElementById('ds-port').value = (defaultPort && parseInt(defaultPort)) || portMap[dbType] || 3306;
         const userEl = document.getElementById('ds-user');
         if (dbType !== _currentDbType || !userEl.value) {
@@ -4610,7 +4610,7 @@ function formatBytes(bytes) {
           if (_dsUserLabel2) _dsUserLabel2.style.display = '';
         }
         _currentDbType = dbType;
-        const showDsDbField = (dbType === 'pg' || dbType === 'ivorysql' || dbType === 'kingbase' || dbType === 'gbase' || dbType === 'oceanbase' || dbType === 'db2' || dbType === 'mysql' || dbType === 'mariadb' || dbType === 'tidb' || dbType === 'clickhouse');
+        const showDsDbField = window.SHOW_DB_FIELD[dbType];
         document.getElementById('ds-database-wrap').style.display = showDsDbField ? '' : 'none';
         document.getElementById('ds-tenant-wrap').style.display = (dbType === 'oceanbase') ? '' : 'none';
         document.getElementById('ds-service-wrap').style.display = (dbType === 'oracle' || dbType === 'oracle_jdbc') ? '' : 'none';
@@ -4651,7 +4651,7 @@ function formatBytes(bytes) {
         // 根据数据库类型更新 database 输入框的 placeholder
         var dbInput = document.getElementById('ds-database');
         if (dbInput) {
-          var _ph = {'pg':'postgres','ivorysql':'postgres','kingbase':'kingbase','gbase':'sysmaster','oceanbase':'oceanbase','mongodb':'admin','db2':'testdb','mysql':'mysql','mariadb':'mysql','tidb':'mysql','clickhouse':'default','uxdb':'uxdb'};
+          var _ph = window.DB_PH_MAP;
           dbInput.placeholder = _ph[dbType] || 'mysql';
           // OceanBase 不预填数据库名（仅为占位提示），由用户在 DBeaver 风格界面自行填写
           if (dbType === 'oceanbase' && !dbInput.value) dbInput.value = '';
@@ -9081,7 +9081,7 @@ async function selectDbType(type, skipReload) {
   var mongoWrap = document.getElementById('f-mongo-wrap');
   if (mongoWrap) mongoWrap.style.display = (type === 'mongodb') ? '' : 'none';
   // 更新数据库名称输入框的 placeholder 并自动填写默认值
-  const defaultDbMap = { pg: 'postgres', ivorysql: 'postgres', kingbase: 'kingbase', gbase: 'sysmaster', mongodb: 'admin', mysql: 'mysql', mariadb: 'mysql', tidb: 'mysql', clickhouse: 'default' };
+  const defaultDbMap = window.DEFAULT_DB_MAP;
   const dbPlaceholderMap = Object.assign({}, defaultDbMap, { oceanbase: 'oceanbase' });
   var fDbEl = document.getElementById('f-database');
   if (fDbEl) {
@@ -9091,7 +9091,7 @@ async function selectDbType(type, skipReload) {
   // 更新数据库标签（去掉静态写死的 PostgreSQL）
   var dbOptLabel = document.querySelector('#f-database-wrap .opt');
   if (dbOptLabel) {
-    var labelMap = { pg: 'PostgreSQL', ivorysql: 'PostgreSQL', kingbase: 'KingbaseES', gbase: 'GBase 8s', mysql: 'MySQL', mariadb: 'MariaDB', tidb: 'TiDB', clickhouse: 'ClickHouse' };
+    var labelMap = window.LABEL_MAP;
     dbOptLabel.textContent = labelMap[type] || '';
   }
 }
@@ -20308,12 +20308,47 @@ function mkdirRemote() {
   <script>
   // 全局数据库类型缓存
   window.dbTypes = [];
+  // —— 真插件化：前端数据库类型映射表（端口/用户/图标/库名/标签/是否显示库字段）——
+  // 统一从 /api/db_types 派生，避免每接入一种新库就改这里。内置类型用静态兜底确保
+  // 即使接口慢/失败也不影响既有行为；新插件类型在 window.dbTypes 加载后自动追加。
+const STATIC_DB_ICONS = {mysql:'🐬', tdsqlc_mysql:'🐬', mariadb:'🐬', oceanbase:'🐋', pg:'🐘', oracle:'🔴', oracle_jdbc:'🔴', dm:'🟡', sqlserver:'🟠', tidb:'🟢', ivorysql:'🐘', kingbase:'🐘', gbase:'🟢', clickhouse:'🧊'};
+const STATIC_PORT_MAP = {mysql:3306, tdsqlc_mysql:3306, mariadb:3306, oceanbase:2881, pg:5432, dm:5236, oracle:1521, oracle_jdbc:1521, sqlserver:1433, tidb:4000, ivorysql:5432, yashandb:1688, kingbase:54321, gbase:9088, db2:50000, redis:6379, 'redis-cluster':6379, clickhouse:8123};
+const STATIC_USER_MAP = {mysql:'root', tdsqlc_mysql:'root', mariadb:'root', oceanbase:'root@test', pg:'postgres', dm:'SYSDBA', oracle:'system', oracle_jdbc:'system', sqlserver:'sa', tidb:'root', ivorysql:'postgres', yashandb:'sys', kingbase:'kingbase', gbase:'gbasedbt', db2:'db2inst1', redis:'', 'redis-cluster':'', clickhouse:'default'};
+  const STATIC_SHOW_DB_FIELD = {'pg':true,'ivorysql':true,'kingbase':true,'gbase':true,'oceanbase':true,'db2':true,'mysql':true,'tdsqlc_mysql':true,'mariadb':true,'tidb':true,'clickhouse':true};
+const STATIC_DEFAULT_DB_MAP = { pg: 'postgres', ivorysql: 'postgres', kingbase: 'kingbase', gbase: 'sysmaster', mongodb: 'admin', mysql: 'mysql', tdsqlc_mysql: 'mysql', mariadb: 'mysql', tidb: 'mysql', clickhouse: 'default' };
+const STATIC_LABEL_MAP = { pg: 'PostgreSQL', ivorysql: 'PostgreSQL', kingbase: 'KingbaseES', gbase: 'GBase 8s', mysql: 'MySQL', tdsqlc_mysql: 'TDSQL-C MySQL', mariadb: 'MariaDB', tidb: 'TiDB', clickhouse: 'ClickHouse' };
+const STATIC_DB_PH_MAP = {'pg':'postgres','ivorysql':'postgres','kingbase':'kingbase','gbase':'sysmaster','oceanbase':'oceanbase','mongodb':'admin','db2':'testdb','mysql':'mysql','mariadb':'mysql','tidb':'mysql','clickhouse':'default','uxdb':'uxdb'};
+
+  window.DB_ICONS = Object.assign({}, STATIC_DB_ICONS);
+  window.PORT_MAP = Object.assign({}, STATIC_PORT_MAP);
+  window.USER_MAP = Object.assign({}, STATIC_USER_MAP);
+  window.SHOW_DB_FIELD = Object.assign({}, STATIC_SHOW_DB_FIELD);
+  window.DEFAULT_DB_MAP = Object.assign({}, STATIC_DEFAULT_DB_MAP);
+  window.LABEL_MAP = Object.assign({}, STATIC_LABEL_MAP);
+  window.DB_PH_MAP = Object.assign({}, STATIC_DB_PH_MAP);
+
+  // 把 /api/db_types 返回的新插件类型合并进映射表（内置类型以静态兜底优先，保持现状）
+  function rebuildDbMetaMaps() {
+    (window.dbTypes || []).forEach(function (t) {
+      var v = t.value;
+      if (!v || STATIC_PORT_MAP[v] !== undefined) return;
+      if (t.port != null) window.PORT_MAP[v] = t.port;
+      if (t.user != null) window.USER_MAP[v] = t.user;
+      if (t.emoji) window.DB_ICONS[v] = t.emoji;
+      if (t.show_database_field != null) window.SHOW_DB_FIELD[v] = !!t.show_database_field;
+      if (t.label) window.LABEL_MAP[v] = t.label;
+      if (t.default_database != null) window.DEFAULT_DB_MAP[v] = t.default_database;
+      window.DB_PH_MAP[v] = (t.default_database != null && t.default_database !== '') ? t.default_database : (window.DB_PH_MAP[v] || 'mysql');
+    });
+  }
+
 
   // 加载数据库类型列表（内置 + 插件）
   async function loadDbTypes() {
     try {
       const res = await fetch('/api/db_types');
       window.dbTypes = await res.json();
+      rebuildDbMetaMaps();
       generateDbTypeCards();
       populateDbTypeDropdowns();
       populateDbIconWall();

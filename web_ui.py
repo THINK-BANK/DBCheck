@@ -91,6 +91,7 @@ def _parse_report_filename(name: str):
     """从报告文件名提取 db_type, host, label"""
     mapping = [
         ('MySQL巡检报告_', 'mysql'),
+        ('TDSQL-C MySQL巡检报告_', 'tdsqlc_mysql'),
         ('PostgreSQL巡检报告_', 'postgresql'),
         ('Oracle巡检报告_', 'oracle'),
         ('DM8巡检报告_', 'dm'),
@@ -550,11 +551,48 @@ def api_shell_instances():
 # ── 通用巡检任务（MySQL/PG/TiDB/SQLServer/IvorySQL/DM8） ──
 def _web_log_is_console_only(msg):
     """判断一条日志是否仅输出到后端控制台、不推送到前端巡检日志。
-    包括：后台采集内部日志 [metrics]，以及连接状态类日志（连接成功/连接失败）。"""
+
+    这些内部输出不应出现在 Web UI 的前端巡检日志中，仅留在后端控制台便于排查：
+    - 后台采集内部日志 [metrics]
+    - 连接状态类日志（连接成功/连接失败，既有规则，本次未改动）
+    - 内部调试日志 [DEBUG] 开头（如 AI 诊断前 version 信息、基线检查、章节追加等）
+    - AI 诊断框架日志 [AIAdvisor] 开头（RAG 知识库启用/初始化等）
+    - 插件加载/注册日志 [Plugin] / [插件] 开头
+    - 各 JDBC 插件注册成功提示（含「插件注册成功」，如
+      [ClickHouse]/[DB2]/[HGDB]/[Oracle JDBC]/[UXDB]）
+    - AI 诊断调用提示（含「正在调用 AI 诊断」，如
+      「🤖 正在调用 AI 诊断（ollama / qwen3:8b）...」）
+    - 报告生成内部内存监控日志 [Report] 开头（防御性过滤；当前其在拦截器恢复后执行，
+      本身不会混入前端，此处一并屏蔽以防未来路径变化）
+
+    注意：正常的巡检进度信息（如 [MySQL] 开始巡检...、📊 开始执行巡检 SQL...、
+    🔍 正在进行慢查询深度分析...、✅ 慢查询深度分析完成...、[WARN]/[ERROR]/[INFO] 等）
+    不会被上述规则过滤，仍会推送到前端。
+    """
     _m = msg.lstrip()
+    # 后台采集内部日志
     if _m.startswith('[metrics]'):
         return True
+    # 连接状态类日志（既有规则，为最小变更予以保留）
     if '连接成功' in msg or '连接失败' in msg:
+        return True
+    # 内部调试日志
+    if _m.startswith('[DEBUG]'):
+        return True
+    # AI 诊断框架日志
+    if _m.startswith('[AIAdvisor]'):
+        return True
+    # 插件加载/注册日志
+    if _m.startswith('[Plugin]') or _m.startswith('[插件]'):
+        return True
+    # 各 JDBC 插件注册成功提示（[X] 插件注册成功）
+    if '插件注册成功' in msg:
+        return True
+    # AI 诊断调用提示
+    if '正在调用 AI 诊断' in msg:
+        return True
+    # 报告生成内部内存监控日志（防御性）
+    if _m.startswith('[Report]'):
         return True
     return False
 
@@ -1686,6 +1724,377 @@ def test_plugin_connection(db_type, host, port, user, password, **kwargs):
         return False, f'插件连接测试失败: {e}'
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+#  连接测试注册表（真插件化基础设施）
+#  把 /api/test_db 与 /api/pro/datasources/test-connection 两处 elif 链统一为
+#  "注册表 + 插件 connect_test 字段" 查表。新增复用已有协议的插件只需在
+#  plugin.json 写 connect_test: "mysql"/"pg"/...，无需在此改 elif。
+# ═══════════════════════════════════════════════════════════════════════════
+from dbtype_registry import (
+    CONNECTION_TESTERS,
+    get_db_meta,
+    resolve_connection_tester,
+    load_all_db_types,
+    register_connection_tester,
+)
+
+
+def _conn_ok(flavor):
+    """按路由风格返回成功响应（regular 用 msg，pro 用 message）。"""
+    if flavor == 'pro':
+        return {'ok': True, 'message': '连接成功'}
+    return {'ok': True, 'msg': '连接成功'}
+
+
+def _parse_plugin_conn_result(db_type, ok, msg):
+    """调用插件实例的 parse_connection_result()（无侵入式架构），返回附加字段。"""
+    extra = {}
+    try:
+        from plugin_loader import get_plugin_instance
+        plugin = get_plugin_instance(db_type)
+        if plugin and hasattr(plugin, 'parse_connection_result'):
+            r = plugin.parse_connection_result(ok, msg)
+            if r and isinstance(r, dict):
+                extra.update(r)
+    except Exception as e:
+        app.logger.warning(f"调用插件 {db_type} 的 parse_connection_result() 失败: {e}")
+    return extra
+
+
+# —— 各 db_type 连接测试处理器（flavor 感知：'regular' / 'pro'） —— #
+def _ct_mysql(data, flavor):
+    if flavor == 'regular':
+        ok, msg = test_mysql_connection(data['host'], data['port'], data['user'],
+                                        data['password'], data.get('database'))
+        return {'ok': ok, 'msg': msg}
+    import pymysql
+    _db = data.get('database') or None
+    _kw = dict(host=data['host'], port=data['port'], user=data['user'],
+               password=data['password'], connect_timeout=10)
+    if _db:
+        _kw['database'] = _db
+    pymysql.connect(**_kw).close()
+    return _conn_ok('pro')
+
+
+def _ct_mariadb(data, flavor):
+    return _ct_mysql(data, flavor)
+
+
+def _ct_oceanbase(data, flavor):
+    _ob_user = data['user'] + '@' + data['tenant'] if data.get('tenant') else data['user']
+    if flavor == 'regular':
+        ok, msg = test_mysql_connection(data['host'], data['port'], _ob_user,
+                                        data['password'], data.get('database'))
+        return {'ok': ok, 'msg': msg}
+    import pymysql
+    _db = data.get('database') or 'sys'
+    pymysql.connect(host=data['host'], port=data['port'], user=_ob_user,
+                    password=data['password'], database=_db, connect_timeout=10).close()
+    return _conn_ok('pro')
+
+
+def _ct_pg(data, flavor, db_default='postgres'):
+    if flavor == 'regular':
+        ok, msg = test_pg_connection(data['host'], data['port'], data['user'],
+                                     data['password'], data.get('database', db_default))
+        return {'ok': ok, 'msg': msg}
+    import psycopg2
+    db = data.get('database', db_default)
+    psycopg2.connect(host=data['host'], port=data['port'], user=data['user'],
+                     password=data['password'], dbname=db, connect_timeout=10).close()
+    return _conn_ok('pro')
+
+
+def _ct_ivorysql(data, flavor):
+    return _ct_pg(data, flavor, db_default='postgres')
+
+
+def _ct_kingbase(data, flavor):
+    return _ct_pg(data, flavor, db_default='kingbase')
+
+
+def _ct_oracle_pro(data):
+    """复刻原 /api/pro/datasources/test-connection 中 oracle 分支（含 SSH / thick mode）。"""
+    import oracledb
+    _jdbc = (data.get('jdbc_url') or '').strip()
+    if _jdbc and _jdbc.lstrip().upper().startswith('(DESCRIPTION'):
+        dsn = _jdbc
+    else:
+        dsn = f"{data['host']}:{data['port']}/{data.get('service_name', '')}" if data.get('service_name') \
+            else f"{data['host']}:{data['port']}"
+    ssh_host = data.get('ssh_host', '')
+    _tunnel = None
+    if ssh_host:
+        try:
+            from ssh_tunnel import SSHTunnel
+            _tunnel = SSHTunnel(
+                ssh_host=ssh_host,
+                ssh_port=int(data.get('ssh_port', 22)),
+                ssh_user=data.get('ssh_user', 'root'),
+                ssh_password=data.get('ssh_password', ''),
+                remote_host=data['host'],
+                remote_port=int(data['port']),
+            )
+            _tunnel.__enter__()
+            _local = _tunnel.local_port
+            dsn = f"localhost:{_local}/{data.get('service_name', '')}" if data.get('service_name') \
+                else f"localhost:{_local}"
+        except Exception as te:
+            return {'ok': False, 'error': f'SSH 隧道建立失败: {te}'}
+    try:
+        params = {"user": data['user'], "password": data['password'], "dsn": dsn}
+        if data.get('sysdba'):
+            params["mode"] = oracledb.SYSDBA
+        conn = oracledb.connect(**params)
+    except Exception as e:
+        err_msg = str(e)
+        if 'DPY-3010' in err_msg or 'DPY-3015' in err_msg:
+            _thick_ok = False
+            try:
+                oracledb.init_oracle_client()
+                _thick_ok = True
+            except Exception:
+                pass
+            if not _thick_ok:
+                _lib_dir = _find_oracle_client_lib_dir()
+                if _lib_dir:
+                    try:
+                        oracledb.init_oracle_client(lib_dir=_lib_dir)
+                        _thick_ok = True
+                    except Exception:
+                        pass
+            if not _thick_ok:
+                try:
+                    import json
+                    with open(os.path.join(BASE_DIR, 'dbc_config.json')) as f:
+                        _cfg = json.load(f)
+                    _lib_dir = _cfg.get('oracle_client_lib_dir', '')
+                    if _lib_dir and os.path.isdir(_lib_dir):
+                        oracledb.init_oracle_client(lib_dir=_lib_dir)
+                        _thick_ok = True
+                except Exception:
+                    pass
+            if not _thick_ok:
+                return {'ok': False, 'error': 'Oracle 11g 及以下版本需要 Oracle Instant Client。'
+                                            '请通过左侧导航"Oracle Client"设置页，点击"一键下载并安装"按钮自动下载安装。'}
+            try:
+                conn = oracledb.connect(**params)
+            except Exception as e2:
+                return {'ok': False, 'error': f'Oracle 连接失败（thick mode）: {e2}'}
+        elif 'timed out' in err_msg.lower() or 'timeout' in err_msg.lower():
+            return {'ok': False, 'error': '连接超时，Oracle 可能无法直连，请在数据源中配置 SSH'}
+        else:
+            return {'ok': False, 'error': str(e)}
+    conn.close()
+    if _tunnel:
+        _tunnel.close()
+    return {'ok': True, 'message': '连接成功'}
+
+
+def _ct_oracle(data, flavor):
+    if flavor == 'regular':
+        ok, msg = test_oracle_connection(data['host'], data['port'], data['user'], data['password'],
+                                         data.get('service_name', 'ORCL'), bool(data.get('sysdba')),
+                                         data.get('jdbc_url') or None)
+        result = {'ok': ok, 'msg': msg}
+        if ok:
+            import re as _re
+            m = _re.search(r'(\d{2})\.', msg)
+            if m:
+                result['oracle_major_version'] = int(m.group(1))
+        return result
+    return _ct_oracle_pro(data)
+
+
+def _ct_dm(data, flavor):
+    if flavor == 'regular':
+        ok, msg = test_dm_connection(data['host'], data['port'], data['user'], data['password'])
+        return {'ok': ok, 'msg': msg}
+    import dmPython
+    try:
+        conn = dmPython.connect(server=data['host'], port=int(data['port']),
+                                 user=data['user'], password=data['password'])
+        conn.close()
+    except Exception as de:
+        if 'exception set' in str(de):
+            return {'ok': False, 'error': f'达梦连接失败，请检查用户名（默认SYSDBA）、密码和端口（{data["host"]}:{data["port"]}）'}
+        raise
+    return _conn_ok('pro')
+
+
+def _ct_sqlserver(data, flavor):
+    if flavor == 'regular':
+        ok, msg = test_sqlserver_connection(data['host'], data['port'], data['user'],
+                                            data['password'], data.get('database', 'master'))
+        return {'ok': ok, 'msg': msg}
+    import pyodbc
+    conn_str = _build_sqlserver_conn_str(data['host'], data['port'], data['user'],
+                                         data['password'], timeout=10)
+    pyodbc.connect(conn_str).close()
+    return _conn_ok('pro')
+
+
+def _ct_tidb(data, flavor):
+    if flavor == 'regular':
+        ok, msg = test_tidb_connection(data['host'], data['port'], data['user'],
+                                       data['password'], data.get('database'))
+        return {'ok': ok, 'msg': msg}
+    import pymysql
+    _db = data.get('database') or None
+    _kw = dict(host=data['host'], port=data['port'], user=data['user'],
+               password=data['password'], connect_timeout=10)
+    if _db:
+        _kw['database'] = _db
+    pymysql.connect(**_kw).close()
+    return _conn_ok('pro')
+
+
+def _ct_yashandb(data, flavor):
+    if flavor == 'regular':
+        ok, msg = test_yashandb_connection(data['host'], data['port'], data['user'], data['password'])
+        return {'ok': ok, 'msg': msg}
+    try:
+        import yasdb
+        yasdb.connect(host=data['host'], port=int(data['port']), user=data['user'],
+                      password=data['password']).close()
+    except ImportError as e:
+        return {'ok': False, 'error': f'yasdb 驱动未安装: {str(e)}'}
+    return _conn_ok('pro')
+
+
+def _ct_gbase(data, flavor):
+    if flavor == 'regular':
+        ok, msg = test_gbase_connection(data['host'], data['port'], data['user'], data['password'],
+                                        data.get('database', 'testdb'),
+                                        data.get('gbase_server_name', 'gbase01'))
+        return {'ok': ok, 'msg': msg}
+    gbase_server = data.get('gbase_server_name', 'gbase01')
+    result = test_gbase_connection(data['host'], int(data['port']), data['user'], data['password'],
+                                    data.get('database', 'gbase01'), gbase_server)
+    if not result[0]:
+        return {'ok': False, 'error': result[1]}
+    return _conn_ok('pro')
+
+
+def _ct_redis(data, flavor):
+    if flavor == 'regular':
+        ok, msg = test_plugin_connection(data['db_type'], data['host'], data['port'], data['user'],
+                                         data['password'], database=data.get('database', ''),
+                                         seed_nodes=data.get('seed_nodes', ''))
+        if ok is not None:
+            return {'ok': ok, 'msg': msg}
+        return {'ok': False, 'msg': _t('webui.err_unknown_db_type')}
+    ok, msg = test_plugin_connection(data['db_type'], data['host'], data['port'], data['user'],
+                                     data['password'], database=data.get('database', ''),
+                                     seed_nodes=data.get('seed_nodes', ''))
+    if ok:
+        return {'ok': True, 'message': msg}
+    return {'ok': False, 'error': msg} if msg else \
+        {'ok': False, 'error': f"不支持的数据库类型: {data['db_type']}"}
+
+
+def _ct_mongodb(data, flavor):
+    _kwargs = dict(
+        database=data.get('database', 'admin'),
+        connect_mode=data.get('connect_mode', 'standard'),
+        auth_source=data.get('auth_source', 'admin'),
+        auth_mechanism=data.get('auth_mechanism', ''),
+        replica_set=data.get('replica_set', ''),
+        tls=bool(data.get('tls', False)),
+        tls_ca_file=data.get('tls_ca_file', ''),
+        tls_cert_key_file=data.get('tls_cert_key_file', ''),
+        tls_allow_invalid_certs=bool(data.get('tls_allow_invalid_certs', False)),
+    )
+    if flavor == 'regular':
+        ok, msg = test_plugin_connection(data['db_type'], data['host'], data['port'], data['user'],
+                                         data['password'], **_kwargs)
+        if ok is not None:
+            result = {'ok': ok, 'msg': msg}
+            result.update(_parse_plugin_conn_result(data['db_type'], ok, msg))
+            return result
+        return {'ok': False, 'msg': _t('webui.err_unknown_db_type')}
+    ok, msg = test_plugin_connection(data['db_type'], data['host'], data['port'], data['user'],
+                                     data['password'], **_kwargs)
+    if ok:
+        return {'ok': True, 'message': msg}
+    return {'ok': False, 'error': msg} if msg else \
+        {'ok': False, 'error': f"不支持的数据库类型: {data['db_type']}"}
+
+
+def _ct_db2(data, flavor):
+    _kwargs = dict(database=data.get('database', ''), jdbc_url=data.get('jdbc_url'),
+                   ssl=bool(data.get('ssl', False)))
+    if flavor == 'regular':
+        ok, msg = test_plugin_connection(data['db_type'], data['host'], data['port'], data['user'],
+                                         data['password'], **_kwargs)
+        if ok is not None:
+            return {'ok': ok, 'msg': msg}
+        return {'ok': False, 'msg': _t('webui.err_unknown_db_type')}
+    ok, msg = test_plugin_connection(data['db_type'], data['host'], data['port'], data['user'],
+                                     data['password'], **_kwargs)
+    if ok:
+        return {'ok': True, 'message': msg}
+    return {'ok': False, 'error': msg} if msg else \
+        {'ok': False, 'error': f"不支持的数据库类型: {data['db_type']}"}
+
+
+def _plugin_conn_fallback(data, flavor):
+    """未知/未注册类型的连接测试兜底（复用既有 test_plugin_connection）。"""
+    db_type = data.get('db_type')
+    _kwargs = dict(service_name=data.get('service_name', ''),
+                   sysdba=bool(data.get('sysdba', False)),
+                   jdbc_url=data.get('jdbc_url') or None)
+    if flavor == 'regular':
+        ok, msg = test_plugin_connection(db_type, data['host'], data['port'], data['user'],
+                                         data['password'], **_kwargs)
+        if ok is not None:
+            result = {'ok': ok, 'msg': msg}
+            result.update(_parse_plugin_conn_result(db_type, ok, msg))
+            return result
+        return {'ok': False, 'msg': _t('webui.err_unknown_db_type')}
+    ok, msg = test_plugin_connection(db_type, data['host'], data['port'], data['user'],
+                                     data['password'], **_kwargs)
+    if ok:
+        return {'ok': True, 'message': msg}
+    return {'ok': False, 'error': msg} if msg else \
+        {'ok': False, 'error': f"不支持的数据库类型: {db_type}"}
+
+
+def _dispatch_conn_test(db_type, data, flavor):
+    """统一连接测试分发：注册表 -> 插件 connect_test 复用 -> 兜底。
+
+    返回响应 dict；若所有路径都无法处理返回 None（调用方应返回未知类型错误）。
+    """
+    tester = CONNECTION_TESTERS.get(db_type)
+    if tester:
+        return tester(data, flavor)
+    meta = get_db_meta(db_type)
+    rt = resolve_connection_tester(meta) if meta else None
+    if rt:
+        return rt(data, flavor)
+    return _plugin_conn_fallback(data, flavor)
+
+
+# 注册内置类型与已知特殊插件的连接测试处理器
+register_connection_tester('mysql', _ct_mysql)
+register_connection_tester('mariadb', _ct_mariadb)
+register_connection_tester('oceanbase', _ct_oceanbase)
+register_connection_tester('pg', _ct_pg)
+register_connection_tester('ivorysql', _ct_ivorysql)
+register_connection_tester('kingbase', _ct_kingbase)
+register_connection_tester('oracle', _ct_oracle)
+register_connection_tester('dm', _ct_dm)
+register_connection_tester('sqlserver', _ct_sqlserver)
+register_connection_tester('tidb', _ct_tidb)
+register_connection_tester('yashandb', _ct_yashandb)
+register_connection_tester('gbase', _ct_gbase)
+register_connection_tester('redis', _ct_redis)
+register_connection_tester('redis-cluster', _ct_redis)
+register_connection_tester('mongodb', _ct_mongodb)
+register_connection_tester('db2', _ct_db2)
+
+
 def test_ssh_connection(host, port=22, username='root', password=None, key_file=None):
     """测试 SSH 连接，返回 (ok: bool, msg: str)"""
     try:
@@ -2539,122 +2948,8 @@ def api_download_all_drivers_status():
 def api_test_db():
     data = request.json
     db_type = data.get('db_type', 'mysql')
-
-    result = {'ok': False, 'msg': ''}
-    if db_type == 'mysql':
-        ok, msg = test_mysql_connection(data['host'], data['port'], data['user'], data['password'], data.get('database'))
-        result = {'ok': ok, 'msg': msg}
-    elif db_type == 'mariadb':
-        ok, msg = test_mysql_connection(data['host'], data['port'], data['user'], data['password'], data.get('database'))
-        result = {'ok': ok, 'msg': msg}
-    elif db_type == 'oceanbase':
-        _ob_user = data['user'] + '@' + data['tenant'] if data.get('tenant') else data['user']
-        ok, msg = test_mysql_connection(data['host'], data['port'], _ob_user, data['password'], data.get('database', 'sys'))
-        result = {'ok': ok, 'msg': msg}
-    elif db_type == 'pg':
-        ok, msg = test_pg_connection(data['host'], data['port'], data['user'], data['password'], data.get('database', 'postgres'))
-        result = {'ok': ok, 'msg': msg}
-    elif db_type == 'oracle':
-        ok, msg = test_oracle_connection(data['host'], data['port'], data['user'], data['password'], data.get('service_name', 'ORCL'), bool(data.get('sysdba')), data.get('jdbc_url') or None)
-        result = {'ok': ok, 'msg': msg}
-        if ok:
-            # 提取 Oracle 大版本（11 / 12 / 18 / 19 / 21 等）
-            import re as _re
-            m = _re.search(r'(\d{2})\.', msg)
-            if m:
-                result['oracle_major_version'] = int(m.group(1))
-    elif db_type == 'dm':
-        ok, msg = test_dm_connection(data['host'], data['port'], data['user'], data['password'])
-        result = {'ok': ok, 'msg': msg}
-    elif db_type == 'sqlserver':
-        ok, msg = test_sqlserver_connection(data['host'], data['port'], data['user'], data['password'], data.get('database', 'master'))
-        result = {'ok': ok, 'msg': msg}
-    elif db_type == 'tidb':
-        ok, msg = test_tidb_connection(data['host'], data['port'], data['user'], data['password'], data.get('database'))
-        result = {'ok': ok, 'msg': msg}
-    elif db_type == 'ivorysql':
-        ok, msg = test_ivorysql_connection(data['host'], data['port'], data['user'], data['password'], data.get('database', 'postgres'))
-        result = {'ok': ok, 'msg': msg}
-    elif db_type == 'kingbase':
-        ok, msg = test_kingbase_connection(data['host'], data['port'], data['user'], data['password'], data.get('database', 'kingbase'))
-        result = {'ok': ok, 'msg': msg}
-    elif db_type == 'yashandb':
-        ok, msg = test_yashandb_connection(data['host'], data['port'], data['user'], data['password'])
-        result = {'ok': ok, 'msg': msg}
-    elif db_type == 'gbase':
-        ok, msg = test_gbase_connection(data['host'], data['port'], data['user'], data['password'], data.get('database', 'gbase01'))
-        result = {'ok': ok, 'msg': msg}
-    elif db_type in ('redis', 'redis-cluster'):
-        ok, msg = test_plugin_connection(
-            db_type,
-            data['host'],
-            data['port'],
-            data['user'],
-            data['password'],
-            database=data.get('database', ''),
-            seed_nodes=data.get('seed_nodes', ''),
-        )
-        result = {'ok': ok, 'msg': msg}
-    elif db_type == 'mongodb':
-        # MongoDB 连接测试：透传专用参数给插件
-        ok, msg = test_plugin_connection(
-            db_type,
-            data['host'],
-            data['port'],
-            data['user'],
-            data['password'],
-            database=data.get('database', 'admin'),
-            connect_mode=data.get('connect_mode', 'standard'),
-            auth_source=data.get('auth_source', 'admin'),
-            auth_mechanism=data.get('auth_mechanism', ''),
-            replica_set=data.get('replica_set', ''),
-            tls=bool(data.get('tls', False)),
-            tls_ca_file=data.get('tls_ca_file', ''),
-            tls_cert_key_file=data.get('tls_cert_key_file', ''),
-            tls_allow_invalid_certs=bool(data.get('tls_allow_invalid_certs', False)),
-        )
-        if ok is not None:
-            result = {'ok': ok, 'msg': msg}
-            # 动态调用插件的 parse_connection_result() 方法（无侵入式架构）
-            try:
-                from plugin_loader import get_plugin_instance
-                plugin = get_plugin_instance(db_type)
-                if plugin and hasattr(plugin, 'parse_connection_result'):
-                    extra = plugin.parse_connection_result(ok, msg)
-                    if extra and isinstance(extra, dict):
-                        result.update(extra)
-            except Exception as e:
-                app.logger.warning(f"调用插件 {db_type} 的 parse_connection_result() 失败: {e}")
-        else:
-            return jsonify({'ok': False, 'msg': _t('webui.err_unknown_db_type')})
-    else:
-        # 尝试使用插件测试连接
-        ok, msg = test_plugin_connection(
-            db_type,
-            data['host'],
-            data['port'],
-            data['user'],
-            data['password'],
-            service_name=data.get('service_name', ''),
-            sysdba=bool(data.get('sysdba', False)),
-            jdbc_url=data.get('jdbc_url') or None
-        )
-        if ok is not None:
-            result = {'ok': ok, 'msg': msg}
-            # 动态调用插件的 parse_connection_result() 方法（无侵入式架构）
-            try:
-                from plugin_loader import get_plugin_instance
-                plugin = get_plugin_instance(db_type)
-                if plugin and hasattr(plugin, 'parse_connection_result'):
-                    extra = plugin.parse_connection_result(ok, msg)
-                    if extra and isinstance(extra, dict):
-                        result.update(extra)
-            except Exception as e:
-                app.logger.warning(f"调用插件 {db_type} 的 parse_connection_result() 失败: {e}")
-        else:
-            return jsonify({'ok': False, 'msg': _t('webui.err_unknown_db_type')})
-
-    return jsonify(result)
+    # 统一连接测试分发：注册表 -> 插件 connect_test 复用 -> 兜底
+    return jsonify(_dispatch_conn_test(db_type, data, 'regular'))
 
 
 @app.route('/api/test_ollama', methods=['POST'])
@@ -2815,18 +3110,24 @@ def api_start_inspection():
             if not instance:
                 return jsonify({'ok': False, 'msg': '数据源不存在'})
             # 使用数据源的连接信息
+            _meta = get_db_meta(db_type)
+            _default_db = _meta.default_database if _meta else 'postgres'
             db_info = {
                 'ip':        instance.get('host', ''),
                 'port':      int(instance.get('port', 0) or 0),
                 'user':      instance.get('user', ''),
                 'tenant':    instance.get('tenant', '') or '',
                 'password':  instance.get('password', ''),
-                'database':  instance.get('database') or ('highgo' if db_type == 'hgdb' else ('admin' if db_type == 'mongodb' else ('master' if db_type == 'sqlserver' else ('DAMENG' if db_type == 'dm' else ('testdb' if db_type == 'gbase' else ('default' if db_type == 'clickhouse' else ('' if db_type in ('tidb', 'oceanbase', 'mysql', 'mariadb', 'redis', 'redis-cluster') else 'postgres'))))))),
+                'database':  instance.get('database') or _default_db,
                 'service_name': instance.get('service_name', None),
                 'sysdba':    bool(instance.get('sysdba', False)),  # ← 新增（确保是布尔值）
                 'name':      instance.get('name', ''),
                 'desensitize': bool(data.get('desensitize', False)),
             }
+            # 修复：缺省库名为空串的类型（MySQL 家族 / redis 等）若库名被旧 bug 误写为
+            # 'postgres'（PG 默认残留），归零为空，连系统时回退到 'mysql'
+            if _meta and _meta.default_database == '' and db_info.get('database') == 'postgres':
+                db_info['database'] = ''
             # MongoDB 专用参数从数据源实例透传
             if db_type == 'mongodb':
                 for _mk in ('connect_mode', 'auth_source', 'auth_mechanism', 'replica_set',
@@ -2838,13 +3139,15 @@ def api_start_inspection():
                 db_info['seed_nodes'] = instance.get('seed_nodes', '')
         else:
             # 原有逻辑：使用手动输入的连接信息
+            _meta = get_db_meta(db_type)
+            _default_db = _meta.default_database if _meta else 'postgres'
             db_info = {
                 'ip':        data.get('host', ''),
                 'port':      int(data.get('port', 0) or 0),
                 'user':      data.get('user', ''),
                 'tenant':    data.get('tenant', '') or '',
                 'password':  data.get('password', ''),
-                'database':  data.get('database') or ('highgo' if db_type == 'hgdb' else ('admin' if db_type == 'mongodb' else ('master' if db_type == 'sqlserver' else ('DAMENG' if db_type == 'dm' else ('testdb' if db_type == 'gbase' else ('default' if db_type == 'clickhouse' else ('' if db_type in ('tidb', 'oceanbase', 'mysql', 'mariadb', 'redis', 'redis-cluster') else 'postgres'))))))),
+                'database':  data.get('database') or _default_db,
                 'service_name': data.get('service_name', None),
                 'sysdba':    bool(data.get('sysdba', False)),  # ← 新增（确保是布尔值）
                 'sid':       data.get('sid', None),
@@ -2853,6 +3156,10 @@ def api_start_inspection():
                 'name':      data.get('name', ''),
                 'desensitize': bool(data.get('desensitize', False)),
             }
+            # 修复：缺省库名为空串的类型（MySQL 家族 / redis 等）若库名被旧 bug 误写为
+            # 'postgres'（PG 默认残留），归零为空，连系统时回退到 'mysql'
+            if _meta and _meta.default_database == '' and db_info.get('database') == 'postgres':
+                db_info['database'] = ''
             # MongoDB 专用参数透传（通过 db_info → ssh_info 传递给插件 getData）
             if db_type == 'mongodb':
                 db_info['connect_mode'] = data.get('connect_mode', 'standard')
@@ -5036,106 +5343,28 @@ def api_pro_datasource_update(instance_id):
 
 @app.route('/api/db_types', methods=['GET'])
 def api_db_types():
-    """返回所有可用的数据库类型（内置 + 插件）"""
+    """返回所有可用的数据库类型（内置 + 插件）。
+
+    统一从 dbtype_registry.load_all_db_types() 读元数据，不再硬编码内置字典。
+    新增插件类型只要启用即在下拉中出现，无需改此函数。
+    """
     result = []
-    
-    # 1. 内置数据库类型（从 task_configs 提取）
-    built_in_icons = {
-        'oracle': '/oracle.png',
-        'mysql': '/mysql.png',
-        'pg': '/pg.png',
-        'dm': '/dm.png',
-        'sqlserver': '/sqlserver.png',
-        'tidb': '/tidb.png',
-        'ivorysql': '/ivorysql.png',
-        'yashandb': '/yashandb.png',
-        'kingbase': '/kingbase.png',
-        'gbase': '/gbase.png',
-        'mariadb': '/mysql.png',  # MariaDB 复用 MySQL 图标（协议兼容）
-        'oceanbase': '/oceanbase.png',  # OceanBase 用自有 logo
-    }
-    
-    built_in_descriptions = {
-        'oracle': '适用于 Oracle 12c/19c/21c 实例，通过 oracledb 或 cx_Oracle 连接',
-        'mysql': '适用于 MySQL 5.7+/8.0+ 实例，通过 PyMySQL 连接',
-        'mariadb': '适用于 MariaDB 10.0+ 实例（MySQL 兼容），通过 PyMySQL 连接',
-        'oceanbase': '适用于 OceanBase 社区版 MySQL 租户（默认端口 2881），通过 PyMySQL 连接',
-        'pg': '适用于 PostgreSQL 10+ 实例，通过 psycopg2 连接',
-        'dm': '适用于 DM8 实例，通过 dmPython 连接',
-        'sqlserver': '适用于 SQL Server 2012+ 实例，通过 pyodbc 连接',
-        'tidb': '适用于 TiDB 5.0+ 实例，通过 PyMySQL 连接',
-        'ivorysql': '适用于 IvorySQL 实例，通过 psycopg2 连接',
-        'yashandb': '适用于 YashanDB 实例，通过 yasdb 连接',
-        'kingbase': '适用于 KingbaseES V8+ 实例，通过 ksycopg2 连接',
-        'gbase': '适用于 GBase 8s V8+ 实例，通过 JDBC 连接',
-    }
-    
-    # Emoji 图标映射（用于文本场景：过滤按钮、下拉框等）
-    built_in_emojis = {
-        'oracle': '🔴',
-        'mysql': '🐬',
-        'pg': '🐘',
-        'dm': '🟡',
-        'sqlserver': '🟠',
-        'tidb': '🟢',
-        'ivorysql': '🐘',
-        'yashandb': '🏔️',
-        'kingbase': '🔵',
-        'gbase': '🟤',
-        'mariadb': '🐬',  # MariaDB 复用 MySQL emoji（协议兼容）
-        'oceanbase': '🐋',  # OceanBase 用鲸鱼 emoji（MySQL 租户兼容）
-    }
-    
-    # 定义内置数据库类型配置
-    task_configs = {
-        'oracle': {'label': 'Oracle', 'port': 1521, 'user': 'system'},
-        'mysql': {'label': 'MySQL', 'port': 3306, 'user': 'root'},
-        'mariadb': {'label': 'MariaDB', 'port': 3306, 'user': 'root'},
-        'oceanbase': {'label': 'OceanBase', 'port': 2881, 'user': 'root@test', 'compat_tag': 'MySQL'},
-        'pg': {'label': 'PostgreSQL', 'port': 5432, 'user': 'postgres'},
-        'dm': {'label': 'DM8', 'port': 5236, 'user': 'SYSDBA'},
-        'sqlserver': {'label': 'SQL Server', 'port': 1433, 'user': 'sa'},
-        'tidb': {'label': 'TiDB', 'port': 4000, 'user': 'root'},
-        'ivorysql': {'label': 'IvorySQL', 'port': 5432, 'user': 'postgres'},
-        'yashandb': {'label': 'YashanDB', 'port': 1688, 'user': 'sys'},
-        'kingbase': {'label': 'KingbaseES', 'port': 54321, 'user': 'system'},
-        'gbase': {'label': 'GBase 8s', 'port': 9088, 'user': 'gbasedbt'},
-    }
-    
-    for db_type, cfg in task_configs.items():
+    for meta in load_all_db_types():
         result.append({
-            'value': db_type,
-            'label': cfg.get('label', db_type),
-            'description': built_in_descriptions.get(db_type, ''),
-            'icon': built_in_icons.get(db_type, ''),
-            'emoji': built_in_emojis.get(db_type, '📊'),
-            'is_plugin': False,
-            'port': cfg.get('port', 3306),
-            'user': cfg.get('user', 'root'),
-            'compat_tag': cfg.get('compat_tag', ''),
+            'value': meta.db_type,
+            'label': meta.label,
+            'description': meta.description,
+            'icon': meta.icon,
+            'emoji': meta.emoji,
+            'is_plugin': meta.is_plugin,
+            'port': meta.port,
+            'user': meta.user,
+            'compat_tag': meta.compat_tag,
+            'default_database': meta.default_database,
+            'show_database_field': meta.show_database_field,
+            'sql_editor': meta.sql_editor,
+            'protocol': meta.protocol,
         })
-    
-    # 2. 插件提供的数据库类型
-    try:
-        from plugin_loader import discover_plugins
-        plugins = discover_plugins()
-        for plugin in plugins:
-            if plugin.get('enabled') and plugin.get('db_type'):
-                # 从插件 manifest 读取自定义端口和用户名
-                result.append({
-                    'value': plugin.get('db_type'),
-                    'label': plugin.get('name', plugin.get('db_type')),
-                    'description': plugin.get('description', ''),
-                    'icon': '/plugin-logo/' + plugin.get('db_type'),  # 插件图标统一从插件目录 /plugin-logo/<db_type> 读取，404 时前端回退 emoji
-                    'emoji': plugin.get('emoji', '🧩'),  # 插件默认 emoji
-                    'is_plugin': True,
-                    'port': plugin.get('default_port', 3306),   # 插件可自定义端口
-                    'user': plugin.get('default_user', 'root'), # 插件可自定义用户名
-                    'compat_tag': plugin.get('compat_tag', ''),  # NoSQL / MySQL 等兼容性标签
-                })
-    except Exception as e:
-        print(f"[API] 加载插件数据库类型失败: {e}")
-    
     return jsonify(result)
 
 
@@ -5197,227 +5426,22 @@ def api_pro_datasource_test(instance_id):
 
 @app.route('/api/pro/datasources/test-connection', methods=['POST'])
 def api_pro_datasources_test_conn():
-    """测试数据库连接（直接传参）"""
+    """测试数据库连接（直接传参）
+
+    统一连接测试分发：注册表 -> 插件 connect_test 复用 -> 兜底。
+    新增复用 MySQL/PG/Oracle 等协议的插件只需在 plugin.json 写 connect_test
+    字段即可接入，无需在此追加 elif 分支。
+    """
     try:
-        data = request.get_json()
+        data = request.get_json() or {}
         db_type = data.get('db_type', 'mysql')
         host = data.get('host', '')
-        port = data.get('port', 3306)
-        user = data.get('user', '')
-        password = data.get('password', '')
-        service_name = data.get('service_name', '')
-        jdbc_url = data.get('jdbc_url')
 
         if not host:
             return jsonify({'ok': False, 'error': '请输入主机地址'})
 
-        if db_type == 'oceanbase':
-            import pymysql
-            ob_user = user + '@' + data['tenant'] if data.get('tenant') else user
-            ob_db = data.get('database') or 'sys'
-            conn = pymysql.connect(host=host, port=port, user=ob_user, password=password, database=ob_db, connect_timeout=10)
-            conn.close()
-        elif db_type in ('mysql', 'tidb', 'mariadb'):
-            import pymysql
-            _db = data.get('database') or None
-            _conn_kwargs = dict(host=host, port=port, user=user, password=password, connect_timeout=10)
-            if _db:
-                _conn_kwargs['database'] = _db
-            conn = pymysql.connect(**_conn_kwargs)
-            conn.close()
-        elif db_type in ('pg', 'postgresql', 'ivorysql', 'kingbase'):
-            import psycopg2
-            db = data.get('database', 'postgres' if db_type != 'kingbase' else 'kingbase')
-            conn = psycopg2.connect(host=host, port=port, user=user, password=password, dbname=db, connect_timeout=10)
-            conn.close()
-        elif db_type == 'oracle':
-            import oracledb
-            _jdbc = (data.get('jdbc_url') or '').strip()
-            if _jdbc and _jdbc.lstrip().upper().startswith('(DESCRIPTION'):
-                # 纯 TNS 描述符：oracledb 可直接作为 dsn 使用
-                dsn = _jdbc
-            else:
-                dsn = f"{host}:{port}/{service_name}" if service_name else f"{host}:{port}"
-            ssh_host = data.get('ssh_host', '')
-            _tunnel = None
-
-            if ssh_host:
-                # 配了 SSH → 只走隧道，不 fallback 直连
-                try:
-                    from ssh_tunnel import SSHTunnel
-                    
-                    _tunnel = SSHTunnel(
-                        ssh_host=ssh_host,
-                        ssh_port=int(data.get('ssh_port', 22)),
-                        ssh_user=data.get('ssh_user', 'root'),
-                        ssh_password=data.get('ssh_password', ''),
-                        remote_host=host,
-                        remote_port=int(port)
-                    )
-                    _tunnel.__enter__()
-                    _local = _tunnel.local_port
-                    dsn = f"localhost:{_local}/{service_name}" if service_name else f"localhost:{_local}"
-                except Exception as te:
-                    return jsonify({'ok': False, 'error': f'SSH 隧道建立失败: {te}'})
-
-            try:
-                params = {"user": user, "password": password, "dsn": dsn}
-                if data.get('sysdba'):
-                    params["mode"] = oracledb.SYSDBA
-                conn = oracledb.connect(**params)
-            except Exception as e:
-                err_msg = str(e)
-                if 'DPY-3010' in err_msg or 'DPY-3015' in err_msg:
-                    # thin mode 不支持 Oracle 11g 及以下 / 老密码验证器(0x939)，尝试 thick mode
-                    _thick_ok = False
-                    # 1. 先尝试自动检测
-                    try:
-                        oracledb.init_oracle_client()
-                        _thick_ok = True
-                    except Exception:
-                        pass
-                    # 2. 自动检测失败，尝试 DBCheck 内置的 Instant Client
-                    if not _thick_ok:
-                        # 使用辅助函数查找 Oracle Client 目录（支持 lib/ 子目录）
-                        _lib_dir = _find_oracle_client_lib_dir()
-                        if _lib_dir:
-                            try:
-                                oracledb.init_oracle_client(lib_dir=_lib_dir)
-                                _thick_ok = True
-                            except Exception:
-                                pass
-                    # 3. 内置 Client 失败，尝试读用户配置的路径
-                    if not _thick_ok:
-                        try:
-                            import json
-                            with open(os.path.join(BASE_DIR, 'dbc_config.json')) as f:
-                                _cfg = json.load(f)
-                            _lib_dir = _cfg.get('oracle_client_lib_dir', '')
-                            if _lib_dir and os.path.isdir(_lib_dir):
-                                oracledb.init_oracle_client(lib_dir=_lib_dir)
-                                _thick_ok = True
-                        except Exception:
-                            pass
-                    if not _thick_ok:
-                        return jsonify(
-                            ok=False,
-                            error='Oracle 11g 及以下版本需要 Oracle Instant Client。'
-                                  '请通过左侧导航"Oracle Client"设置页，点击"一键下载并安装"按钮自动下载安装。'
-                        )
-                    try:
-                        conn = oracledb.connect(**params)
-                    except Exception as e2:
-                        return jsonify(ok=False, error=f'Oracle 连接失败（thick mode）: {e2}')
-                elif 'timed out' in err_msg.lower() or 'timeout' in err_msg.lower():
-                    return jsonify(ok=False, error='连接超时，Oracle 可能无法直连，请在数据源中配置 SSH')
-                else:
-                    return jsonify(ok=False, error=str(e))
-            conn.close()
-            if _tunnel:
-                _tunnel.close()
-        elif db_type == 'dm':
-            import dmPython
-            try:
-                conn = dmPython.connect(server=host, port=int(port), user=user, password=password)
-                conn.close()
-            except Exception as de:
-                if 'exception set' in str(de):
-                    return jsonify({'ok': False, 'error': f'达梦连接失败，请检查用户名（默认SYSDBA）、密码和端口（{host}:{port}）'})
-                raise
-            conn.close()
-        elif db_type == 'sqlserver':
-            import pyodbc
-            conn_str = _build_sqlserver_conn_str(host, port, user, password, timeout=10)
-            conn = pyodbc.connect(conn_str)
-            conn.close()
-        elif db_type == 'yashandb':
-            try:
-                import yasdb
-                conn = yasdb.connect(host=host, port=int(port), user=user, password=password)
-                conn.close()
-            except ImportError as e:
-                return jsonify({'ok': False, 'error': f'yasdb 驱动未安装: {str(e)}'})
-        elif db_type == 'gbase':
-            gbase_server = data.get('gbase_server_name', 'gbase01')
-            result = test_gbase_connection(host, int(port), user, password, data.get('database', 'gbase01'), gbase_server)
-            if not result[0]:
-                return jsonify({'ok': False, 'error': result[1]})
-        elif db_type in ('redis', 'redis-cluster'):
-            ok, msg = test_plugin_connection(
-                db_type,
-                host,
-                port,
-                user,
-                password,
-                database=data.get('database', ''),
-                seed_nodes=data.get('seed_nodes', ''),
-            )
-            if ok:
-                return jsonify({'ok': True, 'message': msg})
-            else:
-                return jsonify({'ok': False, 'error': msg}) if msg else jsonify({'ok': False, 'error': f'不支持的数据库类型: {db_type}'})
-        elif db_type == 'mongodb':
-            # MongoDB 连接测试：透传专用参数给插件
-            ok, msg = test_plugin_connection(
-                db_type,
-                host,
-                port,
-                user,
-                password,
-                database=data.get('database', 'admin'),
-                connect_mode=data.get('connect_mode', 'standard'),
-                auth_source=data.get('auth_source', 'admin'),
-                auth_mechanism=data.get('auth_mechanism', ''),
-                replica_set=data.get('replica_set', ''),
-                tls=bool(data.get('tls', False)),
-                tls_ca_file=data.get('tls_ca_file', ''),
-                tls_cert_key_file=data.get('tls_cert_key_file', ''),
-                tls_allow_invalid_certs=bool(data.get('tls_allow_invalid_certs', False)),
-            )
-            if ok:
-                return jsonify({'ok': True, 'message': msg})
-            else:
-                if msg:
-                    return jsonify({'ok': False, 'error': msg})
-                else:
-                    return jsonify({'ok': False, 'error': f'不支持的数据库类型: {db_type}'})
-        elif db_type == 'db2':
-            # DB2 (JDBC) 插件：走统一插件连接入口；database/jdbc_url 透传
-            ok, msg = test_plugin_connection(
-                db_type,
-                host,
-                port,
-                user,
-                password,
-                database=data.get('database', ''),
-                jdbc_url=jdbc_url,
-                ssl=bool(data.get('ssl', False)),
-            )
-            if ok:
-                return jsonify({'ok': True, 'message': msg})
-            else:
-                return jsonify({'ok': False, 'error': msg}) if msg else jsonify({'ok': False, 'error': f'不支持的数据库类型: {db_type}'})
-        else:
-            # 尝试使用插件测试连接
-            ok, msg = test_plugin_connection(
-                db_type,
-                host,
-                port,
-                user,
-                password,
-                service_name=service_name,
-                sysdba=data.get('sysdba', False),
-                jdbc_url=jdbc_url
-            )
-            if ok:
-                return jsonify({'ok': True, 'message': msg})
-            else:
-                if msg:  # msg不为None，说明是插件返回的错误
-                    return jsonify({'ok': False, 'error': msg})
-                else:  # msg为None，说明不是插件数据库类型
-                    return jsonify({'ok': False, 'error': f'不支持的数据库类型: {db_type}'})
-
-        return jsonify({'ok': True, 'message': '连接成功'})
+        result = _dispatch_conn_test(db_type, data, 'pro')
+        return jsonify(result)
     except ImportError as e:
         return jsonify({'ok': False, 'error': f'驱动未安装: {e}'})
     except Exception as e:
@@ -6158,7 +6182,7 @@ def api_execute_sql():
     try:
         conn = None
         cursor = None
-        if db_type in ('mysql', 'tidb', 'mariadb', 'oceanbase'):
+        if db_type in ('mysql', 'tidb', 'mariadb', 'oceanbase', 'tdsqlc_mysql'):
             import pymysql
             db_name = database or 'INFORMATION_SCHEMA'
             conn = pymysql.connect(
@@ -6870,7 +6894,7 @@ def api_inspection_execute_sql():
                     result.append(p)
             return result
 
-        if db_type in ('mysql', 'tidb', 'mariadb', 'oceanbase'):
+        if db_type in ('mysql', 'tidb', 'mariadb', 'oceanbase', 'tdsqlc_mysql'):
             import pymysql
             conn = pymysql.connect(
                 host=db_info.get('host', ''),

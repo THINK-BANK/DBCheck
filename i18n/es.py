@@ -2431,6 +2431,7 @@ ES.update({
     "webui.mariadb_report_filename": "InformeInspecciónMariaDB_{ip}_{name}_{ts}",
     "webui.mongodb_report_filename": "InformeInspecciónMongoDB_{ip}_{name}_{ts}",
     "webui.mysql_report_filename": "InformeInspecciónMySQL_{ip}_{name}_{ts}",
+    "webui.tdsqlc_mysql_report_filename": "InformeInspecciónTDSQLCMySQL_{ip}_{name}_{ts}",
     "webui.nav_about": "Acerca de DBCheck",
     "webui.nav_account": "Centro de usuario",
     "webui.nav_ai": "Configuración de diagnóstico IA",

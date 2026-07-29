@@ -2430,6 +2430,7 @@ KO.update({
     "webui.mariadb_report_filename": "MariaDB점검보고서_{ip}_{name}_{ts}",
     "webui.mongodb_report_filename": "MongoDB점검보고서_{ip}_{name}_{ts}",
     "webui.mysql_report_filename": "MySQL점검보고서_{ip}_{name}_{ts}",
+    "webui.tdsqlc_mysql_report_filename": "TDSQL-C MySQL점검보고서_{ip}_{name}_{ts}",
     "webui.nav_about": "DBCheck 정보",
     "webui.nav_account": "사용자 센터",
     "webui.nav_ai": "AI 진단 설정",

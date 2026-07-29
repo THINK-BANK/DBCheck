@@ -1819,6 +1819,28 @@ def init_default_baselines(db_path: str = None):
             {'param_name': 'tidb_enable_stmt_summary', 'query_sql': "SHOW VARIABLES LIKE 'tidb_enable_stmt_summary'", 'operator': '=', 'expected_value': 'ON', 'risk_level': 'LOW', 'description_zh': '语句摘要应开启（性能分析）', 'description_en': 'Statement summary should be enabled for performance analysis'},
         ],
         # ═══════════════════════════════════════════
+        # TDSQL-C MySQL（腾讯云 100% MySQL 兼容，直接复用 MySQL 13 条基线）
+        # ═══════════════════════════════════════════
+        'tdsqlc_mysql': [
+            # ── 安全 ──
+            {'param_name': 'validate_password.policy', 'query_sql': "SHOW VARIABLES LIKE 'validate_password.policy'", 'operator': '>=', 'expected_value': 'MEDIUM', 'risk_level': 'HIGH', 'description_zh': '密码策略应 >= MEDIUM', 'description_en': 'Password policy should be >= MEDIUM'},
+            {'param_name': 'max_connect_errors', 'query_sql': "SHOW VARIABLES LIKE 'max_connect_errors'", 'operator': '>=', 'expected_value': '100', 'risk_level': 'MEDIUM', 'description_zh': '最大连接错误数应 >= 100，防止暴力破解', 'description_en': 'Max connect errors should be >= 100'},
+            {'param_name': 'local_infile', 'query_sql': "SHOW VARIABLES LIKE 'local_infile'", 'operator': '=', 'expected_value': 'OFF', 'risk_level': 'HIGH', 'description_zh': 'local_infile 应关闭（防止 SQL 注入加载本地文件）', 'description_en': 'local_infile should be OFF to prevent local file injection'},
+            {'param_name': 'sql_mode', 'query_sql': "SHOW VARIABLES LIKE 'sql_mode'", 'operator': 'LIKE', 'expected_value': 'STRICT_TRANS_TABLES', 'risk_level': 'MEDIUM', 'description_zh': 'sql_mode 应包含 STRICT_TRANS_TABLES', 'description_en': 'sql_mode should contain STRICT_TRANS_TABLES'},
+            {'param_name': 'log_error', 'query_sql': "SHOW VARIABLES LIKE 'log_error'", 'operator': '!=', 'expected_value': '', 'risk_level': 'LOW', 'description_zh': '应配置错误日志路径', 'description_en': 'Error log path should be configured'},
+            # ── 性能 ──
+            {'param_name': 'max_connections', 'query_sql': "SHOW VARIABLES LIKE 'max_connections'", 'operator': '>=', 'expected_value': '500', 'risk_level': 'MEDIUM', 'description_zh': '最大连接数应 >= 500', 'description_en': 'Max connections should be >= 500'},
+            {'param_name': 'innodb_buffer_pool_size', 'query_sql': "SHOW VARIABLES LIKE 'innodb_buffer_pool_size'", 'operator': '>=', 'expected_value': '1073741824', 'risk_level': 'MEDIUM', 'description_zh': 'InnoDB 缓冲池大小应 >= 1GB', 'description_en': 'InnoDB buffer pool size should be >= 1GB'},
+            {'param_name': 'innodb_log_file_size', 'query_sql': "SHOW VARIABLES LIKE 'innodb_log_file_size'", 'operator': '>=', 'expected_value': '268435456', 'risk_level': 'LOW', 'description_zh': 'InnoDB 日志文件大小应 >= 256MB', 'description_en': 'InnoDB log file size should be >= 256MB'},
+            {'param_name': 'query_cache_size', 'query_sql': "SHOW VARIABLES LIKE 'query_cache_size'", 'operator': '<=', 'expected_value': '0', 'risk_level': 'LOW', 'description_zh': 'MySQL 8.0+ 查询缓存应关闭（0）', 'description_en': 'Query cache should be disabled (0) for MySQL 8.0+'},
+            # ── 高可用 ──
+            {'param_name': 'sync_binlog', 'query_sql': "SHOW VARIABLES LIKE 'sync_binlog'", 'operator': '>=', 'expected_value': '1', 'risk_level': 'HIGH', 'description_zh': 'sync_binlog 应 >= 1（保证 binlog 落盘）', 'description_en': 'sync_binlog should be >= 1 for data safety'},
+            {'param_name': 'innodb_flush_log_at_trx_commit', 'query_sql': "SHOW VARIABLES LIKE 'innodb_flush_log_at_trx_commit'", 'operator': '>=', 'expected_value': '1', 'risk_level': 'HIGH', 'description_zh': '事务提交时刷盘策略应 >= 1', 'description_en': 'InnoDB flush log at trx commit should be >= 1'},
+            # ── 运维 ──
+            {'param_name': 'expire_logs_days', 'query_sql': "SHOW VARIABLES LIKE 'expire_logs_days'", 'operator': '>=', 'expected_value': '7', 'risk_level': 'LOW', 'description_zh': 'binlog 保留天数应 >= 7 天', 'description_en': 'Binlog expiration should be >= 7 days'},
+            {'param_name': 'max_allowed_packet', 'query_sql': "SHOW VARIABLES LIKE 'max_allowed_packet'", 'operator': '>=', 'expected_value': '67108864', 'risk_level': 'LOW', 'description_zh': '最大包大小应 >= 64MB', 'description_en': 'Max allowed packet should be >= 64MB'},
+        ],
+        # ═══════════════════════════════════════════
         # IvorySQL（基于 PostgreSQL）
         # ═══════════════════════════════════════════
         'ivorysql': [

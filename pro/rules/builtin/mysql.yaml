@@ -4,7 +4,7 @@ rules:
     name: 连接数使用率
     name_zh: 连接数使用率
     category: connection
-    db_types: [mysql]
+    db_types: [mysql, tdsqlc_mysql]
     severity: high
     priority: high
     owner: DBA
@@ -27,7 +27,7 @@ rules:
     name: 连接数使用率预警
     name_zh: 连接数使用率预警
     category: connection
-    db_types: [mysql]
+    db_types: [mysql, tdsqlc_mysql]
     severity: medium
     priority: medium
     owner: DBA
@@ -50,7 +50,7 @@ rules:
     name: 长时间运行的 SQL
     name_zh: 长时间运行的 SQL
     category: performance
-    db_types: [mysql]
+    db_types: [mysql, tdsqlc_mysql]
     severity: high
     priority: high
     owner: DBA
@@ -72,7 +72,7 @@ rules:
     name: 慢查询日志未开启
     name_zh: 慢查询日志未开启
     category: log
-    db_types: [mysql]
+    db_types: [mysql, tdsqlc_mysql]
     severity: info
     priority: low
     owner: DBA
@@ -90,7 +90,7 @@ rules:
     name: binlog 未开启
     name_zh: binlog 未开启
     category: backup
-    db_types: [mysql]
+    db_types: [mysql, tdsqlc_mysql]
     severity: medium
     priority: medium
     owner: DBA
@@ -108,7 +108,7 @@ rules:
     name: binlog 永不过期
     name_zh: binlog 永不过期
     category: backup
-    db_types: [mysql]
+    db_types: [mysql, tdsqlc_mysql]
     severity: medium
     priority: medium
     owner: DBA
@@ -126,7 +126,7 @@ rules:
     name: InnoDB 缓冲池偏小
     name_zh: InnoDB 缓冲池偏小
     category: memory
-    db_types: [mysql]
+    db_types: [mysql, tdsqlc_mysql]
     severity: medium
     priority: medium
     owner: DBA
@@ -147,7 +147,7 @@ rules:
     name: 查询缓存已开启（不建议）
     name_zh: 查询缓存已开启（不建议）
     category: performance
-    db_types: [mysql]
+    db_types: [mysql, tdsqlc_mysql]
     severity: info
     priority: low
     owner: DBA
@@ -165,7 +165,7 @@ rules:
     name: 表锁等待比例过高
     name_zh: 表锁等待比例过高
     category: lock
-    db_types: [mysql]
+    db_types: [mysql, tdsqlc_mysql]
     severity: high
     priority: high
     owner: DBA
@@ -186,7 +186,7 @@ rules:
     name: 异常中止连接数较多
     name_zh: 异常中止连接数较多
     category: connection
-    db_types: [mysql]
+    db_types: [mysql, tdsqlc_mysql]
     severity: medium
     priority: medium
     owner: DBA
@@ -204,7 +204,7 @@ rules:
     name: 用户空密码
     name_zh: 用户空密码
     category: security
-    db_types: [mysql]
+    db_types: [mysql, tdsqlc_mysql]
     severity: high
     priority: high
     owner: DBA
@@ -223,7 +223,7 @@ rules:
     name: root 用户允许所有主机连接
     name_zh: root 用户允许所有主机连接
     category: security
-    db_types: [mysql]
+    db_types: [mysql, tdsqlc_mysql]
     severity: high
     priority: high
     owner: DBA
@@ -241,7 +241,7 @@ rules:
     name: 复制 IO 线程异常
     name_zh: 复制 IO 线程异常
     category: replication
-    db_types: [mysql]
+    db_types: [mysql, tdsqlc_mysql]
     severity: high
     priority: high
     owner: DBA
@@ -261,7 +261,7 @@ rules:
     name: 主从复制延迟过高
     name_zh: 主从复制延迟过高
     category: replication
-    db_types: [mysql]
+    db_types: [mysql, tdsqlc_mysql]
     severity: medium
     priority: medium
     owner: DBA
@@ -281,7 +281,7 @@ rules:
     name: 表缓存命中率低
     name_zh: 表缓存命中率低
     category: performance
-    db_types: [mysql]
+    db_types: [mysql, tdsqlc_mysql]
     severity: medium
     priority: medium
     owner: DBA
@@ -302,7 +302,7 @@ rules:
     name: 系统内存使用率
     name_zh: 系统内存使用率
     category: system
-    db_types: [mysql]
+    db_types: [mysql, tdsqlc_mysql]
     severity: high
     priority: high
     owner: 系统管理员
@@ -320,7 +320,7 @@ rules:
     name: 系统内存使用率预警
     name_zh: 系统内存使用率预警
     category: system
-    db_types: [mysql]
+    db_types: [mysql, tdsqlc_mysql]
     severity: medium
     priority: medium
     owner: 系统管理员
@@ -338,7 +338,7 @@ rules:
     name: 磁盘空间紧张
     name_zh: 磁盘空间紧张
     category: system
-    db_types: [mysql]
+    db_types: [mysql, tdsqlc_mysql]
     severity: high
     priority: high
     owner: 系统管理员
@@ -356,7 +356,7 @@ rules:
     name: innodb_flush_log_at_trx_commit=0
     name_zh: innodb_flush_log_at_trx_commit=0
     category: durability
-    db_types: [mysql]
+    db_types: [mysql, tdsqlc_mysql]
     severity: high
     priority: high
     owner: DBA
@@ -374,7 +374,7 @@ rules:
     name: 数据库字符集非 UTF8
     name_zh: 数据库字符集非 UTF8
     category: charset
-    db_types: [mysql]
+    db_types: [mysql, tdsqlc_mysql]
     severity: info
     priority: low
     owner: DBA

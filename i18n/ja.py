@@ -2431,6 +2431,7 @@ JA.update({
     "webui.mariadb_report_filename": "MariaDB 検査レポート_{ip}_{name}_{ts}",
     "webui.mongodb_report_filename": "MongoDB 検査レポート_{ip}_{name}_{ts}",
     "webui.mysql_report_filename": "MySQL 検査レポート_{ip}_{name}_{ts}",
+    "webui.tdsqlc_mysql_report_filename": "TDSQL-C MySQL 検査レポート_{ip}_{name}_{ts}",
     "webui.nav_about": "DBCheck について",
     "webui.nav_account": "ユーザーセンター",
     "webui.nav_ai": "AI 診断設定",
