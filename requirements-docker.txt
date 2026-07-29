@@ -35,6 +35,9 @@ beautifulsoup4>=4.12.0  # rag/document_processor.py（from bs4 import BeautifulS
 
 # ── PDF Export ──────────────────────────────────────────────────────────────
 reportlab>=4.0.0
+# 巡检报告 Word→PDF 转换（docx→pdf）：纯 Python 实现（python-docx 解析 + reportlab CID 中文字体），
+#   无需 LibreOffice / MS Word，跨平台 `pip install -r requirements-docker.txt` 即可。
+#   （Dockerfile 中的 libreoffice-writer 已移除，不再需要。）
 
 # ── Automation & Notifications ─────────────────────────────────────────────
 apscheduler>=3.10.0

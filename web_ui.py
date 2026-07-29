@@ -2290,6 +2290,43 @@ def api_download_by_task(task_id):
     return send_file(task['report_file'], as_attachment=True,
                      download_name=task.get('report_name', 'report.docx'))
 
+@app.route('/api/download_pdf/<task_id>')
+def api_download_pdf_by_task(task_id):
+    """将巡检报告 DOCX 转换为 PDF 并提供下载（复用 pdf_export.convert_docx_to_pdf）。
+
+    生成的 PDF 会缓存在报告同目录（与 DOCX 同名、扩展名改为 .pdf）。
+    再次下载时若 PDF 已存在且比 DOCX 新，则直接复用，无需重复转换。
+    """
+    task = tasks.get(task_id)
+    if not task or not task.get('report_file'):
+        return jsonify({'ok': False, 'msg': '未找到对应的巡检任务或报告'}), 404
+    docx_path = task['report_file']
+    if not os.path.isfile(docx_path):
+        return jsonify({'ok': False, 'msg': '报告文件不存在'}), 404
+
+    pdf_path = os.path.splitext(docx_path)[0] + '.pdf'
+    # 缓存命中：PDF 已存在且不过期（mtime >= docx）
+    if not (os.path.isfile(pdf_path) and os.path.getmtime(pdf_path) >= os.path.getmtime(docx_path)):
+        try:
+            from pdf_export import convert_docx_to_pdf
+        except ImportError:
+            return jsonify({'ok': False, 'msg': 'PDF 转换模块不可用（pdf_export 未加载）'}), 500
+        ok, result = convert_docx_to_pdf(docx_path)
+        if not ok:
+            return jsonify({
+                'ok': False,
+                'msg': 'PDF 生成失败：' + str(result) +
+                      '。请确认已安装依赖：pip install -r requirements.txt（reportlab / python-docx）。'
+            }), 503
+        pdf_path = result
+
+    if not os.path.isfile(pdf_path):
+        return jsonify({'ok': False, 'msg': 'PDF 文件生成失败'}), 500
+
+    base = task.get('report_name', 'report.docx')
+    pdf_name = os.path.splitext(base)[0] + '.pdf'
+    return send_file(pdf_path, as_attachment=True, download_name=pdf_name)
+
 @app.route('/api/download_file')
 def api_download_file():
     name = request.args.get('name', '')

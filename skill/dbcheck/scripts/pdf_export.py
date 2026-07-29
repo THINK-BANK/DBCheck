@@ -8,62 +8,185 @@ DBCheck PDF 导出模块
 ====================
 提供将 Word 巡检报告转换为 PDF 的能力。
 
-支持两种转换方式：
-1. LibreOffice headless（推荐，需要安装 LibreOffice）
-2. python-docx2pdf（Windows 专用）
+转换方式（纯 Python，无需 LibreOffice / MS Word，跨平台）:
+    使用 python-docx 解析 DOCX 的段落与表格，再用 reportlab 排版输出 PDF。
+    中文通过 reportlab 内置 CID 字体 STSong-Light 渲染（无需任何外部字体文件）。
 """
 
 import os
 import sys
-import subprocess
-import shutil
-import tempfile
+from xml.sax.saxutils import escape as _xml_escape
+
+
+def _esc(text):
+    """转义文本中的 XML 特殊字符，供 reportlab Paragraph 安全使用。"""
+    return _xml_escape(str(text))
+
+
+def _extract_table(tbl, qn, cell_style):
+    """从 python-docx Table 提取为 reportlab 可用的二维数据，并处理合并单元格。"""
+    from reportlab.platypus import Paragraph as _RParagraph
+
+    data = []
+    span_cmds = []
+    for r_idx, row in enumerate(tbl.rows):
+        cells = []
+        col_idx = 0
+        for cell in row.cells:
+            tc_pr = cell._tc.find(qn('w:tcPr'))
+            grid_span = 1
+            v_merge = None
+            if tc_pr is not None:
+                gs = tc_pr.find(qn('w:gridSpan'))
+                if gs is not None:
+                    try:
+                        grid_span = int(gs.get(qn('w:val')))
+                    except (TypeError, ValueError):
+                        grid_span = 1
+                vm = tc_pr.find(qn('w:vMerge'))
+                if vm is not None:
+                    v_merge = vm.get(qn('w:val'))
+            text = _esc(cell.text).replace('\n', '<br/>')
+            if v_merge is not None and v_merge != 'restart':
+                cells.append(_RParagraph('', cell_style))
+            else:
+                cells.append(_RParagraph(text, cell_style))
+                if grid_span > 1:
+                    span_cmds.append(
+                        ('SPAN', (col_idx, r_idx), (col_idx + grid_span - 1, r_idx))
+                    )
+            col_idx += grid_span
+        data.append(cells)
+    return data, span_cmds
 
 
 def convert_docx_to_pdf(input_path, output_path=None, method='auto'):
     """
-    将 DOCX 文件转换为 PDF。
-    
-    参数:
-        input_path: DOCX 文件路径
-        output_path: PDF 输出路径（可选，默认与输入文件同名，扩展名改为 .pdf）
-        method: 转换方法
-            - 'auto': 自动选择可用方法
-            - 'libreoffice': 强制使用 LibreOffice
-            - 'docx2pdf': 强制使用 docx2pdf（Windows）
-    
-    返回:
-        (成功标志, 输出文件路径或错误信息)
+    将 DOCX 巡检报告转换为 PDF（纯 Python，无需 LibreOffice / MS Word）。
+
+    实现: python-docx 解析 DOCX 段落与表格 -> reportlab platypus 排版 -> PDF，
+    中文使用 reportlab 内置 CID 字体 STSong-Light（无需任何外部字体文件）。
+
+    返回: (成功标志, 输出 PDF 路径或错误信息)
     """
     if not os.path.exists(input_path):
         return False, f"输入文件不存在: {input_path}"
-    
+
     if not input_path.lower().endswith('.docx'):
         return False, "输入文件必须是 .docx 格式"
-    
-    # 确定输出路径
+
     if output_path is None:
         output_path = os.path.splitext(input_path)[0] + '.pdf'
-    
-    # 确保输出目录存在
+
     output_dir = os.path.dirname(output_path)
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
-    
-    # 方法1: LibreOffice headless
-    if method in ('auto', 'libreoffice'):
-        result = _convert_with_libreoffice(input_path, output_path)
-        if result[0]:
-            return result
-    
-    # 方法2: docx2pdf (Windows)
-    if method in ('auto', 'docx2pdf'):
-        if sys.platform == 'win32':
-            result = _convert_with_docx2pdf(input_path, output_path)
-            if result[0]:
-                return result
-    
-    return False, "无法转换 PDF：未找到可用的转换工具。请安装 LibreOffice 或在 Windows 上安装 docx2pdf。"
+
+    try:
+        from docx import Document
+        from docx.text.paragraph import Paragraph as _DocxParagraph
+        from docx.table import Table as _DocxTable
+        from docx.oxml.ns import qn
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.units import cm
+        from reportlab.lib import colors
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.enums import TA_CENTER
+        from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer,
+                                         Table, TableStyle)
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+
+        try:
+            pdfmetrics.registerFont(UnicodeCIDFont('STSong-Light'))
+            cjk = 'STSong-Light'
+        except Exception:
+            cjk = 'Helvetica'
+
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle('RptTitle', parent=styles['Title'],
+                                     fontName=cjk, fontSize=18, leading=24,
+                                     alignment=TA_CENTER,
+                                     textColor=colors.HexColor('#1a5490'))
+        h1_style = ParagraphStyle('RptH1', parent=styles['Heading1'],
+                                   fontName=cjk, fontSize=14, leading=18,
+                                   spaceBefore=10, spaceAfter=6,
+                                   textColor=colors.HexColor('#1a5490'))
+        h2_style = ParagraphStyle('RptH2', parent=styles['Heading2'],
+                                   fontName=cjk, fontSize=12, leading=16,
+                                   spaceBefore=8, spaceAfter=4,
+                                   textColor=colors.HexColor('#2e7d32'))
+        normal_style = ParagraphStyle('RptNormal', parent=styles['Normal'],
+                                      fontName=cjk, fontSize=9, leading=13)
+        cell_style = ParagraphStyle('RptCell', parent=styles['Normal'],
+                                     fontName=cjk, fontSize=8, leading=11)
+
+        document = Document(input_path)
+        body = document.element.body
+        usable_w = A4[0] - 3.6 * cm
+
+        doc = SimpleDocTemplate(
+            output_path, pagesize=A4,
+            leftMargin=1.8 * cm, rightMargin=1.8 * cm,
+            topMargin=1.8 * cm, bottomMargin=1.8 * cm,
+            title='DBCheck 巡检报告',
+        )
+        story = []
+
+        for child in body.iterchildren():
+            if child.tag == qn('w:p'):
+                para = _DocxParagraph(child, document)
+                text = para.text.strip()
+                if not text:
+                    continue
+                sn = para.style.name or ''
+                low = sn.lower()
+                if low == 'title' or 'heading 1' in low or '标题 1' in sn:
+                    story.append(Paragraph(_esc(text), h1_style))
+                elif 'heading 2' in low or '标题 2' in sn:
+                    story.append(Paragraph(_esc(text), h2_style))
+                else:
+                    story.append(Paragraph(_esc(text), normal_style))
+                story.append(Spacer(1, 3))
+            elif child.tag == qn('w:tbl'):
+                tbl = _DocxTable(child, document)
+                tbl_data, span_cmds = _extract_table(tbl, qn, cell_style)
+                if not tbl_data:
+                    continue
+                ncols = max(len(r) for r in tbl_data)
+                tbl_data = [r + [Paragraph('', cell_style)] * (ncols - len(r))
+                            for r in tbl_data]
+                col_w = usable_w / ncols
+                t = Table(tbl_data, colWidths=[col_w] * ncols, repeatRows=1)
+                ts = [
+                    ('FONTNAME', (0, 0), (-1, -1), cjk),
+                    ('FONTSIZE', (0, 0), (-1, -1), 8),
+                    ('GRID', (0, 0), (-1, -1), 0.4, colors.grey),
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a5490')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                    ('ROWBACKGROUNDS', (0, 1), (-1, -1),
+                     [colors.white, colors.HexColor('#f2f7fb')]),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 3),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+                    ('TOPPADDING', (0, 0), (-1, -1), 2),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+                ]
+                ts.extend(span_cmds)
+                t.setStyle(TableStyle(ts))
+                story.append(t)
+                story.append(Spacer(1, 8))
+
+        if not story:
+            return False, "DOCX 内容为空，无法生成 PDF"
+
+        doc.build(story)
+        if os.path.exists(output_path):
+            return True, output_path
+        return False, "PDF 生成完成但未找到输出文件"
+
+    except Exception as e:
+        return False, f"PDF 生成失败: {str(e)}"
 
 
 def _find_libreoffice():

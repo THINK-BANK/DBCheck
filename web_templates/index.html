@@ -949,6 +949,15 @@ select option { background: var(--surface2); }
 .result-card .rd p  { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
 .result-card .btn  { margin-left: auto; flex-shrink: 0; }
 
+/* 报告下载三按钮（Word / PDF / 分享）—— 更小、右对齐成一行、三色区分 */
+.report-dl-group { margin-left:auto; display:flex; gap:8px; flex-shrink:0; flex-wrap:wrap; justify-content:flex-end; }
+.report-dl-btn { display:inline-flex; align-items:center; gap:4px; padding:7px 13px; font-size:12px; font-weight:600; line-height:1; border:none; border-radius:7px; cursor:pointer; color:#fff; text-decoration:none; transition:filter .15s, transform .08s; }
+.report-dl-btn:hover { filter:brightness(.93); }
+.report-dl-btn:active { transform:translateY(1px); }
+.report-dl-word  { background:#2563eb; }  /* Word 蓝 */
+.report-dl-pdf   { background:#dc2626; }  /* PDF 红 */
+.report-dl-share { background:#16a34a; }  /* 分享 绿 */
+
 /* ─── Reports Page ─── */
 .reports-list { display: flex; flex-direction: column; gap: 8px; }
 .report-item {
@@ -9934,8 +9943,11 @@ function pollStatus() {
               <h3>${i18n('webui.report_done_title')}</h3>
               <p>${escHtml(data.report_name || '')}</p>
             </div>
-            <a class="btn btn-success" href="/api/download/${currentTaskId}" download>${i18n('webui.btn_download_report')}</a>
-            <button class="btn btn-ghost" onclick="shareDbInspectReport('${currentTaskId}')">${i18n('webui.btn_share_report') || '📤 分享报告'}</button>
+            <div class="report-dl-group">
+              <a class="report-dl-btn report-dl-word" href="/api/download/${currentTaskId}" download>📝 Word</a>
+              <button class="report-dl-btn report-dl-pdf" type="button" onclick="downloadReportPdf('${currentTaskId}')">📄 PDF</button>
+              <button class="report-dl-btn report-dl-share" type="button" onclick="shareDbInspectReport('${currentTaskId}')">📤 分享</button>
+            </div>
           </div>
           <div class="result-card-v2">
             <div class="health-ring-wrap">
@@ -10013,7 +10025,34 @@ async function shareDbInspectReport(taskId) {
     } else {
       toastError(shareData.msg || '生成分享链接失败');
     }
-  } catch(e) {
+    } catch(e) {
+    toastError('请求失败: ' + e.message);
+  }
+}
+
+// 下载巡检报告 PDF（按需把 DOCX 转 PDF），失败时给出明确提示而非下载 .htm
+async function downloadReportPdf(taskId) {
+  try {
+    const res = await fetch('/api/download_pdf/' + taskId);
+    if (!res.ok) {
+      let msg = 'PDF 生成失败';
+      try { const j = await res.json(); if (j && j.msg) msg = j.msg; } catch (e) {}
+      toastError(msg);
+      return;
+    }
+    const blob = await res.blob();
+    // 从 Content-Disposition 解析文件名（兼容 filename* UTF-8 编码）
+    const cd = res.headers.get('Content-Disposition') || '';
+    let fname = 'report.pdf';
+    const m = cd.match(/filename\*?=(?:UTF-8'')?["']?([^"';]+)/i);
+    if (m) fname = m[1];
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = fname;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (e) {
     toastError('请求失败: ' + e.message);
   }
 }

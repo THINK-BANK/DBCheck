@@ -56,8 +56,7 @@ numpy>=1.21.0           # rag/vector_store.py 向量检索直接 import numpy
 beautifulsoup4>=4.12.0  # rag/document_processor.py 解析 HTML（from bs4 import BeautifulSoup）
 
 # ── PDF Export ───────────────────────────────────────────────────────────────
-reportlab>=4.0.0          # PDF report generation (for config baseline & index health PDF export)
-# docx2pdf>=0.1.0        # Windows PDF conversion (optional, alternative to LibreOffice)
+reportlab>=4.0.0          # PDF 生成：配置基线/索引健康 报告 + 巡检报告 docx→pdf（纯 Python，reportlab 内置 CID 中文字体，无需 Word/LibreOffice）
 
 # ── Automation & Notifications ────────────────────────────────────────────────
 apscheduler>=3.10.0      # Cron-style job scheduling for scheduled inspections

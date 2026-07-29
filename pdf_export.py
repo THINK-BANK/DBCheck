@@ -8,221 +8,203 @@ DBCheck PDF 导出模块
 ====================
 提供将 Word 巡检报告转换为 PDF 的能力。
 
-支持两种转换方式：
-1. LibreOffice headless（推荐，需要安装 LibreOffice）
-2. python-docx2pdf（Windows 专用）
+转换方式（纯 Python，无需 LibreOffice / MS Word，跨平台）:
+    使用 python-docx 解析 DOCX 的段落与表格，再用 reportlab 排版输出 PDF。
+    中文通过 reportlab 内置 CID 字体 STSong-Light 渲染（无需任何外部字体文件），
+    因此只需 `pip install -r requirements.txt` 即可在 Windows / Linux / macOS 上使用。
 """
 
 import os
 import sys
-import subprocess
-import shutil
-import tempfile
+
+from xml.sax.saxutils import escape as _xml_escape
+
+
+def _esc(text):
+    """转义文本中的 XML 特殊字符，供 reportlab Paragraph 安全使用。"""
+    return _xml_escape(str(text))
+
+
+def _extract_table(tbl, qn, cell_style):
+    """从 python-docx Table 提取为 reportlab 可用的二维数据，并处理合并单元格。
+
+    返回: (data, span_cmds)
+        data: 二维列表，元素为 Paragraph（单元格内容）
+        span_cmds: reportlab TableStyle 的 SPAN 命令列表
+    """
+    from reportlab.platypus import Paragraph as _RParagraph
+
+    data = []
+    span_cmds = []
+    for r_idx, row in enumerate(tbl.rows):
+        cells = []
+        col_idx = 0
+        for cell in row.cells:
+            tc_pr = cell._tc.find(qn('w:tcPr'))
+            grid_span = 1
+            v_merge = None
+            if tc_pr is not None:
+                gs = tc_pr.find(qn('w:gridSpan'))
+                if gs is not None:
+                    try:
+                        grid_span = int(gs.get(qn('w:val')))
+                    except (TypeError, ValueError):
+                        grid_span = 1
+                vm = tc_pr.find(qn('w:vMerge'))
+                if vm is not None:
+                    v_merge = vm.get(qn('w:val'))  # 'restart' 或 None(continuation)
+            text = _esc(cell.text).replace('\n', '<br/>')
+            if v_merge is not None and v_merge != 'restart':
+                # 垂直合并的续格：留空，保持表格矩形结构
+                cells.append(_RParagraph('', cell_style))
+            else:
+                cells.append(_RParagraph(text, cell_style))
+                if grid_span > 1:
+                    span_cmds.append(
+                        ('SPAN', (col_idx, r_idx), (col_idx + grid_span - 1, r_idx))
+                    )
+            col_idx += grid_span
+        data.append(cells)
+    return data, span_cmds
 
 
 def convert_docx_to_pdf(input_path, output_path=None, method='auto'):
     """
-    将 DOCX 文件转换为 PDF。
-    
+    将 DOCX 巡检报告转换为 PDF（纯 Python，无需 LibreOffice / MS Word）。
+
+    实现: python-docx 解析 DOCX 段落与表格 -> reportlab platypus 排版 -> PDF，
+    中文使用 reportlab 内置 CID 字体 STSong-Light（无需任何外部字体文件）。
+
     参数:
         input_path: DOCX 文件路径
         output_path: PDF 输出路径（可选，默认与输入文件同名，扩展名改为 .pdf）
-        method: 转换方法
-            - 'auto': 自动选择可用方法
-            - 'libreoffice': 强制使用 LibreOffice
-            - 'docx2pdf': 强制使用 docx2pdf（Windows）
-    
+        method: 保留参数，兼容旧调用（当前仅纯 Python 一种实现）
+
     返回:
-        (成功标志, 输出文件路径或错误信息)
+        (成功标志, 输出 PDF 路径或错误信息)
     """
     if not os.path.exists(input_path):
         return False, f"输入文件不存在: {input_path}"
-    
+
     if not input_path.lower().endswith('.docx'):
         return False, "输入文件必须是 .docx 格式"
-    
-    # 确定输出路径
+
     if output_path is None:
         output_path = os.path.splitext(input_path)[0] + '.pdf'
-    
-    # 确保输出目录存在
+
     output_dir = os.path.dirname(output_path)
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
-    
-    # 方法1: LibreOffice headless
-    if method in ('auto', 'libreoffice'):
-        result = _convert_with_libreoffice(input_path, output_path)
-        if result[0]:
-            return result
-    
-    # 方法2: docx2pdf (Windows)
-    if method in ('auto', 'docx2pdf'):
-        if sys.platform == 'win32':
-            result = _convert_with_docx2pdf(input_path, output_path)
-            if result[0]:
-                return result
-    
-    return False, "无法转换 PDF：未找到可用的转换工具。请安装 LibreOffice 或在 Windows 上安装 docx2pdf。"
 
-
-def _find_libreoffice():
-    """查找 LibreOffice 可执行文件路径"""
-    # 常见安装位置
-    possible_paths = []
-    
-    if sys.platform == 'win32':
-        # Windows 常见路径
-        program_files = os.environ.get('ProgramFiles', 'C:\\Program Files')
-        program_files_x86 = os.environ.get('ProgramFiles(x86)', 'C:\\Program Files (x86)')
-        
-        possible_paths.extend([
-            os.path.join(program_files, 'LibreOffice', 'program', 'soffice.exe'),
-            os.path.join(program_files, 'LibreOffice', 'program', 'soffice'),
-            os.path.join(program_files_x86, 'LibreOffice', 'program', 'soffice.exe'),
-            'soffice.exe',  # PATH 中
-            'soffice',      # PATH 中
-        ])
-    else:
-        # Linux/macOS
-        possible_paths.extend([
-            '/usr/bin/soffice',
-            '/usr/bin/libreoffice',
-            '/opt/libreoffice/program/soffice',
-            '/Applications/LibreOffice.app/Contents/MacOS/soffice',
-            'soffice',
-        ])
-    
-    for path in possible_paths:
-        if os.path.exists(path):
-            return path
-        # 检查 PATH 中的命令
-        if os.path.basename(path) == path:
-            try:
-                result = subprocess.run(['where' if sys.platform == 'win32' else 'which', path],
-                                       capture_output=True, text=True, timeout=5)
-                if result.returncode == 0 and result.stdout.strip():
-                    return result.stdout.strip().split('\n')[0]
-            except Exception:
-                pass
-    
-    return None
-
-
-def _convert_with_libreoffice(input_path, output_path):
-    """使用 LibreOffice headless 转换为 PDF"""
-    soffice = _find_libreoffice()
-    if not soffice:
-        return False, "未找到 LibreOffice"
-    
     try:
-        # 创建临时目录用于输出
-        output_dir = os.path.dirname(output_path) or os.getcwd()
-        
-        # LibreOffice headless 转换命令
-        cmd = [
-            soffice,
-            '--headless',
-            '--convert-to', 'pdf',
-            '--outdir', output_dir,
-            input_path
-        ]
-        
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=120,  # 2分钟超时
-            cwd=output_dir
+        from docx import Document
+        from docx.text.paragraph import Paragraph as _DocxParagraph
+        from docx.table import Table as _DocxTable
+        from docx.oxml.ns import qn
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.units import cm
+        from reportlab.lib import colors
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.enums import TA_CENTER
+        from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer,
+                                         Table, TableStyle)
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+
+        # 注册中文 CID 字体（reportlab 内置，无需字体文件）
+        try:
+            pdfmetrics.registerFont(UnicodeCIDFont('STSong-Light'))
+            cjk = 'STSong-Light'
+        except Exception:
+            cjk = 'Helvetica'
+
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle('RptTitle', parent=styles['Title'],
+                                     fontName=cjk, fontSize=18, leading=24,
+                                     alignment=TA_CENTER,
+                                     textColor=colors.HexColor('#1a5490'))
+        h1_style = ParagraphStyle('RptH1', parent=styles['Heading1'],
+                                   fontName=cjk, fontSize=14, leading=18,
+                                   spaceBefore=10, spaceAfter=6,
+                                   textColor=colors.HexColor('#1a5490'))
+        h2_style = ParagraphStyle('RptH2', parent=styles['Heading2'],
+                                   fontName=cjk, fontSize=12, leading=16,
+                                   spaceBefore=8, spaceAfter=4,
+                                   textColor=colors.HexColor('#2e7d32'))
+        normal_style = ParagraphStyle('RptNormal', parent=styles['Normal'],
+                                      fontName=cjk, fontSize=9, leading=13)
+        cell_style = ParagraphStyle('RptCell', parent=styles['Normal'],
+                                     fontName=cjk, fontSize=8, leading=11)
+
+        document = Document(input_path)
+        body = document.element.body
+
+        usable_w = A4[0] - 3.6 * cm
+
+        doc = SimpleDocTemplate(
+            output_path, pagesize=A4,
+            leftMargin=1.8 * cm, rightMargin=1.8 * cm,
+            topMargin=1.8 * cm, bottomMargin=1.8 * cm,
+            title='DBCheck 巡检报告',
         )
-        
-        if result.returncode != 0:
-            return False, f"LibreOffice 转换失败: {result.stderr}"
-        
-        # LibreOffice 会在同目录生成同名 PDF
-        expected_pdf = os.path.join(output_dir, os.path.splitext(os.path.basename(input_path))[0] + '.pdf')
-        
-        if os.path.exists(expected_pdf):
-            # 如果输出路径不同，移动文件
-            if expected_pdf != output_path:
-                shutil.move(expected_pdf, output_path)
-            return True, output_path
-        
-        # 检查是否有其他位置的 PDF 输出
-        for f in os.listdir(output_dir):
-            if f.endswith('.pdf') and os.path.getmtime(os.path.join(output_dir, f)) > os.path.getmtime(input_path):
-                pdf_path = os.path.join(output_dir, f)
-                if pdf_path != output_path:
-                    shutil.move(pdf_path, output_path)
-                return True, output_path
-        
-        return False, "LibreOffice 转换完成但未找到输出文件"
-        
-    except subprocess.TimeoutExpired:
-        return False, "LibreOffice 转换超时（>2分钟）"
-    except Exception as e:
-        return False, f"LibreOffice 转换异常: {str(e)}"
+        story = []
 
+        table_count = 0
+        for child in body.iterchildren():
+            if child.tag == qn('w:p'):
+                para = _DocxParagraph(child, document)
+                text = para.text.strip()
+                if not text:
+                    continue
+                sn = para.style.name or ''
+                low = sn.lower()
+                if low == 'title' or 'heading 1' in low or '标题 1' in sn:
+                    story.append(Paragraph(_esc(text), h1_style))
+                elif 'heading 2' in low or '标题 2' in sn:
+                    story.append(Paragraph(_esc(text), h2_style))
+                else:
+                    story.append(Paragraph(_esc(text), normal_style))
+                story.append(Spacer(1, 3))
+            elif child.tag == qn('w:tbl'):
+                table_count += 1
+                tbl = _DocxTable(child, document)
+                tbl_data, span_cmds = _extract_table(tbl, qn, cell_style)
+                if not tbl_data:
+                    continue
+                ncols = max(len(r) for r in tbl_data)
+                tbl_data = [r + [Paragraph('', cell_style)]
+                            * (ncols - len(r)) for r in tbl_data]
+                col_w = usable_w / ncols
+                t = Table(tbl_data, colWidths=[col_w] * ncols, repeatRows=1)
+                ts = [
+                    ('FONTNAME', (0, 0), (-1, -1), cjk),
+                    ('FONTSIZE', (0, 0), (-1, -1), 8),
+                    ('GRID', (0, 0), (-1, -1), 0.4, colors.grey),
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a5490')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                    ('ROWBACKGROUNDS', (0, 1), (-1, -1),
+                     [colors.white, colors.HexColor('#f2f7fb')]),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 3),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+                    ('TOPPADDING', (0, 0), (-1, -1), 2),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+                ]
+                ts.extend(span_cmds)
+                t.setStyle(TableStyle(ts))
+                story.append(t)
+                story.append(Spacer(1, 8))
 
-def _convert_with_docx2pdf(input_path, output_path):
-    """使用 docx2pdf 转换为 PDF（仅 Windows）"""
-    if sys.platform != 'win32':
-        return False, "docx2pdf 仅支持 Windows"
-    
-    try:
-        from docx2pdf import convert
-        
-        # docx2pdf 直接转换
-        convert(input_path, output_path)
-        
+        if not story:
+            return False, "DOCX 内容为空，无法生成 PDF"
+
+        doc.build(story)
         if os.path.exists(output_path):
             return True, output_path
-        else:
-            return False, "docx2pdf 转换完成但未找到输出文件"
-            
-    except ImportError:
-        return False, "未安装 docx2pdf，请执行: pip install docx2pdf"
+        return False, "PDF 生成完成但未找到输出文件"
+
     except Exception as e:
-        return False, f"docx2pdf 转换异常: {str(e)}"
-
-
-def get_pdf_converter_info():
-    """
-    获取当前系统可用的 PDF 转换方式信息。
-    
-    返回:
-        dict: {
-            'libreoffice': bool,  # 是否可用
-            'libreoffice_path': str or None,
-            'docx2pdf': bool,     # 是否可用
-            'recommended': str,    # 推荐方法
-        }
-    """
-    info = {
-        'libreoffice': False,
-        'libreoffice_path': None,
-        'docx2pdf': False,
-        'recommended': None,
-    }
-    
-    # 检查 LibreOffice
-    lo_path = _find_libreoffice()
-    if lo_path:
-        info['libreoffice'] = True
-        info['libreoffice_path'] = lo_path
-        info['recommended'] = 'libreoffice'
-    
-    # 检查 docx2pdf
-    if sys.platform == 'win32':
-        try:
-            from docx2pdf import convert
-            info['docx2pdf'] = True
-            if not info['recommended']:
-                info['recommended'] = 'docx2pdf'
-        except ImportError:
-            pass
-    
-    return info
+        return False, f"PDF 生成失败: {str(e)}"
 
 
 # ═══════════════════════════════════════════════════════
