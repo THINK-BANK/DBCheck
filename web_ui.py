@@ -183,7 +183,9 @@ try:
 except ImportError:
     main_mysql = main_pg = main_dm = main_oracle_full = main_sqlserver = main_tidb = main_ivorysql = None
 
-app = Flask(__name__, template_folder='web_templates', static_folder='web_templates', static_url_path='/')
+# 静态资源已收口到 assets/web/（阶段5：原 web_templates 下的 static/、icons/ 及各 png/ico/js 等）。
+# 因 static_url_path='/'，前端所有绝对引用（/static/...、/icons/...、/xxx.png 等）自动映射到 static_folder 根。
+app = Flask(__name__, template_folder='web_templates', static_folder='assets/web', static_url_path='/')
 app.config['SECRET_KEY'] = os.urandom(24)
 socketio.init_app(app)
 
