@@ -73,3 +73,30 @@ drivers/
 # Documentation (optional, keep if you want docs in image)
 # *.md
 # !README.md
+
+# ═══════════════════════════════════════════════════════════════════
+#  阶段6（T3）：可发布干净基线 — 构建上下文排除运行时数据 / 密钥 / 本地配置
+# ═══════════════════════════════════════════════════════════════════
+
+# 运行时数据目录（必须排除，避免把本地 data 带进镜像）
+data/
+data/.migration_backup/
+data/.migration_manifest.json
+.migration_backup/
+.migration_manifest.json
+
+# 密钥 / 凭据（.db_key 不以 .key 结尾，*.key 无法命中，需显式排除）
+.db_key
+
+# 本地配置文件（含密钥 / 运行时配置，不得进入镜像）
+# 说明：上方 config.json 仅精确命中 config.json，无法命中带前缀的本地配置，
+#       故此处显式列出 dbc_config.json / ai_config.json / notifier_config.json /
+#       instances.json；另补充 .env（密钥集中地）。
+dbc_config.json
+ai_config.json
+notifier_config.json
+instances.json
+.env
+
+# Python 测试缓存（非运行时需要）
+.pytest_cache/

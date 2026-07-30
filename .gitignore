@@ -126,3 +126,28 @@ reports/
 data_backups/
 scheduler.log
 scheduler_jobs.json
+
+# ═══════════════════════════════════════════════════════════════════
+#  阶段6（T3）：可发布干净基线 — 补齐缓存 / 构建 / 运行时迁移产物忽略项
+# ═══════════════════════════════════════════════════════════════════
+
+# Python 测试缓存
+.pytest_cache/
+.acceptance_tmp/
+.pytest_tmp/
+
+# 本地 Python 构建产物（如 build 后端生成的 build/）
+build/
+
+# 目录结构重构迁移期内部产物（非源码 / 非运行时提交范畴）
+data/.migration_backup/
+data/.migration_manifest.json
+.migration_backup/
+.migration_manifest.json
+
+# 说明：data/ 未做整目录忽略，原因有二：
+#   1) 现有各运行时子路径（reports/backups/pro_data/user_db/logs/awr_uploads/
+#      *.db/scheduler_jobs.json 等）已逐一忽略，覆盖率完整；
+#   2) data/reports/oracle_awr.html 为前序阶段已提交（force-add）的样例报告，
+#      整目录忽略会误撤该已提交文件，违反"不改动阶段4/5 已提交内容"约束。
+# 故仅以 surgical 条目补齐迁移期产物，保持现有合理条目不变。
