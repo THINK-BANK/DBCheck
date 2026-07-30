@@ -10,40 +10,40 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg:        #0d1117;
-  --surface:   #161b22;
-  --surface2:  #1c2330;
-  --border:    #30363d;
-  --accent:    #2ea043;
-  --accent2:   #388bfd;
-  --warn:      #e3b341;
-  --danger:    #f85149;
-  --text:      #e6edf3;
-  --text-main: #e6edf3;
-  --text-muted:#8b949e;
-  --info:      #58a6ff;
-  --success:   #3fb950;
-  --card-bg:   #161b22;
+  --bg:        #0D1426;
+  --surface:   #141C2E;
+  --surface2:  #1A2338;
+  --border:    #2A3650;
+  --accent:    #00C8A0;
+  --accent2:   #0A2A6E;
+  --warn:      #F59E0B;
+  --danger:    #EF4444;
+  --text:      #F8F9FA;
+  --text-main: #F8F9FA;
+  --text-muted:#94A3B8;
+  --info:      #0A2A6E;
+  --success:   #00C8A0;
+  --card-bg:   #141C2E;
   --radius:    12px;
   --trans:     0.22s ease;
 }
 
 /* ─── 浅色主题 ─── */
 [data-theme="light"] {
-  --bg:        #f6f8fa;
-  --surface:   #ffffff;
-  --surface2:  #f0f2f5;
-  --border:    #d0d7de;
-  --accent:    #1a7f37;
-  --accent2:   #0969da;
-  --warn:      #9a6700;
-  --danger:    #cf222e;
-  --text:      #1f2328;
-  --text-main: #1f2328;
-  --text-muted:#656d76;
-  --info:      #0969da;
-  --success:   #1a7f37;
-  --card-bg:   #ffffff;
+  --bg:        #F8F9FA;
+  --surface:   #FFFFFF;
+  --surface2:  #EEF1F5;
+  --border:    #D1D9E0;
+  --accent:    #00A884;
+  --accent2:   #0A2A6E;
+  --warn:      #B45309;
+  --danger:    #DC2626;
+  --text:      #0D1426;
+  --text-main: #0D1426;
+  --text-muted:#64748B;
+  --info:      #0A2A6E;
+  --success:   #00A884;
+  --card-bg:   #FFFFFF;
 }
 
 html { font-size: 15px; }
@@ -277,7 +277,7 @@ async function executeFixSql(taskId, sql) {
 }
 .sidebar-logo .logo-icon {
   width: 32px; height: 32px;
-  background: linear-gradient(135deg, #2ea043, #388bfd);
+  background: linear-gradient(135deg, #0A2A6E, #00C8A0);
   border-radius: 10px;
   display: flex; align-items: center; justify-content: center;
   font-size: 16px;
@@ -297,9 +297,9 @@ async function executeFixSql(taskId, sql) {
   transition: all 0.3s ease;
 }
 .sidebar-logo h1 .edition-badge.community {
-  background: rgba(56, 139, 253, 0.25);
-  color: var(--accent2);
-  border: 1px solid rgba(56, 139, 253, 0.3);
+  background: rgba(0, 200, 160, 0.18);
+  color: var(--accent);
+  border: 1px solid rgba(0, 200, 160, 0.35);
 }
 .sidebar-logo h1 .edition-badge.pro {
   background: linear-gradient(135deg, #f97316, #ea580c);
@@ -309,6 +309,17 @@ async function executeFixSql(taskId, sql) {
 }
 .sidebar-logo p {
   font-size: 11px; color: var(--text-muted); margin-top: 2px;
+}
+
+/* Sidebar brand logo: transparent icon that blends with the dark sidebar.
+   No white/light square behind it (object-fit keeps it undistorted). */
+.sidebar-brand-logo {
+  width: 50px;
+  height: 50px;
+  margin-bottom: 10px;
+  display: block;
+  object-fit: contain;
+  background: transparent;
 }
 
 .sidebar-nav {
@@ -400,8 +411,8 @@ async function executeFixSql(taskId, sql) {
   display: none;
 }
 .sidebar.collapsed .sidebar-logo img {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   margin-bottom: 0;
 }
 /* 折叠态在 logo 下竖排显示 DBCheck - 通过 HTML 实现 */
@@ -624,7 +635,7 @@ async function executeFixSql(taskId, sql) {
   font-size: 9px;
   font-weight: 600;
   padding: 1px 5px;
-  background: #2196f3;
+  background: #0A2A6E;
   color: #fff;
   border-radius: 3px;
   margin-left: 4px;
@@ -636,7 +647,7 @@ async function executeFixSql(taskId, sql) {
   font-size: 9px;
   font-weight: 600;
   padding: 1px 5px;
-  background: #4caf50;
+  background: #00C8A0;
   color: #fff;
   border-radius: 3px;
   margin-left: 4px;
@@ -772,12 +783,12 @@ select option { background: var(--surface2); }
 .btn-primary {
   background: var(--accent2); color: #fff;
 }
-.btn-primary:hover { background: #4493f8; }
+.btn-primary:hover { background: #0A2A6E; }
 .btn-primary:disabled { background: var(--border); color: var(--text-muted); cursor: not-allowed; }
 .btn-success {
   background: var(--accent); color: #fff;
 }
-.btn-success:hover { background: #3fb950; }
+.btn-success:hover { background: #00C8A0; }
 .btn-danger {
   background: rgba(248,81,73,.15); color: var(--danger);
   border: 1px solid rgba(248,81,73,.3);
@@ -796,7 +807,7 @@ select option { background: var(--surface2); }
 .mkt-status {
   display:inline-block; font-size:10px; line-height:1.6; padding:2px 8px;
   border-radius:5px; white-space:nowrap; font-weight:600;
-  background:#2e7d32; color:#fff; /* 实心绿，明显是状态 */
+  background:#00A884; color:#fff; /* 实心绿，明显是状态 */
 }
 .mkt-btn {
   display:inline-flex; align-items:center; justify-content:center; gap:4px;
@@ -804,10 +815,10 @@ select option { background: var(--surface2); }
   cursor:pointer; border:1px solid transparent; transition:all var(--trans);
   white-space:nowrap;
 }
-.mkt-btn-install { background:#1565c0; color:#fff; }
+.mkt-btn-install { background:#0A2A6E; color:#fff; }
 .mkt-btn-install:hover { background:#0d47a1; }
-.mkt-btn-uninstall { background:#fff; color:#c62828; border-color:#ef9a9a; }
-.mkt-btn-uninstall:hover { background:#c62828; color:#fff; border-color:#c62828; }
+.mkt-btn-uninstall { background:#fff; color:#DC2626; border-color:#ef9a9a; }
+.mkt-btn-uninstall:hover { background:#DC2626; color:#fff; border-color:#DC2626; }
 
 /* ── 插件市场：卡片网格统一排版 ── */
 .market-plugins-grid {
@@ -895,7 +906,7 @@ select option { background: var(--surface2); }
 }
 .inspector-avatar {
   width: 72px; height: 72px; border-radius: 50%;
-  background: linear-gradient(135deg, #2ea043, #388bfd);
+  background: linear-gradient(135deg, #00C8A0, #0A2A6E);
   display: flex; align-items: center; justify-content: center;
   font-size: 32px; margin-bottom: 16px;
 }
@@ -909,7 +920,7 @@ select option { background: var(--surface2); }
 /* ─── Run Step ─── */
 .run-panel {}
 .log-box {
-  background: #0d1117;
+  background: #0D1426;
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 16px;
@@ -918,12 +929,12 @@ select option { background: var(--surface2); }
   font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
   font-size: 12.5px;
   line-height: 1.7;
-  color: #8b949e;
+  color: #94A3B8;
 }
 .log-box .log-line { white-space: pre-wrap; word-break: break-all; }
-.log-box .log-line.ok  { color: #3fb950; }
-.log-box .log-line.err { color: #f85149; }
-.log-box .log-line.info { color: #58a6ff; }
+.log-box .log-line.ok  { color: #00C8A0; }
+.log-box .log-line.err { color: #EF4444; }
+.log-box .log-line.info { color: #0A2A6E; }
 
 .progress-bar-wrap {
   background: var(--surface2);
@@ -954,9 +965,9 @@ select option { background: var(--surface2); }
 .report-dl-btn { display:inline-flex; align-items:center; gap:4px; padding:7px 13px; font-size:12px; font-weight:600; line-height:1; border:none; border-radius:7px; cursor:pointer; color:#fff; text-decoration:none; transition:filter .15s, transform .08s; }
 .report-dl-btn:hover { filter:brightness(.93); }
 .report-dl-btn:active { transform:translateY(1px); }
-.report-dl-word  { background:#2563eb; }  /* Word 蓝 */
+.report-dl-word  { background:#0A2A6E; }  /* Word 蓝 */
 .report-dl-pdf   { background:#dc2626; }  /* PDF 红 */
-.report-dl-share { background:#16a34a; }  /* 分享 绿 */
+.report-dl-share { background:#00C8A0; }  /* 分享 绿 */
 
 /* ─── Reports Page ─── */
 .reports-list { display: flex; flex-direction: column; gap: 8px; }
@@ -1006,7 +1017,7 @@ select option { background: var(--surface2); }
 .home-title-row h1 {
   font-size: 22px;
   font-weight: 700;
-  background: linear-gradient(135deg, #e6edf3, var(--accent2));
+  background: linear-gradient(135deg, #F8F9FA, var(--accent2));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   margin-bottom: 4px;
@@ -1225,8 +1236,8 @@ select option { background: var(--surface2); }
 .status-bar .sb-dot {
   width: 6px; height: 6px;
   border-radius: 50%;
-  background: #22c55e;
-  box-shadow: 0 0 6px #22c55e88;
+  background: #00C8A0;
+  box-shadow: 0 0 6px #00C8A088;
   flex-shrink: 0;
 }
 .status-bar .sb-dot.warn { background: #f97316; box-shadow: 0 0 6px #f9731688; }
@@ -1258,10 +1269,10 @@ body { padding-bottom: 32px !important; }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .overview-card .card-count-danger {
-  color: #ff6765 !important;
+  color: #EF4444 !important;
 }
-.overview-card .card-detail-ok { color: #4ade80; }
-.overview-card .card-detail-warn { color: #ff6765; }
+.overview-card .card-detail-ok { color: #00C8A0; }
+.overview-card .card-detail-warn { color: #EF4444; }
 
 /* 数据库类型分布 */
 .db-type-list {
@@ -1342,7 +1353,7 @@ body { padding-bottom: 32px !important; }
 }
 .kb-stat .stat-num {
   font-size: 28px; font-weight: 700;
-  background: linear-gradient(135deg, #667eea, #764ba2);
+  background: linear-gradient(135deg, #0A2A6E, #00C8A0);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -1399,10 +1410,10 @@ body { padding-bottom: 32px !important; }
 }
 .tag-mysql { background: rgba(255,152,0,.12); color: #ff9800; }
 .tag-pg    { background: rgba(56,139,253,.12); color: var(--accent2); }
-.tag-oracle { background: rgba(244,67,54,.12); color: #f44336; }
+.tag-oracle { background: rgba(244,67,54,.12); color: #EF4444; }
 .tag-dm    { background: rgba(255,193,7,.12); color: #ffc107; }
 .tag-sqlserver { background: rgba(244,67,54,.12); color: #ff5722; }
-.tag-tidb    { background: rgba(76,175,80,.12); color: #4caf50; }
+.tag-tidb    { background: rgba(76,175,80,.12); color: #00C8A0; }
 .tag-ivorysql { background: rgba(51,103,145,.12); color: #336791; }
 .tag-yashandb { background: rgba(156,39,176,.12); color: #9c27b0; }
 .tag-kingbase { background: rgba(220,20,60,.12); color: #dc143c; }
@@ -1449,9 +1460,9 @@ body { padding-bottom: 32px !important; }
   font-weight: 600;
   flex-shrink: 0;
 }
-.severity-high { background: rgba(248,81,73,.15); color: #f85149; }
-.severity-mid  { background: rgba(255,193,7,.15); color: #e3b341; }
-.severity-low  { background: rgba(46,160,67,.15); color: #2ea043; }
+.severity-high { background: rgba(248,81,73,.15); color: #EF4444; }
+.severity-mid  { background: rgba(255,193,7,.15); color: #F59E0B; }
+.severity-low  { background: rgba(46,160,67,.15); color: #00C8A0; }
 .issue-title {
   font-size: 13px;
   font-weight: 600;
@@ -1737,9 +1748,9 @@ async function executeFixSql(taskId, sql) {
 .toast.toast-out {
   animation: toastOut 0.3s ease forwards;
 }
-.toast-success { border-left: 4px solid #4caf50; }
-.toast-error   { border-left: 4px solid #f44336; }
-.toast-info    { border-left: 4px solid #2196f3; }
+.toast-success { border-left: 4px solid #00C8A0; }
+.toast-error   { border-left: 4px solid #EF4444; }
+.toast-info    { border-left: 4px solid #0A2A6E; }
 .toast-icon { font-size: 18px; flex-shrink: 0; }
 .toast-msg  { flex: 1; color: var(--text); }
 
@@ -2071,7 +2082,7 @@ async function executeFixSql(taskId, sql) {
     width: 56px;
     height: 56px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #4caf50, #2196f3);
+    background: linear-gradient(135deg, #00C8A0, #0A2A6E);
     border: none;
     color: #fff;
     font-size: 24px;
@@ -2232,7 +2243,7 @@ async function executeFixSql(taskId, sql) {
   flex-shrink: 0;
 }
 .chat-send-btn:hover {
-  background: #4493f8;
+  background: #0A2A6E;
   transform: scale(1.05);
 }
 .chat-send-btn:disabled {
@@ -2462,8 +2473,8 @@ async function executeFixSql(taskId, sql) {
   margin-top: 4px;
   letter-spacing: 0.5px;
 }
-.health-level-badge.healthy  { background: rgba(46,160,67,.18);  color: #4caf50; }
-.health-level-badge.low      { background: rgba(76,175,80,.15);   color: #81c784; }
+.health-level-badge.healthy  { background: rgba(46,160,67,.18);  color: #00C8A0; }
+.health-level-badge.low      { background: rgba(76,175,80,.15);   color: #00C8A0; }
 .health-level-badge.medium   { background: rgba(227,179,65,.18);  color: var(--warn); }
 .health-level-badge.high     { background: rgba(249,115,22,.18);  color: #ff9800; }
 .health-level-badge.critical { background: rgba(248,81,73,.18);   color: var(--danger); }
@@ -2521,11 +2532,11 @@ async function executeFixSql(taskId, sql) {
   font-size: 10px;
   font-weight: 600;
 }
-.health-risk-chip.critical { background: rgba(248,81,73,.2); color: #f85149; }
+.health-risk-chip.critical { background: rgba(248,81,73,.2); color: #EF4444; }
 .health-risk-chip.high     { background: rgba(249,115,22,.2); color: #ff9800; }
 .health-risk-chip.medium   { background: rgba(227,179,65,.2); color: var(--warn); }
-.health-risk-chip.low      { background: rgba(76,175,80,.15); color: #81c784; }
-.health-risk-chip.healthy  { background: rgba(46,160,67,.15); color: #4caf50; }
+.health-risk-chip.low      { background: rgba(76,175,80,.15); color: #00C8A0; }
+.health-risk-chip.healthy  { background: rgba(46,160,67,.15); color: #00C8A0; }
 
 /* ── 通用表格 ── */
 .table-wrap { overflow-x: auto; border-radius: 10px; border: 1px solid var(--border); }
@@ -2629,7 +2640,7 @@ async function executeFixSql(taskId, sql) {
   font-size: 28px;
   font-weight: 800;
   letter-spacing: 4px;
-  background: linear-gradient(135deg, #2ea043, #58a6ff, #bc8cff, #f97316);
+  background: linear-gradient(135deg, #00C8A0, #0A2A6E, #bc8cff, #f97316);
   background-size: 300% 300%;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -2704,7 +2715,7 @@ async function executeFixSql(taskId, sql) {
 
 /* 浅色主题适配 */
 [data-theme="light"] .slogan-text {
-  background: linear-gradient(135deg, #1a7f37, #0969da, #7c3aed, #ea580c);
+  background: linear-gradient(135deg, #1a7f37, #0969da, #0A2A6E, #ea580c);
   background-size: 300% 300%;
   -webkit-background-clip: text;
   background-clip: text;
@@ -2819,7 +2830,7 @@ async function executeFixSql(taskId, sql) {
         .intel-progress-wrap.on { display: block; }
         .intel-progress-head { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--text-muted); margin-bottom: 6px; }
         .intel-progress-track { height: 7px; border-radius: 20px; background: var(--surface2); overflow: hidden; border: 1px solid var(--border); }
-        .intel-progress-bar { height: 100%; width: 0%; border-radius: 20px; background: linear-gradient(90deg, var(--accent2), #a371f7); transition: width .35s ease; box-shadow: 0 0 10px rgba(56,139,253,.6); }
+        .intel-progress-bar { height: 100%; width: 0%; border-radius: 20px; background: linear-gradient(90deg, var(--accent2), #0A2A6E); transition: width .35s ease; box-shadow: 0 0 10px rgba(56,139,253,.6); }
 
         /* 诊断历史条目 */
         .dh-item:hover {
@@ -2891,7 +2902,7 @@ async function executeFixSql(taskId, sql) {
   border-radius: 50%;
 }
 .legend-name {
-  color: #c9d1d9;
+  color: #CBD5E1;
 }
 .legend-value {
   margin-left: 2px;
@@ -2982,21 +2993,21 @@ async function executeFixSql(taskId, sql) {
     .health-screen { margin-top: 24px; }
     .health-screen-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
     @media (max-width: 900px){ .health-screen-grid { grid-template-columns: 1fr; } }
-    .health-chart-card { background: var(--card-bg, #161b22); border: 1px solid var(--border, #30363d); border-radius: 14px; padding: 14px 16px; }
-    .health-chart-title { font-size: 14px; font-weight: 600; color: var(--text, #e6edf3); margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+    .health-chart-card { background: var(--card-bg, #161b22); border: 1px solid var(--border, #2A3650); border-radius: 14px; padding: 14px 16px; }
+    .health-chart-title { font-size: 14px; font-weight: 600; color: var(--text, #F8F9FA); margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
     .health-chart-box { width: 100%; height: 280px; }
-    .health-chart-fallback { height: 280px; display: flex; align-items: center; justify-content: center; color: var(--text-muted, #8b949e); font-size: 13px; text-align: center; line-height: 1.6; }
+    .health-chart-fallback { height: 280px; display: flex; align-items: center; justify-content: center; color: var(--text-muted, #94A3B8); font-size: 13px; text-align: center; line-height: 1.6; }
     /* ── 实时监控 (v2.10) ── */
     .monitor-section { margin-top: 24px; }
-    .monitor-running-pill { font-size: 12px; color: var(--text-muted, #8b949e); margin-left: auto; }
-    .monitor-toolbar { display: flex; align-items: center; gap: 12px; margin: 12px 0 16px; flex-wrap: wrap; font-size: 13px; color: var(--text, #e6edf3); }
-    .monitor-toolbar label { color: var(--text-muted, #8b949e); }
-    .monitor-toolbar select { background: var(--bg, #0d1117); color: var(--text, #e6edf3); border: 1px solid var(--border, #30363d); border-radius: 6px; padding: 6px 10px; font-size: 13px; }
-    .monitor-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--text-muted, #8b949e); display: inline-block; }
-    .monitor-dot.up { background: #22c55e; box-shadow: 0 0 6px #22c55e; }
-    .monitor-dot.down { background: #f85149; box-shadow: 0 0 6px #f85149; }
-    .monitor-latency { color: var(--text-muted, #8b949e); }
-    .monitor-updated { color: var(--text-muted, #8b949e); margin-left: auto; }
+    .monitor-running-pill { font-size: 12px; color: var(--text-muted, #94A3B8); margin-left: auto; }
+    .monitor-toolbar { display: flex; align-items: center; gap: 12px; margin: 12px 0 16px; flex-wrap: wrap; font-size: 13px; color: var(--text, #F8F9FA); }
+    .monitor-toolbar label { color: var(--text-muted, #94A3B8); }
+    .monitor-toolbar select { background: var(--bg, #0D1426); color: var(--text, #F8F9FA); border: 1px solid var(--border, #2A3650); border-radius: 6px; padding: 6px 10px; font-size: 13px; }
+    .monitor-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--text-muted, #94A3B8); display: inline-block; }
+    .monitor-dot.up { background: #00C8A0; box-shadow: 0 0 6px #00C8A0; }
+    .monitor-dot.down { background: #EF4444; box-shadow: 0 0 6px #EF4444; }
+    .monitor-latency { color: var(--text-muted, #94A3B8); }
+    .monitor-updated { color: var(--text-muted, #94A3B8); margin-left: auto; }
     .monitor-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
     @media (max-width: 1100px){ .monitor-grid { grid-template-columns: 1fr; } }
   </style>
@@ -3183,13 +3194,13 @@ function showShareLinkDialog(url) {
   const inputId = 'share-input-' + Date.now();
   const html =
     '<div id="' + backdropId + '" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:999999;display:flex;align-items:center;justify-content:center">' +
-      '<div style="background:#1c2128;border:1px solid #30363d;border-radius:12px;padding:24px;max-width:500px;width:90%;max-height:calc(100vh - 32px);overflow-y:auto">' +
-        '<h3 style="margin:0 0 12px;color:#f0f6fc;font-size:16px">📤 分享链接</h3>' +
-        '<p style="margin:0 0 12px;color:#8b949e;font-size:13px">链接已生成，请复制后分享：</p>' +
-        '<input id="' + inputId + '" type="text" value="' + escHtml(url) + '" readonly style="width:100%;padding:10px;background:#0d1117;border:1px solid #30363d;border-radius:6px;color:#58a6ff;font-size:13px;margin-bottom:16px" onclick="this.select()">' +
+      '<div style="background:#1A2338;border:1px solid #2A3650;border-radius:12px;padding:24px;max-width:500px;width:90%;max-height:calc(100vh - 32px);overflow-y:auto">' +
+        '<h3 style="margin:0 0 12px;color:#F8F9FA;font-size:16px">📤 分享链接</h3>' +
+        '<p style="margin:0 0 12px;color:#94A3B8;font-size:13px">链接已生成，请复制后分享：</p>' +
+        '<input id="' + inputId + '" type="text" value="' + escHtml(url) + '" readonly style="width:100%;padding:10px;background:#0D1426;border:1px solid #2A3650;border-radius:6px;color:#0A2A6E;font-size:13px;margin-bottom:16px" onclick="this.select()">' +
         '<div style="display:flex;gap:8px;justify-content:flex-end">' +
           '<button id="copy-btn-' + inputId + '" style="padding:8px 16px;background:#238636;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px">复制链接</button>' +
-          '<button onclick="document.getElementById(\'' + backdropId + '\').remove()" style="padding:8px 16px;background:#30363d;color:#c9d1d9;border:none;border-radius:6px;cursor:pointer;font-size:13px">关闭</button>' +
+          '<button onclick="document.getElementById(\'' + backdropId + '\').remove()" style="padding:8px 16px;background:#2A3650;color:#CBD5E1;border:none;border-radius:6px;cursor:pointer;font-size:13px">关闭</button>' +
         '</div>' +
       '</div>' +
     '</div>';
@@ -3203,7 +3214,7 @@ function showShareLinkDialog(url) {
     input.select();
     function onCopied() {
       backdrop.querySelector('#copy-btn-' + inputId).textContent = '已复制';
-      backdrop.querySelector('#copy-btn-' + inputId).style.background = '#2ea043';
+      backdrop.querySelector('#copy-btn-' + inputId).style.background = '#00C8A0';
       setTimeout(function() { backdrop.remove(); }, 1500);
     }
     if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -3223,12 +3234,12 @@ function showConfirmDialog(title, message) {
     const backdropId = 'confirm-backdrop-' + Date.now();
     const html =
       '<div id="' + backdropId + '" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:999999;display:flex;align-items:center;justify-content:center">' +
-        '<div style="background:#1c2128;border:1px solid #30363d;border-radius:12px;padding:24px;max-width:420px;width:90%;max-height:calc(100vh - 32px);overflow-y:auto;color:#c9d1d9;">' +
-          '<h3 style="margin:0 0 12px;color:#f0f6fc;font-size:16px">' + escHtml(title) + '</h3>' +
-          '<p style="margin:0 0 20px;color:#c9d1d9;font-size:14px;white-space:pre-wrap">' + escHtml(message) + '</p>' +
+        '<div style="background:#1A2338;border:1px solid #2A3650;border-radius:12px;padding:24px;max-width:420px;width:90%;max-height:calc(100vh - 32px);overflow-y:auto;color:#CBD5E1;">' +
+          '<h3 style="margin:0 0 12px;color:#F8F9FA;font-size:16px">' + escHtml(title) + '</h3>' +
+          '<p style="margin:0 0 20px;color:#CBD5E1;font-size:14px;white-space:pre-wrap">' + escHtml(message) + '</p>' +
           '<div style="display:flex;gap:8px;justify-content:flex-end">' +
-            '<button id="' + backdropId + '-cancel" style="padding:8px 16px;background:#30363d;color:#c9d1d9;border:none;border-radius:6px;cursor:pointer;font-size:13px">取消</button>' +
-            '<button id="' + backdropId + '-ok" style="padding:8px 16px;background:#f85149;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px">确定</button>' +
+            '<button id="' + backdropId + '-cancel" style="padding:8px 16px;background:#2A3650;color:#CBD5E1;border:none;border-radius:6px;cursor:pointer;font-size:13px">取消</button>' +
+            '<button id="' + backdropId + '-ok" style="padding:8px 16px;background:#EF4444;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px">确定</button>' +
           '</div>' +
         '</div>' +
       '</div>';
@@ -3717,7 +3728,7 @@ async function loadRagDocuments() {
     if (data.ok && data.documents && data.documents.length > 0) {
       var docCount = data.documents.length || 0;
       countBadge.textContent = docCount + ' ' + i18n('webui.rag_doc_unit') + '，' + (data.total_chunks || 0) + ' ' + i18n('webui.rag_chunk_unit');
-      tbody.innerHTML = data.documents.map(doc => '<tr><td style="padding:8px 10px;border-bottom:1px solid var(--border)">' + escHtml(doc.title || doc.doc_id) + '</td><td style="padding:8px 10px;border-bottom:1px solid var(--border)">' + escHtml(doc.db_type || 'all') + '</td><td style="padding:8px 10px;border-bottom:1px solid var(--border)">' + formatBytes(doc.file_size || 0) + '</td><td style="padding:8px 10px;border-bottom:1px solid var(--border)">' + (doc.chunk_count || 0) + '</td><td style="padding:8px 10px;border-bottom:1px solid var(--border)"><span style="color:#4caf50">&#9679; ' + i18n('webui.rag_doc_ready') + '</span></td><td style="padding:8px 10px;border-bottom:1px solid var(--border)"><button class="btn btn-ghost rag-del-btn" style="color:#f44336;font-size:12px;padding:4px 8px" data-doc-id="' + doc.doc_id + '" data-doc-title="' + escHtml(doc.title || doc.doc_id) + '">&#128465; ' + i18n('webui.delete') + '</button></tr>').join('');
+      tbody.innerHTML = data.documents.map(doc => '<tr><td style="padding:8px 10px;border-bottom:1px solid var(--border)">' + escHtml(doc.title || doc.doc_id) + '</td><td style="padding:8px 10px;border-bottom:1px solid var(--border)">' + escHtml(doc.db_type || 'all') + '</td><td style="padding:8px 10px;border-bottom:1px solid var(--border)">' + formatBytes(doc.file_size || 0) + '</td><td style="padding:8px 10px;border-bottom:1px solid var(--border)">' + (doc.chunk_count || 0) + '</td><td style="padding:8px 10px;border-bottom:1px solid var(--border)"><span style="color:#00C8A0">&#9679; ' + i18n('webui.rag_doc_ready') + '</span></td><td style="padding:8px 10px;border-bottom:1px solid var(--border)"><button class="btn btn-ghost rag-del-btn" style="color:#EF4444;font-size:12px;padding:4px 8px" data-doc-id="' + doc.doc_id + '" data-doc-title="' + escHtml(doc.title || doc.doc_id) + '">&#128465; ' + i18n('webui.delete') + '</button></tr>').join('');
     } else {
       countBadge.textContent = i18n('webui.rag_doc_count_zero');
       tbody.innerHTML = '<tr><td colspan="6" style="padding:16px;text-align:center;color:var(--text-muted)">' + (i18n('webui.rag_no_docs') || '暂无已加载文档，请上传。') + '</td></tr>';
@@ -3820,7 +3831,7 @@ async function uploadRagDocument() {
     const res = await fetch('/api/rag/documents', { method: 'POST', body: formData });
     const data = await res.json();
     if (!data.ok) {
-      statusText.style.background = '#ffebee'; statusText.style.color = '#c62828';
+      statusText.style.background = '#FEF3C7'; statusText.style.color = '#DC2626';
       statusText.textContent = (i18n('webui.rag_upload_fail') || '上传失败') + ': ' + (data.error || '');
       return;
     }
@@ -3836,7 +3847,7 @@ async function uploadRagDocument() {
         const progData = await progRes.json();
         if (!progData.ok) {
           clearInterval(pollInterval);
-          statusText.style.background = '#ffebee'; statusText.style.color = '#c62828';
+          statusText.style.background = '#FEF3C7'; statusText.style.color = '#DC2626';
           statusText.textContent = '进度查询失败: ' + (progData.error || '');
           return;
         }
@@ -3847,18 +3858,18 @@ async function uploadRagDocument() {
 
         if (progData.status === 'done') {
           clearInterval(pollInterval);
-          statusText.style.background = '#e8f5e9'; statusText.style.color = '#2e7d32';
+          statusText.style.background = '#e8f5e9'; statusText.style.color = '#00A884';
           statusText.textContent = progData.message || '上传完成';
-          progressBar.style.background = '#4caf50';
+          progressBar.style.background = '#00C8A0';
           progressPct.textContent = '100%';
           fileInput.value = '';
           document.getElementById('rag-doc-title').value = '';
           setTimeout(function() { loadRagDocuments(); }, 500);
         } else if (progData.status === 'error') {
           clearInterval(pollInterval);
-          statusText.style.background = '#ffebee'; statusText.style.color = '#c62828';
+          statusText.style.background = '#FEF3C7'; statusText.style.color = '#DC2626';
           statusText.textContent = (progData.error || '处理失败');
-          progressBar.style.background = '#f44336';
+          progressBar.style.background = '#EF4444';
           progressPct.textContent = '';
         } else {
           // running — 更新状态文字
@@ -3866,12 +3877,12 @@ async function uploadRagDocument() {
         }
       } catch(e) {
         clearInterval(pollInterval);
-        statusText.style.background = '#ffebee'; statusText.style.color = '#c62828';
+        statusText.style.background = '#FEF3C7'; statusText.style.color = '#DC2626';
         statusText.textContent = '轮询异常: ' + e.message;
       }
     }, 1000);
   } catch(e) {
-    statusText.style.background = '#ffebee'; statusText.style.color = '#c62828';
+    statusText.style.background = '#FEF3C7'; statusText.style.color = '#DC2626';
     statusText.textContent = (i18n('webui.rag_upload_fail') || '上传失败：{}').replace('{}', e.message);
   }
 }
@@ -4207,7 +4218,7 @@ async function checkEmbeddingStatus() {
     const res = await fetch('/api/rag/ollama-status');
     const data = await res.json();
     if (data.ok) {
-      status.style.background = '#e8f5e9'; status.style.color = '#2e7d32';
+      status.style.background = '#e8f5e9'; status.style.color = '#00A884';
       status.textContent = (i18n('webui.rag_embedding_ok') || '✅ Embedding 服务已连接（{}）').replace('{}', data.model || '');
       updateRagEmbeddingHint(data.backend, data.model || '');
     } else {
@@ -4215,7 +4226,7 @@ async function checkEmbeddingStatus() {
       status.textContent = (i18n('webui.rag_embedding_fail') || '⚠ Embedding 服务未连接').replace('{}', data.model || '');
       if (data.backend) updateRagEmbeddingHint(data.backend, '');
     }
-  } catch(e) { status.style.background = '#ffebee'; status.style.color = '#c62828'; status.textContent = '检查失败: ' + e.message; }
+  } catch(e) { status.style.background = '#FEF3C7'; status.style.color = '#DC2626'; status.textContent = '检查失败: ' + e.message; }
 }
 // ─── 根据 backend 类型更新 RAG Embedding 提示文本 ──────────────────
 function updateRagEmbeddingHint(backend, model) {
@@ -5015,7 +5026,7 @@ function formatBytes(bytes) {
   <!-- ─── Sidebar ─── -->
   <aside class="sidebar">
     <div class="sidebar-logo">
-      <img src="/dbcheck_logo.png" alt="DBCheck" style="width:40px;height:40px;margin-bottom:10px;">
+      <img src="/dbcheck_logo_icon.png" alt="DBCheck" class="sidebar-brand-logo">
       <span class="sidebar-vertical-text">DBCheck</span>
       <h1>DBCheck {% if edition == 'professional' %}<span class="edition-badge pro" id="sidebar-edition-badge" data-i18n="webui.edition_badge">专业版</span>{% else %}<span class="edition-badge community" id="sidebar-edition-badge" data-i18n="webui.edition_community">社区版</span>{% endif %}</h1>
       <p data-i18n="webui.logo_subtitle">基于 AI 的智能数据库巡检工具</p>
@@ -5243,7 +5254,7 @@ function formatBytes(bytes) {
           <div class="host-resource-block" id="host-resource-block">
             <div class="host-resource-head" style="display:flex;align-items:center;gap:10px;margin:16px 0 4px;">
               <div class="health-chart-title" id="host-res-title" data-i18n="monitor.host_title">🖥️ 宿主资源</div>
-              <span class="host-source-badge" id="host-source-badge" style="font-size:11px;padding:2px 9px;border-radius:10px;border:1px solid #8b949e;color:#8b949e;background:rgba(139,148,158,.12);">—</span>
+              <span class="host-source-badge" id="host-source-badge" style="font-size:11px;padding:2px 9px;border-radius:10px;border:1px solid #94A3B8;color:#94A3B8;background:rgba(139,148,158,.12);">—</span>
             </div>
             <div class="host-resource-body" style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;">
               <div class="health-chart-card host-chart-card" style="flex:1;min-width:320px;">
@@ -5304,7 +5315,7 @@ function formatBytes(bytes) {
             <!-- 实例分布 -->
             <div class="overview-card">
               <div class="card-header">
-                <div class="card-icon" style="background:linear-gradient(135deg,#667eea,#764ba2);">🗄️</div>
+                <div class="card-icon" style="background:linear-gradient(135deg,#0A2A6E,#00C8A0);">🗄️</div>
                 <div>
                   <div class="card-title" data-i18n="webui.home_instance_dist">实例分布</div>
                   <div class="card-subtitle" data-i18n="webui.home_instance_dist_sub">各类型数据库数量</div>
@@ -5370,7 +5381,7 @@ function formatBytes(bytes) {
             <!-- 模板统计 -->
             <div class="overview-card">
               <div class="card-header">
-                <div class="card-icon" style="background:linear-gradient(135deg,#3b82f6,#2563eb);">📋</div>
+                <div class="card-icon" style="background:linear-gradient(135deg,#0A2A6E,#0A2A6E);">📋</div>
                 <div>
                   <div class="card-title" data-i18n="webui.home_template_stats">模板统计</div>
                   <div class="card-subtitle" data-i18n="webui.home_template_stats_sub">各模板章节数</div>
@@ -5392,7 +5403,7 @@ function formatBytes(bytes) {
             <!-- 基线统计 -->
             <div class="overview-card">
               <div class="card-header">
-                <div class="card-icon" style="background:linear-gradient(135deg,#22c55e,#16a34a);">📈</div>
+                <div class="card-icon" style="background:linear-gradient(135deg,#00C8A0,#00C8A0);">📈</div>
                 <div>
                   <div class="card-title" data-i18n="webui.home_baseline_stats">基线统计</div>
                   <div class="card-subtitle" data-i18n="webui.home_baseline_stats_sub">各数据库基线数</div>
@@ -5403,7 +5414,7 @@ function formatBytes(bytes) {
             <!-- 规则统计 -->
             <div class="overview-card">
               <div class="card-header">
-                <div class="card-icon" style="background:linear-gradient(135deg,#a855f7,#9333ea);">📏</div>
+                <div class="card-icon" style="background:linear-gradient(135deg,#0A2A6E,#00C8A0);">📏</div>
                 <div>
                   <div class="card-title" data-i18n="webui.home_rule_stats">规则统计</div>
                   <div class="card-subtitle" data-i18n="webui.home_rule_stats_sub">各数据库规则数</div>
@@ -5676,7 +5687,7 @@ function formatBytes(bytes) {
             </div>
           </div>
           <div class="ssh-ebpf-hint" style="margin-top:12px;padding:10px 14px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.25);border-radius:10px;font-size:12px;color:var(--text-muted);line-height:1.6;">
-            <span style="color:#3b82f6;font-weight:600;">ℹ️ eBPF 内核级指标说明：</span>
+            <span style="color:#0A2A6E;font-weight:600;">ℹ️ eBPF 内核级指标说明：</span>
             <span data-i18n="webui.ssh_ebpf_hint">采集器默认走零依赖 Shell（/proc）方式，目标机无需安装 Python 即可获取 CPU、内存、磁盘等基础宿主指标。</span>
           </div>
           <div id="ssh-test-status" style="margin-top:12px"></div>
@@ -6504,7 +6515,7 @@ curl -H "X-API-Key: YOUR_API_KEY" http://localhost:5003/api/v1/inspect/{task_id}
             <!-- 下载进度 -->
             <div id="all-drivers-download-progress" style="display:none;margin-bottom:12px;">
               <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;height:8px;overflow:hidden;margin-bottom:6px;">
-                <div id="all-drivers-download-bar" style="height:100%;width:0%;background:linear-gradient(90deg,var(--success),#66bb6a);border-radius:6px;transition:width 0.3s;"></div>
+                <div id="all-drivers-download-bar" style="height:100%;width:0%;background:linear-gradient(90deg,var(--success),#00C8A0);border-radius:6px;transition:width 0.3s;"></div>
               </div>
               <div id="all-drivers-download-msg" style="font-size:12px;color:var(--text-muted);"></div>
             </div>
@@ -7050,10 +7061,10 @@ curl -H "X-API-Key: YOUR_API_KEY" http://localhost:5003/api/v1/inspect/{task_id}
                     <span style="color:#f97316;">●</span> <span data-i18n="dm8_offline.sev_error">错误</span>: <span id="dm8-stat-error">0</span>
                   </div>
                   <div style="padding:4px 10px;background:rgba(234,179,8,0.1);border-radius:6px;font-size:12px;">
-                    <span style="color:#eab308;">●</span> <span data-i18n="dm8_offline.sev_warn">警告</span>: <span id="dm8-stat-warn">0</span>
+                    <span style="color:#F59E0B;">●</span> <span data-i18n="dm8_offline.sev_warn">警告</span>: <span id="dm8-stat-warn">0</span>
                   </div>
                   <div style="padding:4px 10px;background:rgba(59,130,246,0.1);border-radius:6px;font-size:12px;">
-                    <span style="color:#3b82f6;">●</span> <span data-i18n="dm8_offline.sev_info">信息</span>: <span id="dm8-stat-info">0</span>
+                    <span style="color:#0A2A6E;">●</span> <span data-i18n="dm8_offline.sev_info">信息</span>: <span id="dm8-stat-info">0</span>
                   </div>
                 </div>
               </div>
@@ -7068,7 +7079,7 @@ curl -H "X-API-Key: YOUR_API_KEY" http://localhost:5003/api/v1/inspect/{task_id}
           <!-- 标签页：诊断 / 文件 / 控制文件 -->
           <div class="card">
             <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:12px;">
-              <button class="dm8-tab-btn active" onclick="dm8SwitchTab('diagnostics')" style="padding:8px 16px;border:none;background:none;font-size:13px;font-weight:600;color:var(--text);cursor:pointer;border-bottom:2px solid var(--accent,#3b82f6);">
+              <button class="dm8-tab-btn active" onclick="dm8SwitchTab('diagnostics')" style="padding:8px 16px;border:none;background:none;font-size:13px;font-weight:600;color:var(--text);cursor:pointer;border-bottom:2px solid var(--accent,#0A2A6E);">
                 <span data-i18n="dm8_offline.tab_diagnostics">诊断详情</span>
               </button>
               <button class="dm8-tab-btn" onclick="dm8SwitchTab('files')" style="padding:8px 16px;border:none;background:none;font-size:13px;font-weight:600;color:var(--text-muted);cursor:pointer;">
@@ -7449,7 +7460,7 @@ curl -H "X-API-Key: YOUR_API_KEY" http://localhost:5003/api/v1/inspect/{task_id}
         <div class="overview-grid" style="margin-bottom:14px">
           <div class="overview-card">
             <div class="card-header">
-              <div class="card-icon" style="background:linear-gradient(135deg,#3b82f6,#2563eb)">📊</div>
+              <div class="card-icon" style="background:linear-gradient(135deg,#0A2A6E,#0A2A6E)">📊</div>
               <div><div class="card-title">监控数据源</div></div>
             </div>
             <div class="card-count mon-count-blue" id="mon-slow-overview-sources">-</div>
@@ -7465,7 +7476,7 @@ curl -H "X-API-Key: YOUR_API_KEY" http://localhost:5003/api/v1/inspect/{task_id}
           </div>
           <div class="overview-card">
             <div class="card-header">
-              <div class="card-icon" style="background:linear-gradient(135deg,#22c55e,#16a34a)">⚡</div>
+              <div class="card-icon" style="background:linear-gradient(135deg,#00C8A0,#00C8A0)">⚡</div>
               <div><div class="card-title">平均执行时间</div></div>
             </div>
             <div class="card-count mon-count-green" id="mon-slow-overview-avg">-</div>
@@ -7553,7 +7564,7 @@ curl -H "X-API-Key: YOUR_API_KEY" http://localhost:5003/api/v1/inspect/{task_id}
         <div class="overview-grid" style="margin-bottom:14px">
           <div class="overview-card">
             <div class="card-header">
-              <div class="card-icon" style="background:linear-gradient(135deg,#3b82f6,#2563eb)">🔗</div>
+              <div class="card-icon" style="background:linear-gradient(135deg,#0A2A6E,#0A2A6E)">🔗</div>
               <div><div class="card-title">总活跃连接</div></div>
             </div>
             <div class="card-count mon-count-blue" id="mon-conn-overview-total">-</div>
@@ -7567,7 +7578,7 @@ curl -H "X-API-Key: YOUR_API_KEY" http://localhost:5003/api/v1/inspect/{task_id}
             <div class="card-count mon-count-red" id="mon-conn-overview-highest-pct">-</div>
             <div class="mon-count-sub" id="mon-conn-overview-highest-name">-</div>
             <div class="card-progress">
-              <div class="card-progress-fill" id="mon-conn-overview-highest-bar" style="width:0%;background:linear-gradient(90deg,#22c55e,#16a34a)"></div>
+              <div class="card-progress-fill" id="mon-conn-overview-highest-bar" style="width:0%;background:linear-gradient(90deg,#00C8A0,#00C8A0)"></div>
             </div>
           </div>
           <div class="overview-card">
@@ -8144,11 +8155,11 @@ function dm8OfflineToggleMode(mode) {
     sshConfig.style.display = 'block';
     if (dirLabel) dirLabel.textContent = '远程 DM8 数据文件目录';
     localLabel.style.borderColor = 'var(--border)';
-    remoteLabel.style.borderColor = 'var(--accent, #2ea043)';
+    remoteLabel.style.borderColor = 'var(--accent, #00C8A0)';
   } else {
     sshConfig.style.display = 'none';
     if (dirLabel) dirLabel.textContent = 'DM8 数据文件目录';
-    localLabel.style.borderColor = 'var(--accent, #2ea043)';
+    localLabel.style.borderColor = 'var(--accent, #00C8A0)';
     remoteLabel.style.borderColor = 'var(--border)';
   }
 }
@@ -8233,7 +8244,7 @@ function dm8OfflineShowHint(msg, type) {
   el.style.display = 'block';
   el.textContent = msg;
   var colors = {error:'rgba(239,68,68,0.1)', info:'rgba(59,130,246,0.1)', success:'rgba(34,197,94,0.1)'};
-  var textColors = {error:'#ef4444', info:'#3b82f6', success:'#22c55e'};
+  var textColors = {error:'#ef4444', info:'#0A2A6E', success:'#00C8A0'};
   el.style.background = colors[type] || colors.info;
   el.style.color = textColors[type] || textColors.info;
   if (type === 'success') setTimeout(() => { el.style.display = 'none'; }, 3000);
@@ -8250,7 +8261,7 @@ function dm8OfflineRender(r) {
   num.textContent = score;
   label.textContent = r.health_label;
   var level = r.health_level;
-  var ringColors = {healthy:'#22c55e', warning:'#eab308', critical:'#ef4444', unknown:'#94a3b8'};
+  var ringColors = {healthy:'#00C8A0', warning:'#F59E0B', critical:'#ef4444', unknown:'#94a3b8'};
   ring.style.borderColor = ringColors[level] || ringColors.unknown;
   ring.style.color = ringColors[level] || ringColors.unknown;
 
@@ -8272,8 +8283,8 @@ function dm8OfflineRender(r) {
   diagBody.innerHTML = '';
   var sevMap = {fatal:{label:(i18n('dm8_offline.sev_fatal') || '严重'),color:'#ef4444',bg:'rgba(239,68,68,0.08)'},
                 error:{label:(i18n('dm8_offline.sev_error') || '错误'),color:'#f97316',bg:'rgba(249,115,22,0.08)'},
-                warning:{label:(i18n('dm8_offline.sev_warn') || '警告'),color:'#eab308',bg:'rgba(234,179,8,0.08)'},
-                info:{label:(i18n('dm8_offline.sev_info') || '信息'),color:'#3b82f6',bg:'rgba(59,130,246,0.08)'}};
+                warning:{label:(i18n('dm8_offline.sev_warn') || '警告'),color:'#F59E0B',bg:'rgba(234,179,8,0.08)'},
+                info:{label:(i18n('dm8_offline.sev_info') || '信息'),color:'#0A2A6E',bg:'rgba(59,130,246,0.08)'}};
   (r.diagnostics || []).forEach(function(d) {
     var s = sevMap[d.severity] || sevMap.info;
     var tr = document.createElement('tr');
@@ -8292,7 +8303,7 @@ function dm8OfflineRender(r) {
   var filesBody = document.getElementById('dm8-files-body');
   filesBody.innerHTML = '';
   (r.data_files || []).forEach(function(f) {
-    var statusIcon = f.exists && f.readable && !f.empty ? '<span style="color:#22c55e;">✓</span>' : '<span style="color:#ef4444;">✗</span>';
+    var statusIcon = f.exists && f.readable && !f.empty ? '<span style="color:#00C8A0;">✓</span>' : '<span style="color:#ef4444;">✗</span>';
     var tr = document.createElement('tr');
     tr.style.borderBottom = '1px solid var(--border)';
     tr.innerHTML = '<td style="padding:8px 10px;font-family:monospace;font-size:12px;">' + f.name + '</td>'
@@ -8380,7 +8391,7 @@ function dm8SwitchTab(tab) {
     btn.style.borderBottom = '2px solid transparent';
     btn.style.color = 'var(--text-muted)';
   });
-  event.target.style.borderBottom = '2px solid var(--accent,#3b82f6)';
+  event.target.style.borderBottom = '2px solid var(--accent,#0A2A6E)';
   event.target.style.color = 'var(--text)';
   document.getElementById('dm8-tab-diagnostics').style.display = tab === 'diagnostics' ? 'block' : 'none';
   document.getElementById('dm8-tab-files').style.display = tab === 'files' ? 'block' : 'none';
@@ -8690,7 +8701,7 @@ async function loadShares() {
             <tr style="border-bottom:1px solid var(--border)" id="share-row-${s.id}">
               <td style="padding:10px 12px">${typeIcon(s.share_type)} ${typeLabel(s.share_type)}</td>
               <td style="padding:10px 12px">
-                <a href="/share/${s.id}" target="_blank" style="color:#58a6ff;text-decoration:none">${escHtml(s.title || '-')}</a>
+                <a href="/share/${s.id}" target="_blank" style="color:#0A2A6E;text-decoration:none">${escHtml(s.title || '-')}</a>
               </td>
               <td style="padding:10px 12px;text-align:center">${s.access_count || 0}</td>
               <td style="padding:10px 12px;color:var(--text-muted)">${s.created_at || '-'}</td>
@@ -9209,7 +9220,7 @@ async function testDb() {
       if ((dbType === 'oracle' || dbType === 'oracle_jdbc') && data.oracle_major_version) {
         const ver = data.oracle_major_version;
         const verSuffix = (ver === 10 || ver === 11) ? 'g' : 'c';
-        extraHtml = `<div style="margin-top:8px;padding:8px 12px;background:rgba(76,175,80,0.1);border:1px solid rgba(76,175,80,0.3);border-radius:6px;font-size:12px;color:#4caf50">
+        extraHtml = `<div style="margin-top:8px;padding:8px 12px;background:rgba(76,175,80,0.1);border:1px solid rgba(76,175,80,0.3);border-radius:6px;font-size:12px;color:#00C8A0">
           ✅ 检测到 Oracle ${ver}${verSuffix}
         </div>`;
         autoSelectOracleTemplate(ver, 'f-template');
@@ -9329,7 +9340,7 @@ async function testJobDb() {
       if ((dbType === 'oracle' || dbType === 'oracle_jdbc') && data.oracle_major_version) {
         const ver = data.oracle_major_version;
         const verSuffix = (ver === 10 || ver === 11) ? 'g' : 'c';
-        extraHtml = `<div style="margin-top:8px;padding:8px 12px;background:rgba(76,175,80,0.1);border:1px solid rgba(76,175,80,0.3);border-radius:6px;font-size:12px;color:#4caf50">
+        extraHtml = `<div style="margin-top:8px;padding:8px 12px;background:rgba(76,175,80,0.1);border:1px solid rgba(76,175,80,0.3);border-radius:6px;font-size:12px;color:#00C8A0">
           ✅ 检测到 Oracle ${ver}${verSuffix}
         </div>`;
         autoSelectOracleTemplate(ver, 'job-template');
@@ -9919,10 +9930,10 @@ function pollStatus() {
           if (inOl) html += '</ol>';
 
           aiHtml = `
-          <div class="result-card" style="background:linear-gradient(135deg,rgba(56,139,253,.06),rgba(124,58,237,.06));border-left:3px solid #7c3aed">
+          <div class="result-card" style="background:linear-gradient(135deg,rgba(56,139,253,.06),rgba(124,58,237,.06));border-left:3px solid #0A2A6E">
             <div class="ri">🤖</div>
             <div class="rd" style="flex:1">
-              <h3 style="color:#7c3aed">${i18n('webui.ai_diagnosis_title')}</h3>
+              <h3 style="color:#0A2A6E">${i18n('webui.ai_diagnosis_title')}</h3>
               <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${i18n('webui.ai_diagnosis_subtitle')}</div>
             </div>
             <div style="margin-left:auto;flex-shrink:0">
@@ -9976,7 +9987,7 @@ function pollStatus() {
             const circumference = 2 * Math.PI * r;
             analyzeFg.style.strokeDasharray = circumference;
             analyzeFg.style.strokeDashoffset = 0; // 满环
-            analyzeFg.style.stroke = '#22c55e'; // 绿色
+            analyzeFg.style.stroke = '#00C8A0'; // 绿色
             analyzeTxt.textContent = issues.length;
           }
         })();
@@ -10657,12 +10668,12 @@ function renderComparison(cmp, inst) {
 function renderTrendCharts(trend, inst) {
   const grid = document.getElementById('trend-charts-grid');
   const metricConfigs = [
-    { key: 'mem_usage',            label: i18n('webui.ind_mem_usage'),           color: '#388bfd', warn: 80 },
-    { key: 'cpu_usage',            label: i18n('webui.ind_cpu_usage'),           color: '#e3b341', warn: 80 },
-    { key: 'disk_usage_max',       label: i18n('webui.ind_disk_usage_max'),      color: '#f85149', warn: 80 },
-    { key: 'connections',          label: i18n('webui.ind_connections'),         color: '#2ea043', warn: null },
-    { key: 'cache_hit_ratio',      label: i18n('webui.ind_cache_hit_ratio'),     color: '#a371f7', warn: 95 },
-    { key: 'risk_count',           label: i18n('webui.ind_risk_count'),          color: '#e3b341', warn: 3 },
+    { key: 'mem_usage',            label: i18n('webui.ind_mem_usage'),           color: '#0A2A6E', warn: 80 },
+    { key: 'cpu_usage',            label: i18n('webui.ind_cpu_usage'),           color: '#F59E0B', warn: 80 },
+    { key: 'disk_usage_max',       label: i18n('webui.ind_disk_usage_max'),      color: '#EF4444', warn: 80 },
+    { key: 'connections',          label: i18n('webui.ind_connections'),         color: '#00C8A0', warn: null },
+    { key: 'cache_hit_ratio',      label: i18n('webui.ind_cache_hit_ratio'),     color: '#0A2A6E', warn: 95 },
+    { key: 'risk_count',           label: i18n('webui.ind_risk_count'),          color: '#F59E0B', warn: 3 },
     { key: 'max_used_connections', label: i18n('webui.ind_max_used_connections'), color: '#79c0ff', warn: null },
   ];
 
@@ -10710,13 +10721,13 @@ function drawLineChart(canvasId, labels, values, cfg) {
   ctx.clearRect(0, 0, W, H);
 
   // 网格线
-  ctx.strokeStyle = '#30363d';
+  ctx.strokeStyle = '#2A3650';
   ctx.lineWidth = 1;
   for (let i = 0; i <= 4; i++) {
     const y = pad.top + (chartH / 4) * i;
     ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + chartW, y); ctx.stroke();
     const val = maxV - (range / 4) * i;
-    ctx.fillStyle = '#8b949e';
+    ctx.fillStyle = '#94A3B8';
     ctx.font = '10px sans-serif';
     ctx.textAlign = 'right';
     ctx.fillText(val.toFixed(val < 10 ? 1 : 0), pad.left - 4, y + 3);
@@ -10764,7 +10775,7 @@ function drawLineChart(canvasId, labels, values, cfg) {
 
   // X 轴标签（每隔几个显示一个）
   const step = Math.max(1, Math.floor(labels.length / 4));
-  ctx.fillStyle = '#8b949e';
+  ctx.fillStyle = '#94A3B8';
   ctx.font = '10px sans-serif';
   ctx.textAlign = 'center';
   labels.forEach((l, i) => {
@@ -10829,7 +10840,7 @@ function drawBarChart(canvasId, labels, values, colors) {
   ctx.clearRect(0, 0, W, H);
 
   // 背景网格线（垂直）
-  ctx.strokeStyle = '#30363d';
+  ctx.strokeStyle = '#2A3650';
   ctx.lineWidth = 1;
   for (let i = 0; i <= 4; i++) {
     const x = pad.left + (chartW / 4) * i;
@@ -10844,7 +10855,7 @@ function drawBarChart(canvasId, labels, values, colors) {
     const color = colors[i % colors.length];
 
     // 左侧标签（模板名）
-    ctx.fillStyle = '#8b949e';
+    ctx.fillStyle = '#94A3B8';
     ctx.font = '10px sans-serif';
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
@@ -10872,7 +10883,7 @@ function drawBarChart(canvasId, labels, values, colors) {
     ctx.fill();
 
     // 右侧数值
-    ctx.fillStyle = '#c9d1d9';
+    ctx.fillStyle = '#CBD5E1';
     ctx.font = 'bold 10px sans-serif';
     ctx.textAlign = 'left';
     ctx.fillText(v, pad.left + barW + 5, y + 7);
@@ -10939,7 +10950,7 @@ function drawPieChart(canvasId, labels, values, colors) {
     ctx.beginPath();
     ctx.arc(legendX, legendY + 5, 4, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = '#8b949e';
+    ctx.fillStyle = '#94A3B8';
     ctx.textAlign = 'left';
     const pct = total > 0 ? Math.round(values[i] / total * 100) : 0;
     ctx.fillText(`${l} ${values[i]} (${pct}%)`, legendX + 10, legendY + 9);
@@ -10948,7 +10959,7 @@ function drawPieChart(canvasId, labels, values, colors) {
 
   // 中心总数
   if (total > 0) {
-    ctx.fillStyle = '#e6edf3';
+    ctx.fillStyle = '#F8F9FA';
     ctx.font = 'bold 16px sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText(total, cx, cy + 6);
@@ -11231,14 +11242,14 @@ async function testOllama() {
     const data = await resp.json();
     if (data.ok) {
       result.textContent = i18n('webui.ai_test_ok');
-      result.style.color = '#4caf50';
+      result.style.color = '#00C8A0';
     } else {
       result.textContent = i18n('webui.ai_test_fail') + ': ' + (data.error || '');
-      result.style.color = '#f44336';
+      result.style.color = '#EF4444';
     }
   } catch(e) {
     result.textContent = i18n('webui.ai_test_fail') + ': ' + e.message;
-    result.style.color = '#f44336';
+    result.style.color = '#EF4444';
   }
 }
 
@@ -11252,7 +11263,7 @@ async function testOpenAI() {
     const model = document.getElementById('ai-model').value.trim() || 'gpt-4o-mini';
     if (!apiKey) {
       result.textContent = i18n('webui.ai_err_no_key') || '请先填写 API Key';
-      result.style.color = '#f44336';
+      result.style.color = '#EF4444';
       return;
     }
     const resp = await fetch('/api/test_openai', {
@@ -11263,14 +11274,14 @@ async function testOpenAI() {
     const data = await resp.json();
     if (data.ok) {
       result.textContent = i18n('webui.ai_test_ok');
-      result.style.color = '#4caf50';
+      result.style.color = '#00C8A0';
     } else {
       result.textContent = (i18n('webui.ai_test_fail') || '测试失败') + ': ' + (data.error || data.msg || '');
-      result.style.color = '#f44336';
+      result.style.color = '#EF4444';
     }
   } catch(e) {
     result.textContent = (i18n('webui.ai_test_fail') || '测试失败') + ': ' + e.message;
-    result.style.color = '#f44336';
+    result.style.color = '#EF4444';
   }
 }
 
@@ -11422,7 +11433,7 @@ function renderJobList(jobs) {
   }
   
   const html = jobs.map(job => {
-    const statusColor = job.running ? '#4caf50' : '#8b949e';
+    const statusColor = job.running ? '#00C8A0' : '#94A3B8';
     const statusText = job.running ? '运行中' : '已暂停';
     const cronText = formatCronText(job.cron);
     const enabledChecked = job.enabled ? 'checked' : '';
@@ -12217,11 +12228,11 @@ async function saveEmailConfig() {
     const msg = document.getElementById('email-msg');
     if (data.ok) {
       msg.textContent = '✅ ' + i18n('webui.email_save_ok');
-      msg.style.color = '#4caf50';
+      msg.style.color = '#00C8A0';
       document.getElementById('email-status').textContent = i18n('webui.email_status_ok');
     } else {
       msg.textContent = '❌ ' + i18n('webui.email_save_fail').replace('{}', data.error || '');
-      msg.style.color = '#f44336';
+      msg.style.color = '#EF4444';
     }
   } catch(e) {
     document.getElementById('email-msg').textContent = '❌ ' + i18n('webui.email_save_fail').replace('{}', e.message);
@@ -12314,14 +12325,14 @@ async function testEmailConfig() {
     const data = await res.json();
     if (data.ok) {
       msg.textContent = '✅ ' + data.msg;
-      msg.style.color = '#4caf50';
+      msg.style.color = '#00C8A0';
     } else {
       msg.textContent = '❌ ' + data.msg;
-      msg.style.color = '#f44336';
+      msg.style.color = '#EF4444';
     }
   } catch(e) {
     msg.textContent = '❌ ' + i18n('webui.email_test_fail').replace('{}', e.message);
-    msg.style.color = '#f44336';
+    msg.style.color = '#EF4444';
   }
 }
 
@@ -12410,11 +12421,11 @@ async function saveWebhookConfig() {
     const msg = document.getElementById('webhook-msg');
     if (data.ok) {
       msg.textContent = '✅ ' + i18n('webui.webhook_save_ok');
-      msg.style.color = '#4caf50';
+      msg.style.color = '#00C8A0';
       document.getElementById('webhook-status').textContent = i18n('webui.webhook_status_ok');
     } else {
       msg.textContent = '❌ ' + i18n('webui.webhook_save_fail').replace('{}', data.error || '');
-      msg.style.color = '#f44336';
+      msg.style.color = '#EF4444';
     }
   } catch(e) {
     document.getElementById('webhook-msg').textContent = '❌ ' + i18n('webui.webhook_save_fail').replace('{}', e.message);
@@ -12509,14 +12520,14 @@ async function testWebhookConfig() {
     const data = await res.json();
     if (data.ok) {
       msg.textContent = '✅ ' + data.msg;
-      msg.style.color = '#4caf50';
+      msg.style.color = '#00C8A0';
     } else {
       msg.textContent = '❌ ' + data.msg;
-      msg.style.color = '#f44336';
+      msg.style.color = '#EF4444';
     }
   } catch(e) {
     msg.textContent = '❌ ' + i18n('webui.webhook_test_fail').replace('{}', e.message);
-    msg.style.color = '#f44336';
+    msg.style.color = '#EF4444';
   }
 }
 
@@ -12685,7 +12696,7 @@ async function executeFixSql(taskId, sql) {
       <!-- Logo 区域 -->
       <div class="logo-area">
         <div class="logo-ring">
-          <img src="/dbcheck_logo.png" class="logo-img" alt="DBCheck"
+          <img src="/dbcheck_logo_icon.png" class="logo-img" alt="DBCheck"
                onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
           <div class="logo-inner" style="display:none;">D</div>
         </div>
@@ -13139,7 +13150,7 @@ async function executeFixSql(taskId, sql) {
   margin-right: 5px;
 }
 .status-dot.connected {
-  background: #22c55e;
+  background: #00C8A0;
 }
 .status-dot.disconnected {
   background: #ef4444;
@@ -13226,8 +13237,8 @@ function toastConfirm(msg) {
     const overlay = document.createElement('div');
     overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;z-index:10000;backdrop-filter:blur(2px)';
     overlay.innerHTML = `
-      <div style="background:var(--surface2,#1c2128);border:1px solid var(--border,#30363d);border-radius:12px;padding:24px;max-width:420px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.45);animation:toastIn 0.2s ease">
-        <div style="margin:0 0 18px;color:var(--text,#f0f6fc);font-size:14px;line-height:1.6;word-break:break-all;white-space:pre-wrap">${escHtml(String(msg))}</div>
+      <div style="background:var(--surface2,#1A2338);border:1px solid var(--border,#2A3650);border-radius:12px;padding:24px;max-width:420px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.45);animation:toastIn 0.2s ease">
+        <div style="margin:0 0 18px;color:var(--text,#F8F9FA);font-size:14px;line-height:1.6;word-break:break-all;white-space:pre-wrap">${escHtml(String(msg))}</div>
         <div style="display:flex;gap:8px;justify-content:flex-end">
           <button class="toast-cancel-btn btn btn-ghost" style="padding:7px 18px;font-size:13px;border-radius:6px;cursor:pointer">取消</button>
           <button class="toast-confirm-btn btn btn-primary" style="padding:7px 18px;font-size:13px;border-radius:6px;cursor:pointer">确定</button>
@@ -13294,18 +13305,18 @@ async function loadHomeStats() {
 
     // 颜色配置
     const levelColors = {
-      healthy:  '#4caf50',
-      low:      '#81c784',
-      medium:   '#e3b341',
+      healthy:  '#00C8A0',
+      low:      '#00C8A0',
+      medium:   '#F59E0B',
       high:     '#ff9800',
-      critical: '#f85149',
+      critical: '#EF4444',
     };
     const catColors = {
-      performance:   '#388bfd',
-      security:      '#f85149',
-      configuration: '#a371f7',
-      capacity:      '#e3b341',
-      availability:  '#4caf50',
+      performance:   '#0A2A6E',
+      security:      '#EF4444',
+      configuration: '#0A2A6E',
+      capacity:      '#F59E0B',
+      availability:  '#00C8A0',
     };
     const catIcons = {
       performance:   '🚀',
@@ -13338,7 +13349,7 @@ async function loadHomeStats() {
       try {
         if (dash.ok && dash.has_history) {
           const level = dash.level || 'unknown';
-          const color = levelColors[level] || '#8b949e';
+          const color = levelColors[level] || '#94A3B8';
           const total = dash.total_score || 0;
 
           // 风险分布 chips
@@ -13381,7 +13392,7 @@ async function loadHomeStats() {
 
       // 与 GitHub 暗色主题协调的颜色序列（HTML 图例圆点与圆环扇区一一对应）
       const DB_TYPE_PALETTE = [
-        '#58a6ff', '#3fb950', '#d29922', '#f85149', '#a371f7',
+        '#0A2A6E', '#00C8A0', '#d29922', '#EF4444', '#0A2A6E',
         '#56d4dd', '#f0883e', '#79c0ff', '#ff7b72', '#d2a8ff'
       ];
 
@@ -13449,8 +13460,8 @@ async function loadHomeStats() {
             left: 'center',
             top: '38%',
             textAlign: 'center',
-            textStyle: { color: '#c9d1d9', fontSize: 24, fontWeight: 700 },
-            subtextStyle: { color: '#8b949e', fontSize: 11 }
+            textStyle: { color: '#CBD5E1', fontSize: 24, fontWeight: 700 },
+            subtextStyle: { color: '#94A3B8', fontSize: 11 }
           },
           series: [{
             type: 'pie',
@@ -13459,7 +13470,7 @@ async function loadHomeStats() {
             data: coloredData,
             label: { show: false },
             labelLine: { show: false },
-            itemStyle: { borderRadius: 5, borderColor: '#0d1117', borderWidth: 2 },
+            itemStyle: { borderRadius: 5, borderColor: '#0D1426', borderWidth: 2 },
             emphasis: { scale: true, scaleSize: 6 }
           }]
         });
@@ -13489,7 +13500,7 @@ async function loadHomeStats() {
           const isActive = job.enabled !== false;
           const nextRun = job.next_run || '--';
           return `<div class="job-item">
-            <span class="job-dot" style="background:${isActive ? '#4caf50' : '#666'}"></span>
+            <span class="job-dot" style="background:${isActive ? '#00C8A0' : '#666'}"></span>
             <span class="job-name">${escHtml(job.name || '定时巡检')}</span>
             <span class="job-next">${isActive ? nextRun : '已暂停'}</span>
           </div>`;
@@ -13551,8 +13562,8 @@ async function loadHomeStats() {
 // ─── 健康态势大屏 (ECharts) ──────────────────────────────
 const healthCharts = { gauge: null, risk: null, trend: null, matrix: null };
 const RISK_COLORS = {
-  critical: '#f85149', high: '#fb923c', medium: '#eab308',
-  low: '#3b82f6', healthy: '#22c55e', unknown: '#8b949e'
+  critical: '#EF4444', high: '#fb923c', medium: '#F59E0B',
+  low: '#0A2A6E', healthy: '#00C8A0', unknown: '#94A3B8'
 };
 
 function cssVar(name, fb) {
@@ -13579,9 +13590,9 @@ function renderHealthScreen(dash) {
   }
   section.style.display = '';
 
-  const TXT  = cssVar('--text', '#e6edf3');
-  const MUT  = cssVar('--text-muted', '#8b949e');
-  const BORD = cssVar('--border', '#30363d');
+  const TXT  = cssVar('--text', '#F8F9FA');
+  const MUT  = cssVar('--text-muted', '#94A3B8');
+  const BORD = cssVar('--border', '#2A3650');
 
   // 1) 仪表盘：综合健康评分
   const gauge = document.getElementById('echart-gauge');
@@ -13591,9 +13602,9 @@ function renderHealthScreen(dash) {
     series: [{
       type: 'gauge', radius: '92%', center: ['50%', '58%'],
       startAngle: 210, endAngle: -30, min: 0, max: 100,
-      progress: { show: true, width: 16, itemStyle: { color: RISK_COLORS[dash.level] || '#3b82f6' } },
+      progress: { show: true, width: 16, itemStyle: { color: RISK_COLORS[dash.level] || '#0A2A6E' } },
       axisLine: { lineStyle: { width: 16, color: [
-        [0.3, '#f85149'], [0.5, '#fb923c'], [0.7, '#eab308'], [0.85, '#4caf50'], [1, '#22c55e']
+        [0.3, '#EF4444'], [0.5, '#fb923c'], [0.7, '#F59E0B'], [0.85, '#00C8A0'], [1, '#00C8A0']
       ] } },
       pointer: { show: true, length: '62%', width: 5, itemStyle: { color: TXT } },
       axisTick: { distance: -16, length: 5, lineStyle: { color: MUT, width: 1 } },
@@ -13650,8 +13661,8 @@ function renderHealthScreen(dash) {
     series: [{
       type: 'line', smooth: true, symbol: 'circle', symbolSize: 5,
       data: tdata.map(d => d.score),
-      lineStyle: { width: 3, color: '#3b82f6' },
-      itemStyle: { color: '#3b82f6' },
+      lineStyle: { width: 3, color: '#0A2A6E' },
+      itemStyle: { color: '#0A2A6E' },
       areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
         { offset: 0, color: 'rgba(59,130,246,0.35)' },
         { offset: 1, color: 'rgba(59,130,246,0.02)' }
@@ -13677,7 +13688,7 @@ function renderHealthScreen(dash) {
     yAxis: { type: 'category', data: insts.map(i => i.instance_name), axisLine: { lineStyle: { color: BORD } }, axisLabel: { color: MUT, fontSize: 10 } },
     series: [{
       type: 'bar', barWidth: '58%',
-      data: insts.map(i => ({ value: i.health_score, itemStyle: { color: RISK_COLORS[i.risk_level] || '#3b82f6', borderRadius: [0, 4, 4, 0] } })),
+      data: insts.map(i => ({ value: i.health_score, itemStyle: { color: RISK_COLORS[i.risk_level] || '#0A2A6E', borderRadius: [0, 4, 4, 0] } })),
       label: { show: true, position: 'right', color: TXT, fontSize: 10, formatter: '{c}' }
     }]
   });
@@ -13829,9 +13840,9 @@ function renderMonitorCharts() {
   // 宿主资源面板（eBPF 内核级 / psutil 用户态，实例感知），与深采与否无关
   renderHostPanel();
 
-  const TXT = cssVar('--text', '#e6edf3');
-  const MUT = cssVar('--text-muted', '#8b949e');
-  const BORD = cssVar('--border', '#30363d');
+  const TXT = cssVar('--text', '#F8F9FA');
+  const MUT = cssVar('--text-muted', '#94A3B8');
+  const BORD = cssVar('--border', '#2A3650');
   const times = hist.map(function (h) { return (h.ts || '').slice(11, 19); }); // 只取 HH:mm:ss
 
   const titleTP = document.getElementById('monitor-throughput-title');
@@ -13916,17 +13927,17 @@ function renderMonitorCharts() {
 
   if (deep) {
     // ── 深采实例：三图保持原逻辑 ──
-    const tp = multi('rate_', ['#3b82f6', '#22c55e', '#f59e0b', '#a855f7']);
+    const tp = multi('rate_', ['#0A2A6E', '#00C8A0', '#f59e0b', '#0D1426']);
     if (!tp.length) { const f = pick(['rate_queries', 'rate_xact_commit', 'rate_ora_user_commits',
-                                      'mssql_batch_requests', 'mssql_sql_compilations'], '#3b82f6'); if (f) tp.push(f); }
+                                      'mssql_batch_requests', 'mssql_sql_compilations'], '#0A2A6E'); if (f) tp.push(f); }
     ensureMonChart('throughput', 'echart-mon-throughput').setOption(opt(tp, !tp.length ? (i18n('webui.home_monitor_no_deep') || '该实例类型暂不支持深采') : null), { notMerge: true });
 
     const conn = [pick(['threads_connected', 'numbackends', 'user_sessions', 'active_sessions',
-                         'connections', 'total_sessions'], '#22c55e'),
+                         'connections', 'total_sessions'], '#00C8A0'),
                   pick(['threads_running', 'sessions_running'], '#f59e0b')].filter(Boolean);
     ensureMonChart('conn', 'echart-mon-conn').setOption(opt(conn, !conn.length ? (i18n('webui.home_monitor_no_deep') || '该实例类型暂不支持深采') : null), { notMerge: true });
 
-    const lat = pick(['latency_ms'], '#f85149');
+    const lat = pick(['latency_ms'], '#EF4444');
     ensureMonChart('latency', 'echart-mon-latency').setOption(opt(lat ? [lat] : [], !lat ? (i18n('webui.home_monitor_no_latency') || '该实例暂无延迟数据') : null), { notMerge: true });
     return;
   }
@@ -13941,7 +13952,7 @@ function renderMonitorCharts() {
   // 1) 端口可用性时间线（可达=1 / 不可达=0 阶梯面积）
   const availSeries = [{
     name: '端口可达', type: 'line', step: 'middle', smooth: false, symbol: 'none', data: avail,
-    lineStyle: { width: 2, color: '#3fb950' }, itemStyle: { color: '#3fb950' },
+    lineStyle: { width: 2, color: '#00C8A0' }, itemStyle: { color: '#00C8A0' },
     areaStyle: { color: 'rgba(63,185,80,0.18)' }
   }];
   const availY = { type: 'value', min: 0, max: 1, interval: 1,
@@ -13951,7 +13962,7 @@ function renderMonitorCharts() {
   availOpt.tooltip.formatter = function (ps) {
     if (!ps || !ps.length) return '';
     const p = ps[0];
-    return p.axisValue + '<br/>' + i18n('webui.home_monitor_port_status') + '<b style="color:#3fb950">' + (p.data === 1 ? i18n('webui.home_monitor_reachable') : i18n('webui.home_monitor_unreachable')) + '</b>';
+    return p.axisValue + '<br/>' + i18n('webui.home_monitor_port_status') + '<b style="color:#00C8A0">' + (p.data === 1 ? i18n('webui.home_monitor_reachable') : i18n('webui.home_monitor_unreachable')) + '</b>';
   };
   ensureMonChart('throughput', 'echart-mon-throughput').setOption(availOpt, { notMerge: true });
 
@@ -13961,7 +13972,7 @@ function renderMonitorCharts() {
   if (latest.status === 'cooldown') reason = i18n('webui.home_monitor_cooldown_reason');
   else if (latest.error) reason = i18n('webui.home_monitor_deep_fail') + String(latest.error).slice(0, 56);
   else if (latest.available === false) reason = i18n('webui.home_monitor_port_unreachable');
-  const rateColor = ratePct >= 90 ? '#3fb950' : (ratePct >= 60 ? '#d29922' : '#f85149');
+  const rateColor = ratePct >= 90 ? '#00C8A0' : (ratePct >= 60 ? '#d29922' : '#EF4444');
   const diagOpt = {
     backgroundColor: 'transparent',
     series: [{
@@ -13983,7 +13994,7 @@ function renderMonitorCharts() {
   ensureMonChart('conn', 'echart-mon-conn').setOption(diagOpt, { notMerge: true });
 
   // 3) 延迟图（所有实例都有 TCP 延迟数据）
-  const lat = pick(['latency_ms'], '#f85149');
+  const lat = pick(['latency_ms'], '#EF4444');
   ensureMonChart('latency', 'echart-mon-latency').setOption(opt(lat ? [lat] : [], !lat ? '该实例暂无延迟数据' : null), { notMerge: true });
 }
 
@@ -13995,9 +14006,9 @@ function renderHostPanel() {
   const block = document.getElementById('host-resource-block');
   if (!block || typeof echarts === 'undefined') return;
   const latest = (hist[hist.length - 1] || {}).metrics || {};
-  const TXT = cssVar('--text', '#e6edf3');
-  const MUT = cssVar('--text-muted', '#8b949e');
-  const BORD = cssVar('--border', '#30363d');
+  const TXT = cssVar('--text', '#F8F9FA');
+  const MUT = cssVar('--text-muted', '#94A3B8');
+  const BORD = cssVar('--border', '#2A3650');
   const times = hist.map(function (h) { return (h.ts || '').slice(11, 19); });
 
   // ── 数据源徽标 ──
@@ -14005,11 +14016,11 @@ function renderHostPanel() {
   const src = latest.host_collector_source;
   if (badge) {
     let txt, bg, fg;
-    if (src === 'ebpf') { txt = i18n('monitor.host_src_ebpf') || '内核级 eBPF'; bg = 'rgba(63,185,80,.18)'; fg = '#3fb950'; }
-    else if (src === 'psutil') { txt = i18n('monitor.host_src_psutil') || 'psutil 用户态'; bg = 'rgba(59,130,246,.18)'; fg = '#3b82f6'; }
-    else if (src === 'shell') { txt = i18n('monitor.host_src_shell') || 'Shell /proc 零依赖'; bg = 'rgba(59,130,246,.18)'; fg = '#3b82f6'; }
-    else if (src === 'unavailable') { txt = i18n('monitor.host_src_unavailable') || '宿主资源不可用'; bg = 'rgba(139,148,158,.18)'; fg = '#8b949e'; }
-    else { txt = i18n('monitor.host_src_none') || '暂无宿主数据'; bg = 'rgba(139,148,158,.12)'; fg = '#8b949e'; }
+    if (src === 'ebpf') { txt = i18n('monitor.host_src_ebpf') || '内核级 eBPF'; bg = 'rgba(63,185,80,.18)'; fg = '#00C8A0'; }
+    else if (src === 'psutil') { txt = i18n('monitor.host_src_psutil') || 'psutil 用户态'; bg = 'rgba(59,130,246,.18)'; fg = '#0A2A6E'; }
+    else if (src === 'shell') { txt = i18n('monitor.host_src_shell') || 'Shell /proc 零依赖'; bg = 'rgba(59,130,246,.18)'; fg = '#0A2A6E'; }
+    else if (src === 'unavailable') { txt = i18n('monitor.host_src_unavailable') || '宿主资源不可用'; bg = 'rgba(139,148,158,.18)'; fg = '#94A3B8'; }
+    else { txt = i18n('monitor.host_src_none') || '暂无宿主数据'; bg = 'rgba(139,148,158,.12)'; fg = '#94A3B8'; }
     badge.textContent = txt;
     badge.style.background = bg; badge.style.color = fg; badge.style.border = '1px solid ' + fg;
     badge.title = (src === 'unavailable' && latest.host_error)
@@ -14019,9 +14030,9 @@ function renderHostPanel() {
 
   // ── 基础资源图：CPU% / 内存% / Swap% / Load1 ──
   const baseDef = [
-    { key: 'host_cpu', name: 'CPU %', color: '#3b82f6' },
-    { key: 'host_mem', name: '内存 %', color: '#22c55e' },
-    { key: 'host_swap_pct', name: 'Swap %', color: '#f85149' },
+    { key: 'host_cpu', name: 'CPU %', color: '#0A2A6E' },
+    { key: 'host_mem', name: '内存 %', color: '#00C8A0' },
+    { key: 'host_swap_pct', name: 'Swap %', color: '#EF4444' },
     { key: 'host_load1', name: 'Load1', color: '#f59e0b' }
   ];
   const baseSeries = baseDef.map(function (d) {
@@ -14066,7 +14077,7 @@ function renderHostPanel() {
   if (ebpfCard) ebpfCard.style.display = hasEbpf ? '' : 'none';
   if (hasEbpf) {
     const eDef = [
-      { key: 'host_disk_latency_us_p99', name: 'IO p99 (µs)', color: '#a855f7', axis: 0 },
+      { key: 'host_disk_latency_us_p99', name: 'IO p99 (µs)', color: '#0A2A6E', axis: 0 },
       { key: 'host_disk_iops', name: 'IOPS', color: '#22d3ee', axis: 1 }
     ];
     const eSeries = eDef.map(function (d) {
@@ -14760,7 +14771,7 @@ async function loadProHealth() {
     const levelEl = document.getElementById('pro-health-level');
     levelEl.textContent = data.level.toUpperCase();
     levelEl.style.background = data.level === 'healthy' ? 'var(--accent)' :
-                             data.level === 'low' ? '#4caf50' :
+                             data.level === 'low' ? '#00C8A0' :
                              data.level === 'medium' ? 'var(--warn)' : 'var(--danger)';
     const res2 = await fetch('/api/pro/statistics');
     const data2 = await res2.json();
@@ -14846,7 +14857,7 @@ async function loadProHistory() {
     listEl.innerHTML = data.history.map(h => {
       const d = new Date(h.inspect_time);
       const dateStr = d.toLocaleString('zh-CN');
-      const scoreColor = h.health_score >= 86 ? 'var(--accent)' : h.health_score >= 70 ? '#4caf50' : h.health_score >= 50 ? 'var(--warn)' : 'var(--danger)';
+      const scoreColor = h.health_score >= 86 ? 'var(--accent)' : h.health_score >= 70 ? '#00C8A0' : h.health_score >= 50 ? 'var(--warn)' : 'var(--danger)';
       return `<div style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--surface2);border-radius:8px;margin-bottom:6px;">
         <div style="font-size:20px;font-weight:700;color:${scoreColor};min-width:40px;">${h.health_score||'--'}</div>
         <div style="flex:1;">
@@ -14938,7 +14949,7 @@ function renderMarkdown(text) {
   });
   
   // 2. 行内代码：`code`
-  text = text.replace(/`([^`]+)`/g, '<code style="background:rgba(76,175,80,0.1); color:#4caf50; padding:2px 6px; border-radius:4px; font-size:13px">$1</code>');
+  text = text.replace(/`([^`]+)`/g, '<code style="background:rgba(76,175,80,0.1); color:#00C8A0; padding:2px 6px; border-radius:4px; font-size:13px">$1</code>');
   
   // 2. 水平分割线：--- 或 *** 或 ___
   text = text.replace(/^(?:---|\*\*\*|___)\s*$/gm, '<hr style="border:none; border-top:1px solid var(--border); margin:12px 0;">');
@@ -15756,7 +15767,7 @@ function animateHealthRing(score) {
   fg.style.strokeDashoffset = offset;
   if (txt) txt.textContent = Math.round(score);
   if (score >= 90) fg.style.stroke = 'var(--accent)';
-  else if (score >= 70) fg.style.stroke = '#e3b341';
+  else if (score >= 70) fg.style.stroke = '#F59E0B';
   else fg.style.stroke = 'var(--danger)';
 }
 
@@ -16437,7 +16448,7 @@ async function deleteBackupHistory(recordId) {
   <div class="chat-header" style="position:relative">
     <span style="font-size:20px">🤖</span>
     <span class="chat-title" data-i18n="webui.chat_title">AI 巡检助手</span>
-    <span id="chat-mode-badge" class="chat-mode-badge" style="font-size:11px;padding:2px 8px;border-radius:10px;background:rgba(76,175,80,0.15);color:#4caf50;margin-left:8px;display:none">问答模式</span>
+    <span id="chat-mode-badge" class="chat-mode-badge" style="font-size:11px;padding:2px 8px;border-radius:10px;background:rgba(76,175,80,0.15);color:#00C8A0;margin-left:8px;display:none">问答模式</span>
     <button class="chat-close" onclick="clearChatSession()" title="清空对话" style="font-size:16px;color:var(--text-secondary);background:none;border:none;cursor:pointer;padding:4px 8px;margin-right:4px">🗑</button>
     <!-- 小屏幕关闭按钮 -->
     <button class="chat-close chat-panel-close" onclick="toggleAiChatPanel()" title="关闭" style="font-size:18px;display:none">✕</button>
@@ -17379,7 +17390,7 @@ async function deleteBackupHistory(recordId) {
     var barEl = document.getElementById('mon-conn-overview-highest-bar');
     if (highestPct > 80) barEl.style.background = 'linear-gradient(90deg,#ef4444,#dc2626)';
     else if (highestPct > 50) barEl.style.background = 'linear-gradient(90deg,#f97316,#ea580c)';
-    else barEl.style.background = 'linear-gradient(90deg,#22c55e,#16a34a)';
+    else barEl.style.background = 'linear-gradient(90deg,#00C8A0,#00C8A0)';
 
     // 最长空闲：设计稿显示分钟
     if (maxIdleDur > 0) {
@@ -17531,8 +17542,8 @@ async function deleteBackupHistory(recordId) {
       var type = guessDbType(s.source);
       var abbr = dbAbbr[type] || 'DB';
       var tagColor = {
-        mysql:'#60a5fa', pg:'#a78bfa', ivory:'#a78bfa', tidb:'#fb923c',
-        oracle:'#f87171', dm8:'#4ade80', sqlserver:'#60a5fa', default:'#94a3b8'
+        mysql:'#0A2A6E', pg:'#0A2A6E', ivory:'#0A2A6E', tidb:'#fb923c',
+        oracle:'#EF4444', dm8:'#00C8A0', sqlserver:'#0A2A6E', default:'#94a3b8'
       }[type] || '#94a3b8';
 
       var userHtml = '<span class="mon-session-tag" style="background:' + tagColor + '22;color:' + tagColor + '">' + abbr + '</span> '
@@ -17691,7 +17702,7 @@ async function deleteBackupHistory(recordId) {
           `DBCheck 将自动使用: <code>${data.using || data.available[0]}</code>`;
         el.style.background = 'rgba(76,175,80,0.08)';
         el.style.border = '1px solid rgba(76,175,80,0.3)';
-        el.style.color = '#4caf50';
+        el.style.color = '#00C8A0';
       } else {
         // 未安装 ODBC 驱动，根据系统架构和本地 MSI 情况给出提示
         let installHint = '';
@@ -17724,7 +17735,7 @@ async function deleteBackupHistory(recordId) {
         el.innerHTML = installHint;
         el.style.background = 'rgba(244,67,54,0.08)';
         el.style.border = '1px solid rgba(244,67,54,0.3)';
-        el.style.color = '#f44336';
+        el.style.color = '#EF4444';
       }
     } catch(e) {
       el.innerHTML = `❌ 检测失败: ${e.message}`;
@@ -17756,7 +17767,7 @@ async function deleteBackupHistory(recordId) {
           `路径: <code>${data.install_dir}</code>`;
         el.style.background = 'rgba(76,175,80,0.08)';
         el.style.border = '1px solid rgba(76,175,80,0.3)';
-        el.style.color = '#4caf50';
+        el.style.color = '#00C8A0';
       } else {
         el.innerHTML =
           `❌ <strong>Oracle Instant Client 未安装</strong><br/>` +
@@ -17764,13 +17775,13 @@ async function deleteBackupHistory(recordId) {
           `请点击上方"一键下载"按钮自动安装，或手动从 Oracle 官网下载后解压到 oracle_client/${data.platform}/ 目录。`;
         el.style.background = 'rgba(244,67,54,0.08)';
         el.style.border = '1px solid rgba(244,67,54,0.3)';
-        el.style.color = '#f44336';
+        el.style.color = '#EF4444';
       }
     } catch(e) {
       el.innerHTML = `❌ 检查失败: ${e.message}`;
       el.style.background = 'rgba(244,67,54,0.08)';
       el.style.border = '1px solid rgba(244,67,54,0.3)';
-      el.style.color = '#f44336';
+      el.style.color = '#EF4444';
     }
   }
 
@@ -17822,9 +17833,9 @@ async function deleteBackupHistory(recordId) {
 
       if (data.already_installed) {
         barEl.style.width = '100%';
-        barEl.style.background = 'linear-gradient(90deg, #4caf50, #66bb6a)';
+        barEl.style.background = 'linear-gradient(90deg, #00C8A0, #00C8A0)';
         msgEl.textContent = data.message;
-        msgEl.style.color = '#4caf50';
+        msgEl.style.color = '#00C8A0';
         restoreBtn();
         checkOracleClientStatus();
         return;
@@ -17832,9 +17843,9 @@ async function deleteBackupHistory(recordId) {
 
       if (!data.ok) {
         barEl.style.width = '0%';
-        barEl.style.background = 'linear-gradient(90deg, #f44336, #ef5350)';
+        barEl.style.background = 'linear-gradient(90deg, #EF4444, #EF4444)';
         msgEl.textContent = '❌ ' + (data.message || '下载失败');
-        msgEl.style.color = '#f44336';
+        msgEl.style.color = '#EF4444';
         restoreBtn();
         return;
       }
@@ -17865,9 +17876,9 @@ async function deleteBackupHistory(recordId) {
             _oracleDownloadPollTimer = null;
             barEl.classList.remove('progress-bar-animated');
             barEl.style.width = '100%';
-            barEl.style.background = 'linear-gradient(90deg, #4caf50, #66bb6a)';
+            barEl.style.background = 'linear-gradient(90deg, #00C8A0, #00C8A0)';
             msgEl.textContent = dlMsg || `✅ Oracle Instant Client ${statusData.version} 安装成功！`;
-            msgEl.style.color = '#4caf50';
+            msgEl.style.color = '#00C8A0';
             restoreBtn();
             checkOracleClientStatus();
             return;
@@ -17879,9 +17890,9 @@ async function deleteBackupHistory(recordId) {
             _oracleDownloadPollTimer = null;
             barEl.classList.remove('progress-bar-animated');
             barEl.style.width = '0%';
-            barEl.style.background = 'linear-gradient(90deg, #f44336, #ef5350)';
+            barEl.style.background = 'linear-gradient(90deg, #EF4444, #EF4444)';
             msgEl.textContent = '❌ ' + (dlMsg || dlError || '下载失败');
-            msgEl.style.color = '#f44336';
+            msgEl.style.color = '#EF4444';
             restoreBtn();
             return;
           }
@@ -17919,7 +17930,7 @@ async function deleteBackupHistory(recordId) {
 
     } catch(e) {
       msgEl.textContent = '❌ 启动下载失败: ' + e.message;
-      msgEl.style.color = '#f44336';
+      msgEl.style.color = '#EF4444';
       restoreBtn();
       if (_oracleDownloadPollTimer) {
         clearInterval(_oracleDownloadPollTimer);
@@ -17978,9 +17989,9 @@ async function deleteBackupHistory(recordId) {
 
       if (!data.ok) {
         barEl.style.width = '0%';
-        barEl.style.background = 'linear-gradient(90deg, #f44336, #ef5350)';
+        barEl.style.background = 'linear-gradient(90deg, #EF4444, #EF4444)';
         msgEl.textContent = '❌ ' + (data.message || '启动下载失败');
-        msgEl.style.color = '#f44336';
+        msgEl.style.color = '#EF4444';
         restoreBtn();
         return;
       }
@@ -18011,9 +18022,9 @@ async function deleteBackupHistory(recordId) {
             _allDriversDownloadPollTimer = null;
             barEl.classList.remove('progress-bar-animated');
             barEl.style.width = '100%';
-            barEl.style.background = 'linear-gradient(90deg, #4caf50, #66bb6a)';
+            barEl.style.background = 'linear-gradient(90deg, #00C8A0, #00C8A0)';
             msgEl.textContent = dlMsg || '✅ 所有驱动下载并安装成功！';
-            msgEl.style.color = '#4caf50';
+            msgEl.style.color = '#00C8A0';
             restoreBtn();
             checkOracleClientStatus();
             return;
@@ -18025,9 +18036,9 @@ async function deleteBackupHistory(recordId) {
             _allDriversDownloadPollTimer = null;
             barEl.classList.remove('progress-bar-animated');
             barEl.style.width = '0%';
-            barEl.style.background = 'linear-gradient(90deg, #f44336, #ef5350)';
+            barEl.style.background = 'linear-gradient(90deg, #EF4444, #EF4444)';
             msgEl.textContent = '❌ ' + (dlMsg || dlError || '下载失败');
-            msgEl.style.color = '#f44336';
+            msgEl.style.color = '#EF4444';
             restoreBtn();
             return;
           }
@@ -18065,7 +18076,7 @@ async function deleteBackupHistory(recordId) {
 
     } catch(e) {
       msgEl.textContent = '❌ 启动下载失败: ' + e.message;
-      msgEl.style.color = '#f44336';
+      msgEl.style.color = '#EF4444';
       restoreBtn();
       if (_allDriversDownloadPollTimer) {
         clearInterval(_allDriversDownloadPollTimer);
@@ -18149,7 +18160,7 @@ async function deleteBackupHistory(recordId) {
       if (allOk) {
         el.style.background = 'rgba(76,175,80,0.08)';
         el.style.border = '1px solid rgba(76,175,80,0.3)';
-        el.style.color = '#4caf50';
+        el.style.color = '#00C8A0';
       } else {
         el.style.background = 'rgba(255,152,0,0.08)';
         el.style.border = '1px solid rgba(255,152,0,0.3)';
@@ -18159,7 +18170,7 @@ async function deleteBackupHistory(recordId) {
       el.innerHTML = '❌ 检测失败: ' + e.message;
       el.style.background = 'rgba(244,67,54,0.08)';
       el.style.border = '1px solid rgba(244,67,54,0.3)';
-      el.style.color = '#f44336';
+      el.style.color = '#EF4444';
     }
   }
 
@@ -18182,7 +18193,7 @@ async function deleteBackupHistory(recordId) {
     box-shadow:0 24px 64px rgba(0,0,0,0.12), 0 4px 16px rgba(0,0,0,0.06);
   }
   .about-hero {
-    background:linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #a855f7 100%);
+    background:linear-gradient(135deg, #0A2A6E 0%, #0D1426 50%, #00C8A0 100%);
     padding:32px 32px 24px;position:relative;overflow:hidden;
   }
   .about-hero::before {
@@ -18200,6 +18211,8 @@ async function deleteBackupHistory(recordId) {
   }
   .about-logo {
     width:56px;height:56px;border-radius:14px;
+    background:transparent;padding:0;
+    object-fit:contain;display:block;
     box-shadow:0 4px 16px rgba(0,0,0,0.2);flex-shrink:0;
   }
   .about-hero-text h2 {
@@ -18272,14 +18285,14 @@ async function deleteBackupHistory(recordId) {
   }
   /* 监控状态指示器 */
   .mon-status-running { background:#34a853 !important; box-shadow:0 0 6px rgba(52,168,83,0.5); }
-  .mon-status-stopped { background:#ff6765 !important; }
+  .mon-status-stopped { background:#EF4444 !important; }
   .mon-status-unknown { background:#999 !important; }
 
   /* 严重度标签 */
   .mon-severity {
     display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;
   }
-  .mon-severity-critical { background:rgba(255,103,101,0.15);color:#ff6765; }
+  .mon-severity-critical { background:rgba(255,103,101,0.15);color:#EF4444; }
   .mon-severity-warning  { background:rgba(255,160,0,0.15);color:#ffa000; }
   .mon-severity-normal   { background:rgba(52,168,83,0.15);color:#34a853; }
 
@@ -18299,7 +18312,7 @@ async function deleteBackupHistory(recordId) {
   }
   .mon-bar-fill-low    { background:linear-gradient(90deg,#34a853,#5ecf6e); }
   .mon-bar-fill-medium { background:linear-gradient(90deg,#ffa000,#ffca28); }
-  .mon-bar-fill-high   { background:linear-gradient(90deg,#ff6765,#ff8a80); }
+  .mon-bar-fill-high   { background:linear-gradient(90deg,#EF4444,#ff8a80); }
 
   /* 热力图 */
   .mon-heatmap-table {
@@ -18334,19 +18347,19 @@ async function deleteBackupHistory(recordId) {
     display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;
     white-space:nowrap;
   }
-  .mon-tag-mysql     { background:rgba(59,130,246,0.12);color:#60a5fa; }
-  .mon-tag-pg        { background:rgba(139,92,246,0.12);color:#a78bfa; }
-  .mon-tag-ivory     { background:rgba(139,92,246,0.12);color:#a78bfa; }
+  .mon-tag-mysql     { background:rgba(59,130,246,0.12);color:#0A2A6E; }
+  .mon-tag-pg        { background:rgba(139,92,246,0.12);color:#0A2A6E; }
+  .mon-tag-ivory     { background:rgba(139,92,246,0.12);color:#0A2A6E; }
   .mon-tag-tidb      { background:rgba(249,115,22,0.12);color:#fb923c; }
-  .mon-tag-oracle    { background:rgba(239,68,68,0.12);color:#f87171; }
-  .mon-tag-dm8       { background:rgba(34,197,94,0.12);color:#4ade80; }
-  .mon-tag-sqlserver { background:rgba(59,130,246,0.12);color:#60a5fa; }
+  .mon-tag-oracle    { background:rgba(239,68,68,0.12);color:#EF4444; }
+  .mon-tag-dm8       { background:rgba(34,197,94,0.12);color:#00C8A0; }
+  .mon-tag-sqlserver { background:rgba(59,130,246,0.12);color:#0A2A6E; }
   .mon-tag-default   { background:rgba(148,163,184,0.12);color:#94a3b8; }
 
   /* 执行耗时颜色 */
-  .mon-time-high   { color:#f87171;font-weight:600; }
+  .mon-time-high   { color:#EF4444;font-weight:600; }
   .mon-time-med    { color:#fb923c;font-weight:600; }
-  .mon-time-low    { color:#4ade80;font-weight:600; }
+  .mon-time-low    { color:#00C8A0;font-weight:600; }
 
   /* 严重度圆点 */
   .mon-severity-dot {
@@ -18355,12 +18368,12 @@ async function deleteBackupHistory(recordId) {
   .mon-severity-dot::before {
     content:'';width:7px;height:7px;border-radius:50%;display:inline-block;
   }
-  .mon-sev-high   { color:#f87171; }
-  .mon-sev-high::before   { background:#f87171; }
+  .mon-sev-high   { color:#EF4444; }
+  .mon-sev-high::before   { background:#EF4444; }
   .mon-sev-medium { color:#fb923c; }
   .mon-sev-medium::before { background:#fb923c; }
-  .mon-sev-low    { color:#4ade80; }
-  .mon-sev-low::before    { background:#4ade80; }
+  .mon-sev-low    { color:#00C8A0; }
+  .mon-sev-low::before    { background:#00C8A0; }
 
   /* 监控筛选栏 */
   .mon-filter-bar {
@@ -18390,9 +18403,9 @@ async function deleteBackupHistory(recordId) {
   }
   .mon-ctrl-btn:hover { transform:translateY(-1px);box-shadow:0 2px 8px rgba(0,0,0,.12); }
   .mon-ctrl-start {
-    background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;border:none;
+    background:linear-gradient(135deg,#00C8A0,#00C8A0);color:#fff;border:none;
   }
-  .mon-ctrl-start:hover { background:linear-gradient(135deg,#16a34a,#15803d); }
+  .mon-ctrl-start:hover { background:linear-gradient(135deg,#00C8A0,#15803d); }
   .mon-ctrl-stop {
     background:linear-gradient(135deg,#ef4444,#dc2626);color:#fff;border:none;
   }
@@ -18403,13 +18416,13 @@ async function deleteBackupHistory(recordId) {
   }
 
   .mon-filter-btn {
-    background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;border:none;
+    background:linear-gradient(135deg,#0A2A6E,#0A2A6E);color:#fff;border:none;
     padding:6px 16px;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;
     transition:all .2s;
   }
   .mon-filter-btn:hover { opacity:.9;transform:translateY(-1px); }
   .mon-export-link {
-    font-size:12px;color:#60a5fa;text-decoration:none;margin-left:auto;
+    font-size:12px;color:#0A2A6E;text-decoration:none;margin-left:auto;
     cursor:pointer;
   }
   .mon-export-link:hover { text-decoration:underline; }
@@ -18422,20 +18435,20 @@ async function deleteBackupHistory(recordId) {
   .mon-refresh-dot {
     width:7px;height:7px;border-radius:50%;
   }
-  .mon-refresh-dot.running { background:#4ade80;box-shadow:0 0 6px #4ade80; }
+  .mon-refresh-dot.running { background:#00C8A0;box-shadow:0 0 6px #00C8A0; }
   .mon-refresh-dot.stopped { background:#9ca3af; }
 
   /* 监控卡片数字颜色 */
-  .mon-count-blue  { color:#60a5fa !important; }
-  .mon-count-red   { color:#f87171 !important; }
-  .mon-count-green { color:#4ade80 !important; }
+  .mon-count-blue  { color:#0A2A6E !important; }
+  .mon-count-red   { color:#EF4444 !important; }
+  .mon-count-green { color:#00C8A0 !important; }
   .mon-count-orange{ color:#fb923c !important; }
   .mon-count-sub {
     font-size:11px;color:var(--text-muted);margin-top:4px;
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   }
-  .mon-count-trend-up   { color:#f87171; }
-  .mon-count-trend-down { color:#4ade80; }
+  .mon-count-trend-up   { color:#EF4444; }
+  .mon-count-trend-down { color:#00C8A0; }
 
   /* 连接页面两栏布局 */
   .mon-conn-layout {
@@ -18460,9 +18473,9 @@ async function deleteBackupHistory(recordId) {
   .mon-conn-bar-fill {
     height:100%;border-radius:3px;transition:width .4s ease;
   }
-  .mon-conn-bar-fill.low    { background:#4ade80; }
+  .mon-conn-bar-fill.low    { background:#00C8A0; }
   .mon-conn-bar-fill.medium { background:#fbbf24; }
-  .mon-conn-bar-fill.high   { background:#f87171; }
+  .mon-conn-bar-fill.high   { background:#EF4444; }
   .mon-conn-bar-num {
     width:70px;text-align:left;flex-shrink:0;color:var(--text-muted);font-size:11px;font-weight:500;
   }
@@ -18486,11 +18499,11 @@ async function deleteBackupHistory(recordId) {
     display:flex;align-items:center;justify-content:center;
     font-size:10px;font-weight:500;color:var(--text);
   }
-  .mon-heatmap-cell.h0 { background:rgba(74,222,128,0.12);color:#4ade80; }
-  .mon-heatmap-cell.h1 { background:rgba(74,222,128,0.30);color:#4ade80; }
+  .mon-heatmap-cell.h0 { background:rgba(74,222,128,0.12);color:#00C8A0; }
+  .mon-heatmap-cell.h1 { background:rgba(74,222,128,0.30);color:#00C8A0; }
   .mon-heatmap-cell.h2 { background:rgba(251,191,36,0.30);color:#fbbf24; }
   .mon-heatmap-cell.h3 { background:rgba(249,115,22,0.35);color:#fb923c; }
-  .mon-heatmap-cell.h4 { background:rgba(248,113,113,0.40);color:#f87171; }
+  .mon-heatmap-cell.h4 { background:rgba(248,113,113,0.40);color:#EF4444; }
   .mon-heatmap-legend {
     display:flex;gap:12px;justify-content:center;margin-top:10px;font-size:11px;color:var(--text-muted);
   }
@@ -18502,10 +18515,10 @@ async function deleteBackupHistory(recordId) {
   .mon-session-table td { font-size:12px;padding:6px 8px; }
   .mon-session-tag {
     display:inline-block;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:500;
-    background:rgba(59,130,246,0.12);color:#60a5fa;
+    background:rgba(59,130,246,0.12);color:#0A2A6E;
   }
-  .mon-state-executing { color:#4ade80;font-weight:500; }
-  .mon-state-locked    { color:#f87171;font-weight:500; }
+  .mon-state-executing { color:#00C8A0;font-weight:500; }
+  .mon-state-locked    { color:#EF4444;font-weight:500; }
   .mon-state-sleep     { color:#94a3b8; }
   .mon-state-idle      { color:#94a3b8; }
 </style>
@@ -18545,7 +18558,7 @@ async function deleteBackupHistory(recordId) {
         <span class="about-db-chip"><img src="/tidb.png" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='inline'" style="width:16px;height:16px;object-fit:contain"><span class="db-emoji" style="display:none;">🌊</span> TiDB</span>
         <span class="about-db-chip"><img src="/ivorysql.png" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='inline'" style="width:16px;height:16px;object-fit:contain"><span class="db-emoji" style="display:none;">🦣</span> IvorySQL</span>
         <span class="about-db-chip"><img src="/yashandb.png" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='inline'" style="width:16px;height:16px;object-fit:contain"><span class="db-emoji" style="display:none;">🗻</span> YashanDB</span>
-        <span class="about-db-chip"><img src="/oceanbase.png" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='inline'" style="width:16px;height:16px;object-fit:contain"><span class="db-emoji" style="display:none;">🐋</span> OceanBase <span style="font-size:10px;background:#4caf50;color:#fff;padding:1px 5px;border-radius:3px;font-weight:600">MySQL</span></span>
+        <span class="about-db-chip"><img src="/oceanbase.png" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='inline'" style="width:16px;height:16px;object-fit:contain"><span class="db-emoji" style="display:none;">🐋</span> OceanBase <span style="font-size:10px;background:#00C8A0;color:#fff;padding:1px 5px;border-radius:3px;font-weight:600">MySQL</span></span>
       </div>
 
       <!-- Apache License 2.0 开源协议（Base64 encoded to prevent static search） -->
@@ -19928,7 +19941,7 @@ function mkdirRemote() {
       row.innerHTML =
         '<span style="font-size:11px;color:var(--text-muted);width:20px;">' + (idx + 1) + '.</span>' +
         '<input type="text" value="' + url + '" style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface2);color:var(--text);" placeholder="https://...">' +
-        '<button onclick="removeMirrorUrl(' + idx + ')" style="padding:4px 8px;border:none;background:rgba(244,67,54,0.1);color:#f44336;border-radius:6px;cursor:pointer;font-size:12px;">✕</button>';
+        '<button onclick="removeMirrorUrl(' + idx + ')" style="padding:4px 8px;border:none;background:rgba(244,67,54,0.1);color:#EF4444;border-radius:6px;cursor:pointer;font-size:12px;">✕</button>';
       list.appendChild(row);
     });
   }
@@ -19951,7 +19964,7 @@ function mkdirRemote() {
     row.innerHTML =
       '<span style="font-size:11px;color:var(--text-muted);width:20px;">' + (list.children.length + 1) + '.</span>' +
       '<input type="text" value="" style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface2);color:var(--text);" placeholder="https://...">' +
-      '<button onclick="this.parentElement.remove()" style="padding:4px 8px;border:none;background:rgba(244,67,54,0.1);color:#f44336;border-radius:6px;cursor:pointer;font-size:12px;">✕</button>';
+      '<button onclick="this.parentElement.remove()" style="padding:4px 8px;border:none;background:rgba(244,67,54,0.1);color:#EF4444;border-radius:6px;cursor:pointer;font-size:12px;">✕</button>';
     list.appendChild(row);
   }
 
@@ -19973,7 +19986,7 @@ function mkdirRemote() {
     if (urls.length === 0) {
       statusEl.style.display = 'block';
       statusEl.style.background = 'rgba(244,67,54,0.08)';
-      statusEl.style.color = '#f44336';
+      statusEl.style.color = '#EF4444';
       statusEl.textContent = '❌ 请至少添加一个镜像地址';
       return;
     }
@@ -19987,17 +20000,17 @@ function mkdirRemote() {
       statusEl.style.display = 'block';
       if (data.ok) {
         statusEl.style.background = 'rgba(76,175,80,0.08)';
-        statusEl.style.color = '#4caf50';
+        statusEl.style.color = '#00C8A0';
         statusEl.textContent = '✅ ' + (data.msg || '保存成功');
       } else {
         statusEl.style.background = 'rgba(244,67,54,0.08)';
-        statusEl.style.color = '#f44336';
+        statusEl.style.color = '#EF4444';
         statusEl.textContent = '❌ ' + (data.error || '保存失败');
       }
     } catch(e) {
       statusEl.style.display = 'block';
       statusEl.style.background = 'rgba(244,67,54,0.08)';
-      statusEl.style.color = '#f44336';
+      statusEl.style.color = '#EF4444';
       statusEl.textContent = '❌ 保存失败: ' + e.message;
     }
   }
@@ -20011,19 +20024,19 @@ function mkdirRemote() {
       statusEl.style.display = 'block';
       if (data.ok) {
         statusEl.style.background = 'rgba(76,175,80,0.08)';
-        statusEl.style.color = '#4caf50';
+        statusEl.style.color = '#00C8A0';
         statusEl.textContent = '✅ ' + (data.msg || '已恢复默认');
         renderMirrorUrls(data.urls || []);
       } else {
         statusEl.style.background = 'rgba(244,67,54,0.08)';
-        statusEl.style.color = '#f44336';
+        statusEl.style.color = '#EF4444';
         statusEl.textContent = '❌ ' + (data.error || '恢复失败');
       }
     } catch(e) {
       const statusEl = document.getElementById('mirror-settings-status');
       statusEl.style.display = 'block';
       statusEl.style.background = 'rgba(244,67,54,0.08)';
-      statusEl.style.color = '#f44336';
+      statusEl.style.color = '#EF4444';
       statusEl.textContent = '❌ 恢复失败: ' + e.message;
     }
   }
@@ -20039,16 +20052,16 @@ function mkdirRemote() {
       const data = await res.json();
       if (data.ok) {
         statusEl.style.background = 'rgba(76,175,80,0.08)';
-        statusEl.style.color = '#4caf50';
+        statusEl.style.color = '#00C8A0';
         statusEl.textContent = '✅ ' + data.message;
       } else {
         statusEl.style.background = 'rgba(244,67,54,0.08)';
-        statusEl.style.color = '#f44336';
+        statusEl.style.color = '#EF4444';
         statusEl.textContent = '❌ ' + (data.message || data.error || '保存失败');
       }
     } catch(e) {
       statusEl.style.background = 'rgba(244,67,54,0.08)';
-      statusEl.style.color = '#f44336';
+      statusEl.style.color = '#EF4444';
       statusEl.textContent = '❌ 保存失败: ' + e.message;
     }
   }
@@ -20082,7 +20095,7 @@ function mkdirRemote() {
 
     // 分类标签映射（字号 10px，与标签行统一，使用 .mkt-tag 三态视觉）
     const categoryTags = {
-      'db': '<span class="mkt-tag" style="color:#1565c0;">' + (i18n('plugin_market.badge_db') || '📊 数据库') + '</span>',
+      'db': '<span class="mkt-tag" style="color:#0A2A6E;">' + (i18n('plugin_market.badge_db') || '📊 数据库') + '</span>',
       'rule': '<span class="mkt-tag" style="color:#e65100;">' + (i18n('plugin_market.badge_rule') || '📋 规则') + '</span>',
     };
 
@@ -20094,9 +20107,9 @@ function mkdirRemote() {
 
       // 官方/社区/已验证 标签
       const badge = p.author_type === 'official'
-        ? '<span class="mkt-tag" style="color:#2e7d32;">' + (i18n('plugin_market.badge_official') || '✅ 官方') + '</span>'
+        ? '<span class="mkt-tag" style="color:#00A884;">' + (i18n('plugin_market.badge_official') || '✅ 官方') + '</span>'
         : (p.verified
-          ? '<span class="mkt-tag" style="color:#1565c0;">' + (i18n('plugin_market.badge_verified') || '✅ 已验证') + '</span>'
+          ? '<span class="mkt-tag" style="color:#0A2A6E;">' + (i18n('plugin_market.badge_verified') || '✅ 已验证') + '</span>'
           : '<span class="mkt-tag" style="color:#e65100;">' + (i18n('plugin_market.badge_community') || '👤 社区') + '</span>');
       // 分类标签
       const catTag = categoryTags[p.category] || '';
@@ -20106,18 +20119,18 @@ function mkdirRemote() {
       const typeTag = p.type === 'rule'
         ? '<span class="mkt-tag" style="color:#e65100;">📋 规则</span>'
         : (p.type === 'inspection'
-          ? '<span class="mkt-tag" style="color:#1565c0;">🔍 巡检</span>'
+          ? '<span class="mkt-tag" style="color:#0A2A6E;">🔍 巡检</span>'
           : '');
 
       // 左侧色条（强化视觉区分：规则=橙、巡检=蓝）
       const typeBorder = p.type === 'rule'
         ? 'border-left:4px solid #e65100;'
-        : (p.type === 'inspection' ? 'border-left:4px solid #1565c0;' : '');
+        : (p.type === 'inspection' ? 'border-left:4px solid #0A2A6E;' : '');
 
       // 精选标签
       // 精选标签
       const featuredTag = p.featured
-        ? '<span class="mkt-tag" style="color:#c62828;">' + (i18n('plugin_market.badge_featured') || '🔥 精选') + '</span>'
+        ? '<span class="mkt-tag" style="color:#DC2626;">' + (i18n('plugin_market.badge_featured') || '🔥 精选') + '</span>'
         : '';
 
       // 标签行（名称下方，字号 10px）：官方/社区/已验证 + 分类 + 类型 + 精选
@@ -20129,7 +20142,7 @@ function mkdirRemote() {
       if (p.source === 'local') {
         sourceTag = '<span class="mkt-tag" style="color:#7b1fa2;">' + (i18n('plugin_market.badge_local') || '📁 本地') + '</span>';
       } else if (p.source === 'online') {
-        sourceTag = '<span class="mkt-tag" style="color:#2e7d32;">' + (i18n('plugin_market.badge_online') || '🌐 线上') + '</span>';
+        sourceTag = '<span class="mkt-tag" style="color:#00A884;">' + (i18n('plugin_market.badge_online') || '🌐 线上') + '</span>';
       }
 
       // 按钮样式优化：已安装显示实心绿徽章 + 独立卸载按钮；未安装显示蓝色主按钮
@@ -20164,13 +20177,13 @@ function mkdirRemote() {
       
       // 分类标签（已安装不区分本地/线上，都在本地了）
       const categoryTag = (cat) => cat === 'db'
-        ? '<span class="mkt-tag" style="color:#1565c0;">' + (i18n('plugin_market.badge_db') || '📊 数据库') + '</span>'
+        ? '<span class="mkt-tag" style="color:#0A2A6E;">' + (i18n('plugin_market.badge_db') || '📊 数据库') + '</span>'
         : (cat === 'rule' ? '<span class="mkt-tag" style="color:#e65100;">' + (i18n('plugin_market.badge_rule') || '📋 规则') + '</span>' : '');
 
       // 类型标签（基于可靠字段 pp.type）：规则=橙、巡检=蓝
       const installedTypeTag = (t) => t === 'rule'
         ? '<span class="mkt-tag" style="color:#e65100;">📋 规则</span>'
-        : (t === 'inspection' ? '<span class="mkt-tag" style="color:#1565c0;">🔍 巡检</span>' : '');
+        : (t === 'inspection' ? '<span class="mkt-tag" style="color:#0A2A6E;">🔍 巡检</span>' : '');
 
       el.innerHTML = p.map(pp =>
         '<span style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:4px 10px;font-size:12px;display:inline-flex;align-items:center;gap:6px;">'+

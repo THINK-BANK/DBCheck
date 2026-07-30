@@ -3,87 +3,275 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DBCheck - 用户登录</title>
+    <title>DBCheck - Login</title>
     <style>
-        /* ─── 动态背景 ─── */
+        /* ─── 基础重置 ─── */
         * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --c-navy: #0A2A6E;
+            --c-blue: #4A9FD8;
+            --c-dark-bg: #0D1426;
+            --c-light-bg: #F8F9FA;
+            --c-green: #00C8A0;
+        }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans SC', sans-serif;
             min-height: 100vh;
+            background: var(--c-dark-bg);
+            color: #fff;
+            overflow-x: hidden;
+        }
+        html[data-theme="light"] body {
+            background: var(--c-light-bg);
+            color: #1e293b;
+        }
+
+        /* ─── 整体布局：左右分栏 ─── */
+        .login-container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* ─── 左侧品牌展示区 ─── */
+        .brand-panel {
+            flex: 0 0 50%;
+            position: relative;
+            background: linear-gradient(160deg, #0A2A6E 0%, #15388A 40%, #4A9FD8 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 60px 50px;
+            overflow: hidden;
+        }
+
+        /* 品牌区装饰光晕 */
+        .brand-panel::before {
+            content: '';
+            position: absolute;
+            width: 500px;
+            height: 500px;
+            border-radius: 50%;
+            background: rgba(74, 159, 216, 0.25);
+            filter: blur(80px);
+            top: 10%;
+            left: 30%;
+            animation: brandGlow 14s ease-in-out infinite alternate;
+        }
+        .brand-panel::after {
+            content: '';
+            position: absolute;
+            width: 400px;
+            height: 400px;
+            border-radius: 50%;
+            background: rgba(0, 200, 160, 0.15);
+            filter: blur(90px);
+            bottom: 5%;
+            right: 10%;
+            animation: brandGlow 18s ease-in-out infinite alternate-reverse;
+        }
+        @keyframes brandGlow {
+            0%   { transform: translate(0, 0) scale(1); }
+            100% { transform: translate(30px, -20px) scale(1.15); }
+        }
+
+        /* 网格纹理 */
+        .brand-grid {
+            position: absolute;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
+            background-size: 50px 50px;
+            mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 20%, transparent 100%);
+            -webkit-mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 20%, transparent 100%);
+            pointer-events: none;
+        }
+
+        .brand-content {
+            position: relative;
+            z-index: 2;
+            text-align: center;
+            max-width: 420px;
+            width: 100%;
+            animation: brandEntry 0.8s cubic-bezier(0.16,1,0.3,1) both;
+        }
+        @keyframes brandEntry {
+            from { opacity: 0; transform: translateY(24px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        /* 吉祥物 */
+        .mascot-wrap {
+            position: relative;
+            width: 280px;
+            height: 280px;
+            margin: 0 auto 20px;
+        }
+        .mascot-wrap::before {
+            content: '';
+            position: absolute;
+            inset: -20px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(0,200,160,0.2) 0%, transparent 70%);
+            animation: mascotBreath 3s ease-in-out infinite;
+        }
+        @keyframes mascotBreath {
+            0%, 100% { transform: scale(1); opacity: 0.6; }
+            50%      { transform: scale(1.1); opacity: 1; }
+        }
+        .mascot-img {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            filter: drop-shadow(0 12px 40px rgba(0,0,0,0.4));
+            animation: mascotFloat 5s ease-in-out infinite;
+        }
+        @keyframes mascotFloat {
+            0%, 100% { transform: translateY(0); }
+            50%      { transform: translateY(-12px); }
+        }
+
+        /* 吉祥物徽章 */
+        .mascot-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 16px;
+            background: rgba(255,255,255,0.12);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 20px;
+            font-size: 12px;
+            color: rgba(255,255,255,0.9);
+            margin-bottom: 18px;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+        .mascot-badge .dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--c-green);
+            animation: dotPulse 2s ease-in-out infinite;
+        }
+        @keyframes dotPulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(0,200,160,0.6); }
+            50%      { box-shadow: 0 0 0 6px rgba(0,200,160,0); }
+        }
+
+        /* Logo + 产品名 */
+        .brand-logo-row {
             display: flex;
             align-items: center;
             justify-content: center;
-            background: linear-gradient(160deg, #0a0a1a 0%, #12122e 50%, #1a1040 100%);
-            position: relative;
-            overflow: hidden;
+            gap: 14px;
+            margin-bottom: 10px;
         }
-        html[data-theme="light"] body {
-            background: linear-gradient(160deg, #f0f4ff 0%, #e8ecff 50%, #f5f0ff 100%);
+        .brand-logo {
+            width: 52px;
+            height: 52px;
+            border-radius: 14px;
+            object-fit: contain;
+        }
+        .brand-name {
+            font-size: 34px;
+            font-weight: 800;
+            letter-spacing: -1px;
+            color: #fff;
         }
 
-        .bg-glow {
-            position: fixed;
+        /* Slogan */
+        .brand-slogan {
+            font-size: 14px;
+            color: rgba(255,255,255,0.75);
+            letter-spacing: 1px;
+            margin-bottom: 36px;
+        }
+
+        /* 特性亮点 */
+        .features {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            text-align: left;
+        }
+        .feature-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+            padding: 14px 18px;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 14px;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            transition: transform 0.3s, background 0.3s;
+        }
+        .feature-item:hover {
+            transform: translateX(6px);
+            background: rgba(255,255,255,0.14);
+        }
+        .feature-icon {
+            flex-shrink: 0;
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            background: rgba(0,200,160,0.15);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--c-green);
+        }
+        .feature-icon svg { width: 22px; height: 22px; }
+        .feature-text { flex: 1; }
+        .feature-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 2px;
+        }
+        .feature-desc {
+            font-size: 12px;
+            color: rgba(255,255,255,0.6);
+        }
+
+        /* ─── 右侧登录表单区 ─── */
+        .form-panel {
+            flex: 0 0 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 30px;
+            position: relative;
+        }
+
+        /* 右侧装饰光晕 */
+        .form-panel::before {
+            content: '';
+            position: absolute;
+            width: 300px;
+            height: 300px;
             border-radius: 50%;
-            filter: blur(100px);
-            opacity: 0.35;
-            z-index: 0;
-            animation: glowFloat 18s ease-in-out infinite alternate;
+            background: rgba(74, 159, 216, 0.08);
+            filter: blur(80px);
+            top: 15%;
+            right: -10%;
             pointer-events: none;
         }
-        .bg-glow.g1 {
-            width: 600px; height: 600px;
-            background: #6c5ce7;
-            top: -200px; left: -100px;
-        }
-        .bg-glow.g2 {
-            width: 500px; height: 500px;
-            background: #0984e3;
-            bottom: -150px; right: -100px;
-            animation-delay: -6s; animation-duration: 22s;
-        }
-        .bg-glow.g3 {
-            width: 350px; height: 350px;
-            background: #e84393;
-            top: 40%; left: 60%;
-            animation-delay: -12s; animation-duration: 25s;
-            opacity: 0.2;
+        html[data-theme="light"] .form-panel::before {
+            background: rgba(10, 42, 110, 0.06);
         }
 
-        @keyframes glowFloat {
-            0%   { transform: translate(0, 0) scale(1); }
-            33%  { transform: translate(40px, -30px) scale(1.08); }
-            66%  { transform: translate(-20px, 25px) scale(0.95); }
-            100% { transform: translate(15px, -10px) scale(1.03); }
-        }
-
-        .bg-grid {
-            position: fixed;
-            inset: 0;
-            z-index: 0;
-            background-image:
-                linear-gradient(rgba(108,92,231,0.04) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(108,92,231,0.04) 1px, transparent 1px);
-            background-size: 60px 60px;
-            mask-image: radial-gradient(ellipse 70% 70% at 50% 50%, black 30%, transparent 100%);
-            -webkit-mask-image: radial-gradient(ellipse 70% 70% at 50% 50%, black 30%, transparent 100%);
-            pointer-events: none;
-        }
-
-        /* ─── 登录卡片 ─── */
-        .login-wrap {
-            position: relative;
-            z-index: 1;
-            animation: cardEntry 0.7s cubic-bezier(0.16,1,0.3,1) both;
-        }
-        @keyframes cardEntry {
-            from { opacity: 0; transform: translateY(32px) scale(0.96); }
-            to   { opacity: 1; transform: translateY(0) scale(1); }
-        }
-
+        /* 登录卡片 */
         .login-card {
             position: relative;
-            width: 400px;
-            padding: 40px 36px 36px;
+            width: 100%;
+            max-width: 400px;
+            padding: 40px 36px 32px;
             background: rgba(255,255,255,0.04);
             border: 1px solid rgba(255,255,255,0.08);
             border-radius: 22px;
@@ -93,13 +281,17 @@
                 0 8px 32px rgba(0,0,0,0.25),
                 0 2px 8px rgba(0,0,0,0.15),
                 inset 0 1px 0 rgba(255,255,255,0.06);
-            overflow: hidden;
+            animation: cardEntry 0.7s cubic-bezier(0.16,1,0.3,1) both;
+        }
+        @keyframes cardEntry {
+            from { opacity: 0; transform: translateY(28px) scale(0.96); }
+            to   { opacity: 1; transform: translateY(0) scale(1); }
         }
         html[data-theme="light"] .login-card {
             background: rgba(255,255,255,0.92);
-            border: 1px solid rgba(108,92,231,0.12);
+            border: 1px solid rgba(10,42,110,0.1);
             box-shadow:
-                0 20px 60px rgba(108,92,231,0.12),
+                0 20px 60px rgba(10,42,110,0.1),
                 0 4px 16px rgba(0,0,0,0.06);
         }
 
@@ -108,65 +300,28 @@
             position: absolute;
             top: 0; left: 0; right: 0;
             height: 2px;
-            background: linear-gradient(90deg, transparent, #6c5ce7, #a29bfe, transparent);
+            background: linear-gradient(90deg, transparent, var(--c-navy), var(--c-blue), transparent);
             opacity: 0.7;
+            border-radius: 22px 22px 0 0;
         }
 
-        /* ─── Logo 区域 ─── */
-        .logo-area {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            margin-bottom: 32px;
-        }
-
-        .logo-ring {
-            width: 88px;
-            height: 88px;
-            border-radius: 22px;
-            margin-bottom: 20px;
-            animation: ringPulse 3s ease-in-out infinite;
-        }
-        @keyframes ringPulse {
-            0%, 100% { filter: drop-shadow(0 0 12px rgba(108,92,231,0.5)) drop-shadow(0 0 28px rgba(108,92,231,0.25)); }
-            50%       { filter: drop-shadow(0 0 20px rgba(108,92,231,0.7)) drop-shadow(0 0 40px rgba(162,155,254,0.35)); }
-        }
-
-        .logo-img {
-            width: 82px;
-            height: 82px;
-            border-radius: 20px;
-            object-fit: contain;
-            display: block;
-        }
-
-        .login-title {
+        /* 欢迎标题 */
+        .welcome-title {
             font-size: 26px;
             font-weight: 800;
             letter-spacing: -0.5px;
-            background: linear-gradient(135deg, #fff 0%, #a29bfe 50%, #6c5ce7 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
             margin-bottom: 6px;
-            text-align: center;
+            color: #fff;
         }
-        html[data-theme="light"] .login-title {
-            background: linear-gradient(135deg, #1e293b 0%, #6c5ce7 100%);
-            -webkit-background-clip: text;
-            background-clip: text;
+        html[data-theme="light"] .welcome-title {
+            color: #0A2A6E;
         }
-
-        .login-subtitle {
-            font-size: 12.5px;
+        .welcome-desc {
+            font-size: 13px;
+            margin-bottom: 30px;
             color: rgba(255,255,255,0.45);
-            letter-spacing: 1.5px;
-            text-transform: uppercase;
-            font-weight: 500;
-            text-align: center;
-            margin-bottom: 32px;
         }
-        html[data-theme="light"] .login-subtitle {
+        html[data-theme="light"] .welcome-desc {
             color: #94a3b8;
         }
 
@@ -175,7 +330,6 @@
             margin-bottom: 18px;
             position: relative;
         }
-
         .form-label {
             display: block;
             font-size: 11px;
@@ -185,9 +339,7 @@
             letter-spacing: 0.5px;
             text-transform: uppercase;
         }
-        html[data-theme="light"] .form-label {
-            color: #64748b;
-        }
+        html[data-theme="light"] .form-label { color: #64748b; }
 
         .form-input {
             width: 100%;
@@ -207,11 +359,16 @@
             color: #1e293b;
         }
         .form-input:focus {
-            border-color: #6c5ce7;
-            background: rgba(108,92,231,0.06);
-            box-shadow: 0 0 0 3px rgba(108,92,231,0.1), inset 0 1px 4px rgba(108,92,231,0.05);
+            border-color: var(--c-blue);
+            background: rgba(74,159,216,0.06);
+            box-shadow: 0 0 0 3px rgba(74,159,216,0.12), inset 0 1px 4px rgba(74,159,216,0.05);
         }
-        .form-input::placeholder { color: rgba(255,255,255,0.2); }
+        html[data-theme="light"] .form-input:focus {
+            border-color: var(--c-navy);
+            background: rgba(10,42,110,0.04);
+            box-shadow: 0 0 0 3px rgba(10,42,110,0.08);
+        }
+        .form-input::placeholder { color: rgba(255,255,255,0.25); }
         html[data-theme="light"] .form-input::placeholder { color: #94a3b8; }
 
         .input-icon {
@@ -226,7 +383,8 @@
             transition: color 0.25s;
             margin-top: 10px;
         }
-        .form-group:focus-within .input-icon { color: #6c5ce7; }
+        .form-group:focus-within .input-icon { color: var(--c-blue); }
+        html[data-theme="light"] .form-group:focus-within .input-icon { color: var(--c-navy); }
 
         .pwd-toggle {
             position: absolute;
@@ -245,9 +403,14 @@
             transition: color 0.25s, background 0.25s;
             margin-top: 10px;
         }
+        html[data-theme="light"] .pwd-toggle { color: #94a3b8; }
         .pwd-toggle:hover {
-            color: #6c5ce7;
-            background: rgba(108,92,231,0.08);
+            color: var(--c-blue);
+            background: rgba(74,159,216,0.08);
+        }
+        html[data-theme="light"] .pwd-toggle:hover {
+            color: var(--c-navy);
+            background: rgba(10,42,110,0.06);
         }
 
         /* ─── 登录按钮 ─── */
@@ -255,7 +418,7 @@
             width: 100%;
             padding: 14px;
             margin-top: 6px;
-            background: linear-gradient(135deg, #6c5ce7 0%, #a29bfe 50%, #6c5ce7 100%);
+            background: linear-gradient(135deg, #0A2A6E 0%, #4A9FD8 100%);
             background-size: 200% 200%;
             border: none;
             border-radius: 14px;
@@ -271,7 +434,7 @@
         }
         @keyframes btnBgShift {
             0%, 100% { background-position: 0% 50%; }
-            50%       { background-position: 100% 50%; }
+            50%      { background-position: 100% 50%; }
         }
         .login-btn::before {
             content: '';
@@ -283,12 +446,13 @@
         }
         .login-btn:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(108,92,231,0.4), 0 2px 8px rgba(108,92,231,0.2);
+            box-shadow: 0 8px 25px rgba(10,42,110,0.4), 0 2px 8px rgba(74,159,216,0.2);
         }
         .login-btn:hover::before { opacity: 1; }
         .login-btn:active { transform: translateY(0) scale(0.98); }
 
-        .login-btn.loading { pointer-events: none; opacity: 0.75; }
+        .login-btn.loading { pointer-events: none; opacity: 0.85; }
+        .login-btn.loading .btn-text { opacity: 0; }
         .login-btn.loading::after {
             content: '';
             position: absolute;
@@ -301,6 +465,19 @@
             animation: loginSpin 0.6s linear infinite;
         }
         @keyframes loginSpin { to { transform: rotate(360deg); } }
+
+        /* 涟漪效果 */
+        .ripple {
+            position: absolute;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.35);
+            transform: scale(0);
+            animation: rippleAnim 0.6s ease-out;
+            pointer-events: none;
+        }
+        @keyframes rippleAnim {
+            to { transform: scale(4); opacity: 0; }
+        }
 
         /* ─── 错误提示 ─── */
         .login-error {
@@ -330,140 +507,403 @@
             80%     { transform: translateX(5px); }
         }
 
-        /* ─── 底部版本信息 ─── */
-        .login-footer {
-            text-align: center;
-            margin-top: 24px;
-            font-size: 11px;
-            color: rgba(255,255,255,0.5);
-        }
-        html[data-theme="light"] .login-footer {
-            color: #94a3b8;
-            opacity: 0.85;
-        }
-
-        /* ─── 主题切换按钮 ─── */
-        .theme-toggle {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 1000000;
-            width: 42px;
-            height: 42px;
-            border-radius: 12px;
-            border: 1px solid rgba(255,255,255,0.08);
-            background: rgba(255,255,255,0.04);
-            backdrop-filter: blur(12px);
-            color: rgba(255,255,255,0.45);
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 18px;
-            transition: color 0.25s, border-color 0.25s, transform 0.25s;
-        }
-        .theme-toggle:hover {
-            color: #6c5ce7;
-            border-color: #6c5ce7;
-            transform: rotate(15deg);
-        }
-
         /* ─── 演示账户信息 ─── */
         .demo-info {
             margin-top: 20px;
-            padding: 16px;
+            padding: 14px 16px;
             background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.06);
             border-radius: 12px;
             font-size: 12px;
             color: rgba(255,255,255,0.4);
-            text-align: center;
         }
         html[data-theme="light"] .demo-info {
-            background: rgba(108,92,231,0.05);
+            background: rgba(10,42,110,0.04);
+            border-color: rgba(10,42,110,0.08);
             color: #64748b;
         }
         .demo-info strong {
             color: rgba(255,255,255,0.6);
+            display: block;
+            margin-bottom: 8px;
         }
-        html[data-theme="light"] .demo-info strong {
+        html[data-theme="light"] .demo-info strong { color: #1e293b; }
+        .demo-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+        .demo-row:last-child { margin-bottom: 0; }
+        .demo-tag {
+            display: inline-block;
+            padding: 1px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 600;
+            background: rgba(74,159,216,0.15);
+            color: var(--c-blue);
+            min-width: 48px;
+            text-align: center;
+        }
+        html[data-theme="light"] .demo-tag {
+            background: rgba(10,42,110,0.08);
+            color: var(--c-navy);
+        }
+
+        /* ─── 底部版本信息 ─── */
+        .login-footer {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 11px;
+            color: rgba(255,255,255,0.4);
+        }
+        html[data-theme="light"] .login-footer {
+            color: #94a3b8;
+        }
+
+        /* ─── 右上角控制栏 ─── */
+        .top-controls {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000000;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .theme-toggle {
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            color: rgba(255,255,255,0.5);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.25s, border-color 0.25s, transform 0.25s, background 0.25s;
+        }
+        html[data-theme="light"] .theme-toggle {
+            background: rgba(255,255,255,0.8);
+            border-color: rgba(10,42,110,0.12);
+            color: #64748b;
+        }
+        .theme-toggle:hover {
+            color: var(--c-blue);
+            border-color: var(--c-blue);
+            transform: rotate(15deg);
+        }
+        html[data-theme="light"] .theme-toggle:hover {
+            color: var(--c-navy);
+            border-color: var(--c-navy);
+        }
+        .theme-toggle svg { width: 20px; height: 20px; }
+
+        .lang-select {
+            height: 40px;
+            padding: 0 30px 0 14px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            color: rgba(255,255,255,0.7);
+            font-size: 13px;
+            cursor: pointer;
+            outline: none;
+            appearance: none;
+            -webkit-appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 10px center;
+            transition: border-color 0.25s, color 0.25s;
+        }
+        html[data-theme="light"] .lang-select {
+            background-color: rgba(255,255,255,0.8);
+            border-color: rgba(10,42,110,0.12);
+            color: #475569;
+        }
+        .lang-select:hover { border-color: var(--c-blue); }
+        html[data-theme="light"] .lang-select:hover { border-color: var(--c-navy); }
+        .lang-select option {
+            background: #0D1426;
+            color: #fff;
+        }
+        html[data-theme="light"] .lang-select option {
+            background: #fff;
             color: #1e293b;
+        }
+
+        /* ─── 响应式 ─── */
+        @media (max-width: 768px) {
+            .login-container {
+                flex-direction: column;
+            }
+            .brand-panel {
+                flex: 0 0 auto;
+                min-height: 38vh;
+                padding: 30px 24px;
+            }
+            .mascot-wrap {
+                width: 160px;
+                height: 160px;
+                margin-bottom: 12px;
+            }
+            .brand-logo { width: 40px; height: 40px; }
+            .brand-name { font-size: 26px; }
+            .brand-slogan { font-size: 12px; margin-bottom: 20px; }
+            .features { display: none; }
+            .mascot-badge { margin-bottom: 12px; }
+            .form-panel {
+                flex: 1;
+                padding: 30px 20px;
+            }
+            .login-card {
+                padding: 32px 24px 28px;
+            }
+            .top-controls {
+                top: 12px;
+                right: 12px;
+            }
+        }
+
+        @media (max-width: 380px) {
+            .lang-select { font-size: 12px; padding: 0 26px 0 10px; }
         }
     </style>
 </head>
 <body>
-    <!-- 背景层 -->
-    <div class="bg-glow g1"></div>
-    <div class="bg-glow g2"></div>
-    <div class="bg-glow g3"></div>
-    <div class="bg-grid"></div>
-
-    <!-- 主题切换 -->
-    <button class="theme-toggle" onclick="toggleTheme()" title="切换主题">🌓</button>
-
-    <!-- 登录卡片 -->
-    <div class="login-wrap">
-        <div class="login-card">
-            <!-- Logo 区域 -->
-            <div class="logo-area">
-                <div class="logo-ring">
-                    <img src="/dbcheck_logo.png" class="logo-img" alt="DBCheck"
-                         onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-                    <div class="logo-inner" style="display:none; width:100%; height:100%; border-radius:20px; background:#0a0a1a; align-items:center; justify-content:center; font-size:36px; font-weight:900; color:#6c5ce7;">D</div>
+    <div class="login-container">
+        <!-- ═══ 左侧品牌展示区 ═══ -->
+        <div class="brand-panel">
+            <div class="brand-grid"></div>
+            <div class="brand-content">
+                <!-- 吉祥物 -->
+                <div class="mascot-wrap">
+                    <img src="/mascot.png" class="mascot-img" alt="DBCheck Mascot"
+                         onerror="this.style.display='none'">
                 </div>
-                <div class="login-title">DBCheck</div>
-                <div class="login-subtitle">智能数据库巡检与性能分析平台</div>
+
+                <!-- 徽章 -->
+                <div class="mascot-badge">
+                    <span class="dot"></span>
+                    <span data-i18n="login.mascot_badge">DBCheck 智能巡检官</span>
+                </div>
+
+                <!-- Logo + 产品名 -->
+                <div class="brand-logo-row">
+                    <img src="/dbcheck_logo_icon.png" class="brand-logo" alt="DBCheck Logo"
+                         onerror="this.style.display='none'">
+                    <span class="brand-name" data-i18n="login.title">DBCheck</span>
+                </div>
+
+                <!-- Slogan -->
+                <div class="brand-slogan" data-i18n="login.slogan">让数据库运维 可知 · 可控 · 可防</div>
+
+                <!-- 特性亮点 -->
+                <div class="features">
+                    <div class="feature-item">
+                        <div class="feature-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><path d="M21 12c-1 0-3-1-3-3s2-3 3-3 3 1 3 3-2 3-3 3z"/><path d="M3 12c1 0 3-1 3-3s-2-3-3-3-3 1-3 3 2 3 3 3z"/><path d="M13 5a3 3 0 0 1-2 0"/><path d="M12 21v-7"/></svg>
+                        </div>
+                        <div class="feature-text">
+                            <div class="feature-title" data-i18n="login.feature_1">智能巡检</div>
+                            <div class="feature-desc" data-i18n="login.feature_1_desc">一键体检数据库健康状态</div>
+                        </div>
+                    </div>
+                    <div class="feature-item">
+                        <div class="feature-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 10v6m11-11h-6M7 12H1m17.07-7.07l-4.24 4.24M9.17 14.83l-4.24 4.24m0-14.14l4.24 4.24m5.66 5.66l4.24 4.24"/></svg>
+                        </div>
+                        <div class="feature-text">
+                            <div class="feature-title" data-i18n="login.feature_2">AI 诊断</div>
+                            <div class="feature-desc" data-i18n="login.feature_2_desc">大模型驱动的智能分析</div>
+                        </div>
+                    </div>
+                    <div class="feature-item">
+                        <div class="feature-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                        </div>
+                        <div class="feature-text">
+                            <div class="feature-title" data-i18n="login.feature_3">实时监控</div>
+                            <div class="feature-desc" data-i18n="login.feature_3_desc">慢查询与连接实时追踪</div>
+                        </div>
+                    </div>
+                </div>
             </div>
+        </div>
 
-            <!-- 表单 -->
-            <form id="loginForm">
-                <div class="form-group">
-                    <label class="form-label" for="username">用户名</label>
-                    <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                    <input id="username" type="text" class="form-input" placeholder="请输入用户名" required autofocus>
-                </div>
+        <!-- ═══ 右侧登录表单区 ═══ -->
+        <div class="form-panel">
+            <div class="login-card">
+                <!-- 欢迎标题 -->
+                <div class="welcome-title" data-i18n="login.welcome">欢迎回来</div>
+                <div class="welcome-desc" data-i18n="login.welcome_desc">登录以开始您的数据库巡检之旅</div>
 
-                <div class="form-group">
-                    <label class="form-label" for="password">密码</label>
-                    <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                    <input id="password" type="password" class="form-input" placeholder="请输入密码" required>
-                    <button type="button" class="pwd-toggle" onclick="togglePwd()" title="显示/隐藏密码">
-                        <svg id="eye-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8z"/><circle cx="12" cy="12" r="3"/></svg>
+                <!-- 表单 -->
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label class="form-label" for="username" data-i18n="login.username">用户名</label>
+                        <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                        <input id="username" type="text" class="form-input" data-i18n="login.username_placeholder" placeholder="请输入用户名" required autofocus>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="password" data-i18n="login.password">密码</label>
+                        <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                        <input id="password" type="password" class="form-input" data-i18n="login.password_placeholder" placeholder="请输入密码" required>
+                        <button type="button" class="pwd-toggle" id="pwd-toggle" data-i18n-title="login.show_password" title="显示密码">
+                            <svg id="eye-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8z"/><circle cx="12" cy="12" r="3"/></svg>
+                        </button>
+                    </div>
+
+                    <div id="errorMsg" class="login-error"></div>
+
+                    <button type="submit" class="login-btn" id="btn-login">
+                        <span class="btn-text" id="btn-text" data-i18n="login.button">登 录</span>
                     </button>
+                </form>
+
+                <!-- 演示账户 -->
+                <div class="demo-info">
+                    <strong data-i18n="login.demo_title">演示账户</strong>
+                    <div class="demo-row">
+                        <span class="demo-tag" data-i18n="login.demo_admin">管理员</span>
+                        <span>admin / admin123</span>
+                    </div>
+                    <div class="demo-row">
+                        <span class="demo-tag" data-i18n="login.demo_viewer">只读</span>
+                        <span>viewer / viewer123</span>
+                    </div>
+                    <div class="demo-row">
+                        <span class="demo-tag" data-i18n="login.demo_operator">运维</span>
+                        <span>operator / operator123</span>
+                    </div>
                 </div>
 
-                <div id="errorMsg" class="login-error"></div>
-
-                <button type="submit" class="login-btn" id="btn-login">
-                    <span id="btn-text">登  录</span>
-                </button>
-            </form>
-
-            <div class="demo-info">
-                <strong>演示账户:</strong>
-                <div style="margin-top:6px;">
-                    <div>管理员: admin / admin123</div>
-                    <div>只读: viewer / viewer123</div>
-                    <div>运维: operator / operator123</div>
+                <!-- 底部版本 -->
+                <div class="login-footer">
+                    <span id="login-version">v2.6.3</span> · <span data-i18n="login.copyright">DBCheck © 2026</span>
                 </div>
-            </div>
-
-            <div class="login-footer">
-                <span id="login-version">v2.6.3</span> · DBCheck © 2026
             </div>
         </div>
     </div>
 
+    <!-- 右上角控制栏 -->
+    <div class="top-controls">
+        <select class="lang-select" id="lang-select" onchange="changeLang()" title="Language">
+            <option value="zh">中文</option>
+            <option value="en">English</option>
+            <option value="zh_tw">繁體中文</option>
+            <option value="ja">日本語</option>
+            <option value="ko">한국어</option>
+            <option value="es">Español</option>
+            <option value="fr">Français</option>
+            <option value="de">Deutsch</option>
+            <option value="ru">Русский</option>
+        </select>
+        <button class="theme-toggle" onclick="toggleTheme()" data-i18n-title="login.theme_toggle" title="切换主题">
+            <svg id="theme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+    </div>
+
     <script>
-        // 主题切换
+        /* ═══════════════════════════════════════════════
+           i18n 国际化模块
+           ═══════════════════════════════════════════════ */
+        let I18N = {};
+        let CURRENT_LANG = 'zh';
+
+        async function initI18N() {
+            try {
+                const res = await fetch('/api/i18n');
+                const data = await res.json();
+                if (data.ok) {
+                    I18N = data.data || {};
+                    CURRENT_LANG = data.lang;
+                    applyI18N();
+                }
+            } catch(e) {
+                console.error('i18n load failed', e);
+            }
+        }
+
+        function i18n(key) {
+            return I18N[key] !== undefined ? I18N[key] : undefined;
+        }
+
+        function applyI18N() {
+            // 语言下拉框
+            const langSel = document.getElementById('lang-select');
+            if (langSel) langSel.value = CURRENT_LANG;
+
+            // data-i18n → INPUT 设 placeholder，其余设 textContent
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                if (el.tagName === 'INPUT' && el.hasAttribute('placeholder')) {
+                    el.placeholder = i18n(key);
+                } else {
+                    el.textContent = i18n(key);
+                }
+            });
+
+            // data-i18n-title → title 属性
+            document.querySelectorAll('[data-i18n-title]').forEach(el => {
+                const k = el.getAttribute('data-i18n-title');
+                if (k) el.title = i18n(k);
+            });
+
+            // 更新页面标题
+            document.title = (i18n('login.title') || 'DBCheck') + ' - Login';
+        }
+
+        async function changeLang() {
+            const sel = document.getElementById('lang-select');
+            const newLang = sel ? sel.value : 'zh';
+            if (newLang === CURRENT_LANG) return;
+            try {
+                await fetch('/api/set_lang', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({lang: newLang})
+                });
+                location.reload();
+            } catch(e) {
+                console.error('lang switch failed', e);
+            }
+        }
+
+        /* ═══════════════════════════════════════════════
+           主题切换
+           ═══════════════════════════════════════════════ */
         function toggleTheme() {
             const html = document.documentElement;
             const current = html.getAttribute('data-theme');
             if (current === 'light') {
                 html.removeAttribute('data-theme');
                 localStorage.setItem('dbcheck-theme', 'dark');
+                updateThemeIcon('dark');
             } else {
                 html.setAttribute('data-theme', 'light');
                 localStorage.setItem('dbcheck-theme', 'light');
+                updateThemeIcon('light');
+            }
+        }
+
+        function updateThemeIcon(theme) {
+            const icon = document.getElementById('theme-icon');
+            if (!icon) return;
+            if (theme === 'light') {
+                // 太阳图标
+                icon.innerHTML = '<circle cx="12" cy="12" r="5"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>';
+            } else {
+                // 月亮图标
+                icon.innerHTML = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
             }
         }
 
@@ -472,41 +912,69 @@
             const saved = localStorage.getItem('dbcheck-theme');
             if (saved === 'light') {
                 document.documentElement.setAttribute('data-theme', 'light');
+                updateThemeIcon('light');
+            } else {
+                updateThemeIcon('dark');
             }
         })();
 
-        // 显示/隐藏密码
+        /* ═══════════════════════════════════════════════
+           密码显隐
+           ═══════════════════════════════════════════════ */
         function togglePwd() {
             const pwd = document.getElementById('password');
             const icon = document.getElementById('eye-icon');
+            const btn = document.getElementById('pwd-toggle');
             if (pwd.type === 'password') {
                 pwd.type = 'text';
                 icon.innerHTML = '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.45 18.45 0 0 1-5.06 5.94M1 1l22 22"/>';
+                btn.title = i18n('login.hide_password') || '隐藏密码';
+                btn.setAttribute('data-i18n-title', 'login.hide_password');
             } else {
                 pwd.type = 'password';
                 icon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8z"/><circle cx="12" cy="12" r="3"/>';
+                btn.title = i18n('login.show_password') || '显示密码';
+                btn.setAttribute('data-i18n-title', 'login.show_password');
             }
         }
+        document.getElementById('pwd-toggle').addEventListener('click', togglePwd);
 
-        // 登录表单提交
+        /* ═══════════════════════════════════════════════
+           按钮涟漪效果
+           ═══════════════════════════════════════════════ */
+        document.getElementById('btn-login').addEventListener('click', function(e) {
+            if (this.classList.contains('loading')) return;
+            const rect = this.getBoundingClientRect();
+            const ripple = document.createElement('span');
+            ripple.className = 'ripple';
+            const size = Math.max(rect.width, rect.height);
+            ripple.style.width = ripple.style.height = size + 'px';
+            ripple.style.left = (e.clientX - rect.left - size / 2) + 'px';
+            ripple.style.top = (e.clientY - rect.top - size / 2) + 'px';
+            this.appendChild(ripple);
+            setTimeout(() => ripple.remove(), 600);
+        });
+
+        /* ═══════════════════════════════════════════════
+           登录表单提交
+           ═══════════════════════════════════════════════ */
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const errorEl = document.getElementById('errorMsg');
             const btnLogin = document.getElementById('btn-login');
             const btnText = document.getElementById('btn-text');
-            
+
             errorEl.classList.remove('show');
             btnLogin.classList.add('loading');
-            btnText.textContent = '登录中...';
 
             const username = document.getElementById('username').value.trim();
             const password = document.getElementById('password').value;
 
             if (!username || !password) {
-                errorEl.textContent = '请输入用户名和密码';
+                errorEl.textContent = i18n('login.error_empty') || '请输入用户名和密码';
                 errorEl.classList.add('show');
                 btnLogin.classList.remove('loading');
-                btnText.textContent = '登  录';
+                shakeCard();
                 return;
             }
 
@@ -515,41 +983,60 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ username, password }),
-                    credentials: 'include'  // 重要：携带 session cookie
+                    credentials: 'include'
                 });
                 const data = await res.json();
-                
+
                 if (data.code === 0) {
-                    // 登录成功：保存token和用户信息
                     localStorage.setItem('token', data.data.token);
                     localStorage.setItem('user', JSON.stringify(data.data.user));
-                    
-                    // 重定向到首页
                     window.location.href = '/';
                 } else {
-                    errorEl.textContent = data.msg || '登录失败';
+                    errorEl.textContent = data.msg || (i18n('login.error_failed') || '登录失败');
                     errorEl.classList.add('show');
-                    
-                    // 卡片抖动动画
-                    const card = document.querySelector('.login-card');
-                    card.classList.add('shake');
-                    setTimeout(() => card.classList.remove('shake'), 400);
+                    shakeCard();
                 }
             } catch (err) {
-                errorEl.textContent = '网络错误，请稍后重试';
+                errorEl.textContent = i18n('login.error_network') || '网络错误，请稍后重试';
                 errorEl.classList.add('show');
             } finally {
                 btnLogin.classList.remove('loading');
-                btnText.textContent = '登  录';
             }
         });
 
-        // 回车键提交
+        function shakeCard() {
+            const card = document.querySelector('.login-card');
+            card.classList.add('shake');
+            setTimeout(() => card.classList.remove('shake'), 400);
+        }
+
+        /* ═══════════════════════════════════════════════
+           回车键提交
+           ═══════════════════════════════════════════════ */
         document.getElementById('password').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 document.getElementById('loginForm').dispatchEvent(new Event('submit'));
             }
         });
+
+        /* ═══════════════════════════════════════════════
+           版本号加载
+           ═══════════════════════════════════════════════ */
+        (function() {
+            fetch('/version.json')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.version) {
+                        document.getElementById('login-version').textContent = 'v' + data.version;
+                    }
+                })
+                .catch(() => {});
+        })();
+
+        /* ═══════════════════════════════════════════════
+           初始化
+           ═══════════════════════════════════════════════ */
+        initI18N();
     </script>
 </body>
 </html>
