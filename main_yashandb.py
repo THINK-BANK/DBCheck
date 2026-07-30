@@ -7,6 +7,7 @@
 from version import __version__ as VER
 from i18n import get_lang, t as _t
 from inspection_engine import BaseInspectionEngine
+from core import entry
 
 """
 崖山 YashanDB 数据库自动化健康巡检工具 {VER}
@@ -137,6 +138,7 @@ class YashanDbInspector(BaseInspectionEngine):
 # ============================================================
 def main_cli():
     """独立运行时的 argparse 入口"""
+    entry.ensure_bootstrapped('yashandb')
     parser = argparse.ArgumentParser(description=_t("yashandb_cli_desc"))
     parser.add_argument('-H', '--host', required=True, help=_t("cli_host"))
     parser.add_argument('-P', '--port', type=int, default=1688, help=_t("yashandb_cli_port"))
@@ -183,6 +185,7 @@ def main_cli():
 
 def main(host=None, port=None, user=None, password=None, output=None, ssh_info=None):
     """YashanDB 巡检 CLI 入口 - 支持交互模式和参数模式"""
+    entry.ensure_bootstrapped('yashandb')
     if host is None:
         # 交互模式（从 main.py 调用时）
         print(u"YashanDB 数据库巡检")

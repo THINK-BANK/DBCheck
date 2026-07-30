@@ -14,8 +14,9 @@ DBCheck - Oracle 全面巡检工具（增强版）
 import sys
 import os
 from core import paths
+from core import entry
 
-paths.ensure_migrated()
+entry.ensure_bootstrapped('oracle')
 
 # frozen 模式下路径处理
 if getattr(sys, 'frozen', False):

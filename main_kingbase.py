@@ -7,6 +7,7 @@
 from version import __version__ as VER
 from i18n import get_lang, t as _t
 from inspection_engine import BaseInspectionEngine
+from core import entry
 
 """
 KingbaseES 数据库自动化健康巡检工具 {VER}
@@ -126,6 +127,7 @@ def getData(ip, port, user, password, database='kingbase', ssh_info=None, label=
 # ============================================================
 def main_cli():
     """独立运行时的 argparse 入口"""
+    entry.ensure_bootstrapped('kingbase')
     parser = argparse.ArgumentParser(description="KingbaseES Database Inspection Tool")
     parser.add_argument('-H', '--host', required=True, help='Host address')
     parser.add_argument('-P', '--port', type=int, default=54321, help='Port (default: 54321)')
@@ -174,6 +176,7 @@ def main_cli():
 
 def main(host=None, port=None, user=None, password=None, database=None, output=None, ssh_info=None):
     """KingbaseES 巡检 CLI 入口 - 支持交互模式和参数模式"""
+    entry.ensure_bootstrapped('kingbase')
     if host is None:
         # 交互模式（从 main.py 调用时）
         print("KingbaseES 数据库巡检")

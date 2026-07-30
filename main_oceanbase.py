@@ -31,6 +31,7 @@ OceanBase 社区版 MySQL 租户与 MySQL 协议/参数高度兼容，本模块�
 
 import os
 from inspection_engine import BaseInspectionEngine
+from core import entry
 
 
 class OceanBaseInspector(BaseInspectionEngine):
@@ -286,6 +287,7 @@ def saveDoc(context, ofile, ifile, inspector_name):
 
 def main():
     """OceanBase 巡检 CLI 入口"""
+    entry.ensure_bootstrapped('oceanbase')
     import getpass
 
     print(u"OceanBase（MySQL 租户）数据库巡检")

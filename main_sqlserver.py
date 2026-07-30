@@ -18,6 +18,7 @@ SQL Server 数据库巡检模块 - 基于 BaseInspectionEngine 重构版本
 
 import os
 from inspection_engine import BaseInspectionEngine
+from core import entry
 
 
 class SQLServerInspector(BaseInspectionEngine):
@@ -114,6 +115,7 @@ def getData(ip, port, user, password, database=None, ssh_info=None, label=None, 
 
 def main():
     """SQL Server 巡检 CLI 入口"""
+    entry.ensure_bootstrapped('sqlserver')
     import getpass
 
     print(u"SQL Server 数据库巡检")

@@ -18,6 +18,7 @@ PostgreSQL 数据库巡检模块 - 基于 BaseInspectionEngine 重构版本
 
 import os
 from inspection_engine import BaseInspectionEngine
+from core import entry
 
 
 class PostgreSQLInspector(BaseInspectionEngine):
@@ -95,6 +96,7 @@ def getData(ip, port, user, password, database='postgres', ssh_info=None, label=
 
 def main():
     """PostgreSQL 巡检 CLI 入口"""
+    entry.ensure_bootstrapped('postgresql')
     import getpass
 
     print(u"PostgreSQL 数据库巡检")

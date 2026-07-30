@@ -22,6 +22,7 @@ MariaDB 与 MySQL 协议/参数高度兼容，本模块以**最小改动、最�
 
 import os
 from inspection_engine import BaseInspectionEngine
+from core import entry
 
 
 class MariaDBInspector(BaseInspectionEngine):
@@ -407,6 +408,7 @@ def saveDoc(context, ofile, ifile, inspector_name):
 
 def main():
     """MariaDB 巡检 CLI 入口"""
+    entry.ensure_bootstrapped('mariadb')
     import getpass
 
     print(u"MariaDB 数据库巡检")

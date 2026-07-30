@@ -21,6 +21,7 @@ TiDB 使用 MySQL 协议，可以用 pymysql 连接。
 
 import os
 from inspection_engine import BaseInspectionEngine
+from core import entry
 
 
 class TiDBInspector(BaseInspectionEngine):
@@ -182,6 +183,7 @@ def getData(ip, port, user, password, ssh_info=None, template_id=None, database=
 
 def main():
     """TiDB 巡检 CLI 入口"""
+    entry.ensure_bootstrapped('tidb')
     import getpass
 
     print(u"TiDB 数据库巡检")

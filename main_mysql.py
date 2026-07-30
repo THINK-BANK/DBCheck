@@ -18,6 +18,7 @@ MySQL 数据库巡检模块 - 基于 BaseInspectionEngine 重构版本
 
 import os
 from inspection_engine import BaseInspectionEngine
+from core import entry
 
 
 class MySQLInspector(BaseInspectionEngine):
@@ -127,6 +128,7 @@ def saveDoc(context, ofile, ifile, inspector_name):
 
 def main():
     """MySQL 巡检 CLI 入口"""
+    entry.ensure_bootstrapped('mysql')
     import getpass
 
     print(u"MySQL 数据库巡检")

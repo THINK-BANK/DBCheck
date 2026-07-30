@@ -19,6 +19,7 @@ from pathlib import Path
 warnings.filterwarnings("ignore")
 
 from inspection_engine import BaseInspectionEngine
+from core import entry
 
 # ── JDBC 驱动路径 ────────────────────────────────────────────────────────
 # ── JDBC 驱动路径 ──────────────────────────────────────────────
@@ -266,6 +267,7 @@ def getData(ip, port, user, password, database='testdb', ssh_info=None, label=No
 
 
 if __name__ == '__main__':
+    entry.ensure_bootstrapped('gbase')
     # 简单测试
     import argparse
     parser = argparse.ArgumentParser(description='GBase 8s 巡检测试（JDBC 模式）')
