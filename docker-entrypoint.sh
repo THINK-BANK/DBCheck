@@ -21,8 +21,8 @@ mkdir -p /app/data
 chmod 755 /app/data
 mkdir -p /app/drivers
 chmod 755 /app/drivers
-mkdir -p /app/pro_data
-chmod 755 /app/pro_data
+mkdir -p /app/data/pro_data
+chmod 755 /app/data/pro_data
 
 # Initialize database tables (create if not exist)
 # This ensures inspection_template and other tables exist even on first run

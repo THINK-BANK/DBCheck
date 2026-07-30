@@ -13,6 +13,9 @@ DBCheck - Oracle 全面巡检工具（增强版）
 
 import sys
 import os
+from core import paths
+
+paths.ensure_migrated()
 
 # frozen 模式下路径处理
 if getattr(sys, 'frozen', False):
@@ -2266,7 +2269,7 @@ def build_word_report(db_info, os_data, check_results, db_version, ai_advice='',
 
     # ── 封面 ────────────────────────────────────────────────────────────────
     # Logo 图片
-    logo_path = os.path.join(os.path.dirname(__file__), 'dbcheck_logo.png')
+    logo_path = str(paths.LOGO_PATH)
     if os.path.exists(logo_path):
         logo_para = doc.add_paragraph()
         logo_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -3436,7 +3439,7 @@ def single_inspection(args):
 
     # ── 6. 保存报告 ────────────────────────────────────────────────────────
     print(f"\n[{GREEN}6/6{RESET}] {_t('oracle_log_save_report')}")
-    output_dir = args.output or os.path.join(os.getcwd(), 'reports')
+    output_dir = args.output or str(core.paths.REPORTS_DIR)
     os.makedirs(output_dir, exist_ok=True)
 
     ver_tag  = ver_major or 'DB'
@@ -3522,7 +3525,7 @@ def interactive_single_inspection():
             ssh_host, ssh_user, ssh_pass = None, None, None
 
     # ── 输出选项 ───────────────────────────────────────────────
-    output_dir = _input(f"\n{GREEN}{t('oracle_output_dir')}{RESET}", 'reports')
+    output_dir = _input(f"\n{GREEN}{t('oracle_output_dir')}{RESET}", str(core.paths.REPORTS_DIR))
     inspector  = _input(f"{GREEN}{t('oracle_inspector_name')}{RESET}", 'dbcheck')
 
     # ── 构造 args ───────────────────────────────────────────────

@@ -25,6 +25,7 @@ import traceback
 import time
 import re
 from datetime import datetime
+from core import paths
 # docx 相关导入改为延迟导入（在 generate_report 相关方法中导入）
 # from docx import Document
 # from docx.shared import Pt, RGBColor, Inches, Cm
@@ -1155,7 +1156,7 @@ class BaseInspectionEngine:
         }.get(self.db_type, self.db_type.upper())
         
         # Logo
-        logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dbcheck_logo.png')
+        logo_path = str(paths.LOGO_PATH)
         if os.path.exists(logo_path):
             logo_para = doc.add_paragraph()
             logo_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -1918,7 +1919,7 @@ class BaseInspectionEngine:
                 return p
             
             # ── 封面 ────────────────────────────────────────
-            logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dbcheck_logo.png')
+            logo_path = str(paths.LOGO_PATH)
             if os.path.exists(logo_path):
                 logo_para = doc.add_paragraph()
                 logo_para.alignment = WD_ALIGN_PARAGRAPH.CENTER

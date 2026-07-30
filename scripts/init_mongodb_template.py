@@ -17,9 +17,14 @@ import os
 import sys
 import json
 import argparse
+from pathlib import Path
 
-# 添加项目根目录到路径
-sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
+# 保证从任意位置运行时都能 import core.paths 与项目内模块
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
+from core import paths  # noqa: E402
 
 from inspection_dal import (
     init_database,
@@ -35,7 +40,7 @@ from inspection_dal import (
 def load_template_config(plugin_dir=None):
     """从 sql_templates.json 加载模板配置"""
     if plugin_dir is None:
-        plugin_dir = os.path.join(os.path.dirname(__file__), 'plugins', 'available', 'mongodb')
+        plugin_dir = str(paths.PROJECT_ROOT / 'plugins' / 'available' / 'mongodb')
     
     config_path = os.path.join(plugin_dir, 'sql_templates.json')
     

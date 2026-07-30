@@ -29,9 +29,17 @@ import os
 import sys
 import argparse
 import traceback
+from pathlib import Path
 
-# 确保脚本所在目录（DBCheck 根目录）在 sys.path 中，便于 `from pro import ...`
-_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# 保证从任意位置运行时都能 import core.paths 与项目内模块
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
+from core import paths  # noqa: E402
+
+# 确保项目根目录（DBCheck 根目录）在 sys.path 中，便于 `from pro import ...`
+_BASE_DIR = str(paths.PROJECT_ROOT)
 if _BASE_DIR not in sys.path:
     sys.path.insert(0, _BASE_DIR)
 

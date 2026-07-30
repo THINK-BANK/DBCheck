@@ -28,6 +28,10 @@ _script_dir = BASE_DIR
 if _script_dir not in sys.path:
     sys.path.insert(0, _script_dir)
 
+# 旧路径一次性迁移（幂等；仅当检测到遗留旧路径时触发，异常降级不阻断启动）
+from core import paths
+paths.ensure_migrated()
+
 from flask import Flask, request, jsonify, render_template, Response, send_file
 from version import __version__, EDITION
 from flask_socketio import SocketIO, emit, join_room, leave_room
@@ -129,7 +133,7 @@ def _sync_delete_trend_for_report(filename: str):
         from analyzer import HistoryManager
         script_dir = BASE_DIR
         hm = HistoryManager(script_dir)
-        reports_dir = os.path.join(script_dir, 'reports')
+        reports_dir = str(paths.REPORTS_DIR)
 
         db_type, host, label = _parse_report_filename(filename)
         if not db_type or not host:
@@ -395,10 +399,7 @@ try:
     # 初始化 RBAC 种子数据（仅首次）
     def _init_rbac_seed():
         import os
-        seed_flag = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)),
-            'pro_data', '.rbac_seeded'
-        )
+        seed_flag = str(paths.PRO_DATA_DIR / '.rbac_seeded')
         if not os.path.exists(seed_flag):
             try:
                 from user_management.seed import init_seed_data
@@ -451,13 +452,13 @@ def format_bytes(n):
     except: return str(n)
 
 def get_reports():
-    reports_dir = os.path.join(BASE_DIR, 'reports')
+    reports_dir = str(paths.REPORTS_DIR)
     reports = []
     # 读取 pro_history.db 中的风险统计，key 为报告文件名
     risk_map = {}
     try:
         import sqlite3
-        pro_db = os.path.join(BASE_DIR, 'pro_data', 'pro_history.db')
+        pro_db = str(paths.PRO_DATA_DIR / 'pro_history.db')
         if os.path.isfile(pro_db):
             conn = sqlite3.connect(pro_db)
             cursor = conn.cursor()
@@ -964,7 +965,7 @@ def run_inspection_task(task_id, db_info, inspector_name, template_id=None):
 
         inspector_nm = db_info.get('inspector_name') or inspector_name or 'Jack'
 
-        reports_dir = os.path.join(BASE_DIR, 'reports')
+        reports_dir = str(paths.REPORTS_DIR)
         os.makedirs(reports_dir, exist_ok=True)
         timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
         filename_tmpl = _t(cfg['filename_key'])
@@ -1164,7 +1165,7 @@ def run_config_task(task_id, db_info, output_format='txt'):
 
     try:
         db_type = db_info.get('db_type', 'mysql')
-        reports_dir = os.path.join(BASE_DIR, 'reports')
+        reports_dir = str(paths.REPORTS_DIR)
         os.makedirs(reports_dir, exist_ok=True)
         timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
 
@@ -1253,7 +1254,7 @@ def run_index_task(task_id, db_info, output_format='txt'):
 
     try:
         db_type = db_info.get('db_type', 'mysql')
-        reports_dir = os.path.join(BASE_DIR, 'reports')
+        reports_dir = str(paths.REPORTS_DIR)
         os.makedirs(reports_dir, exist_ok=True)
         timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
 
@@ -2204,7 +2205,7 @@ def api_reports():
 def api_report_detail(filename):
     """获取报告详情（用于分享）"""
     try:
-        reports_dir = os.path.join(BASE_DIR, 'reports')
+        reports_dir = str(paths.REPORTS_DIR)
         fp = os.path.join(reports_dir, filename)
         if not os.path.isfile(fp):
             return jsonify({'ok': False, 'msg': '报告文件不存在'}), 404
@@ -2212,7 +2213,7 @@ def api_report_detail(filename):
         # 从 pro_history.db 获取详情
         result = {'filename': filename, 'db_type': '', 'host': ''}
         try:
-            pro_db = os.path.join(BASE_DIR, 'pro_data', 'pro_history.db')
+            pro_db = str(paths.PRO_DATA_DIR / 'pro_history.db')
             if os.path.isfile(pro_db):
                 conn = sqlite3.connect(pro_db)
                 cursor = conn.cursor()
@@ -2330,7 +2331,7 @@ def api_download_pdf_by_task(task_id):
 @app.route('/api/download_file')
 def api_download_file():
     name = request.args.get('name', '')
-    reports_dir = os.path.join(BASE_DIR, 'reports')
+    reports_dir = str(paths.REPORTS_DIR)
     fp = os.path.join(reports_dir, name)
     if not os.path.isfile(fp):
         return "File not found", 404
@@ -2344,7 +2345,7 @@ def api_delete_report():
         name = data.get('name', '')
         if not name:
             return jsonify({'ok': False, 'error': _t('webui.reports_delete_name_required')}), 400
-        reports_dir = os.path.join(BASE_DIR, 'reports')
+        reports_dir = str(paths.REPORTS_DIR)
         fp = os.path.join(reports_dir, name)
         if not os.path.isfile(fp):
             return jsonify({'ok': False, 'error': _t('webui.reports_file_not_found')}), 404
@@ -2372,7 +2373,7 @@ def api_history_instances():
     try:
         from analyzer import HistoryManager
         script_dir = BASE_DIR
-        reports_dir = os.path.join(script_dir, 'reports')
+        reports_dir = str(paths.REPORTS_DIR)
         hm = HistoryManager(script_dir)
         raw_instances = hm.list_instances()
         instances = []
@@ -4623,7 +4624,7 @@ def api_awr_upload():
             return jsonify({'ok': False, 'error': '仅支持 .html/.htm 格式的 AWR 报告'})
 
         import tempfile, shutil
-        awr_dir = os.path.join(BASE_DIR, 'awr_uploads')
+        awr_dir = str(paths.AWR_UPLOADS_DIR)
         os.makedirs(awr_dir, exist_ok=True)
 
         # 保存上传文件
@@ -4782,7 +4783,7 @@ def _run_awr_report_task(report_task_id, awr_task_id):
     if not task:
         return
     steps = task['steps']
-    awr_dir = os.path.join(BASE_DIR, 'awr_uploads')
+    awr_dir = str(paths.AWR_UPLOADS_DIR)
     import glob
     files = glob.glob(os.path.join(awr_dir, f'awr_{awr_task_id}.*'))
     if not files:
@@ -4817,7 +4818,7 @@ def _run_awr_report_task(report_task_id, awr_task_id):
 
         # Step 3: 生成 Word
         task['current_step'] = len(steps) - 2
-        reports_dir = os.path.join(BASE_DIR, 'reports')
+        reports_dir = str(paths.REPORTS_DIR)
         os.makedirs(reports_dir, exist_ok=True)
         timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
         meta = awr_data.get('metadata', {})
@@ -4845,7 +4846,7 @@ def _run_awr_report_task(report_task_id, awr_task_id):
 def api_awr_generate_report(awr_task_id):
     """启动 AWR Word 报告异步生成任务，返回 report_task_id 供轮询"""
     try:
-        awr_dir = os.path.join(BASE_DIR, 'awr_uploads')
+        awr_dir = str(paths.AWR_UPLOADS_DIR)
         import glob
         files = glob.glob(os.path.join(awr_dir, f'awr_{awr_task_id}.*'))
         if not files:
@@ -4891,7 +4892,7 @@ def api_awr_report_status(report_task_id):
 @app.route('/api/awr/status/<task_id>', methods=['GET'])
 def api_awr_status(task_id):
     """查询 AWR 任务文件是否存在"""
-    awr_dir = os.path.join(BASE_DIR, 'awr_uploads')
+    awr_dir = str(paths.AWR_UPLOADS_DIR)
     import glob
     files = glob.glob(os.path.join(awr_dir, f'awr_{task_id}.*'))
     if files:
@@ -6661,7 +6662,7 @@ def api_pro_backup_history_delete(record_id):
     """删除备份历史记录"""
     try:
         import sqlite3
-        db_file = os.path.join("pro_data", "backup_history.db")
+        db_file = str(paths.PRO_DATA_DIR / "backup_history.db")
         conn = sqlite3.connect(db_file)
         cursor = conn.cursor()
         cursor.execute("DELETE FROM backup_history WHERE id=?", (record_id,))
@@ -6722,7 +6723,7 @@ def _ensure_sql_exec_log_table():
         from pro import get_instance_manager
         im = get_instance_manager()
         # 使用 pro.db
-        db_path = os.path.join(BASE_DIR, 'pro_data', 'pro.db')
+        db_path = str(paths.PRO_DATA_DIR / 'pro.db')
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
 
         conn = sqlite3.connect(db_path)
@@ -6755,7 +6756,7 @@ def _log_sql_execution(datasource_id: str, datasource_name: str, sql: str,
     _ensure_sql_exec_log_table()
 
     try:
-        db_path = os.path.join(BASE_DIR, 'pro_data', 'pro.db')
+        db_path = str(paths.PRO_DATA_DIR / 'pro.db')
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         cursor.execute("""
@@ -7116,7 +7117,7 @@ def api_inspection_execute_sql():
 def api_inspection_sql_logs():
     """获取 SQL 执行日志"""
     try:
-        db_path = os.path.join(BASE_DIR, 'pro_data', 'pro.db')
+        db_path = str(paths.PRO_DATA_DIR / 'pro.db')
         if not os.path.exists(db_path):
             return jsonify({'ok': True, 'logs': []})
 
@@ -9225,7 +9226,7 @@ def api_dm8_offline_report(task_id):
         filename = f'DM8离线存储检查报告_本机_{task_id[:8]}.docx'
 
     # 落盘到 reports 目录（与其他巡检报告统一管理）
-    reports_dir = os.path.join(BASE_DIR, 'reports')
+    reports_dir = str(paths.REPORTS_DIR)
     os.makedirs(reports_dir, exist_ok=True)
     ofile = os.path.join(reports_dir, filename)
 

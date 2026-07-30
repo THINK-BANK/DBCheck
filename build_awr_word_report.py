@@ -13,6 +13,7 @@ DBCheck - Oracle AWR 报告 Word 报告生成器
 import os
 import re
 import datetime
+from core import paths
 from typing import Dict, Any, Optional, List, Tuple
 
 try:
@@ -100,7 +101,7 @@ def _render_cover(doc, awr_data):
     meta = awr_data.get('metadata', {})
 
     # Logo
-    logo_path = os.path.join(os.path.dirname(__file__), 'dbcheck_logo.png')
+    logo_path = str(paths.LOGO_PATH)
     if os.path.exists(logo_path):
         logo_para = doc.add_paragraph()
         logo_para.alignment = WD_ALIGN_PARAGRAPH.CENTER

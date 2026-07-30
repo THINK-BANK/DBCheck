@@ -14,9 +14,9 @@ services:
       # Persist SQLite databases and config
       - dbcheck_data:/app/data
       # Persist pro_data (RBAC users.db, um_rbac.db)
-      - dbcheck_pro_data:/app/pro_data
+      - dbcheck_pro_data:/app/data/pro_data
       # Persist generated reports
-      - dbcheck_reports:/app/reports
+      - dbcheck_reports:/app/data/reports
       # Mount drivers directory (read-only)
       - ./drivers:/app/drivers:ro
     environment:

@@ -12,6 +12,8 @@ import os
 import sqlite3
 from threading import Lock
 
+from core import paths
+
 
 class DBManager:
     """RBAC 数据库管理器（单例模式）"""
@@ -31,19 +33,15 @@ class DBManager:
         if self._initialized:
             return
         self._initialized = True
-        # DB 放在项目目录 user_management/db/ 下，跟着项目走
-        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        self._db_dir = os.path.join(base_dir, 'user_management', 'db')
+        # DB 统一收口到 data/user_db（与 core.paths.USER_DB_DIR 对齐）
+        self._db_dir = str(paths.USER_DB_DIR)
         os.makedirs(self._db_dir, exist_ok=True)
         self._db_path = os.path.join(self._db_dir, 'um_rbac.db')
         self._init_schema()
 
     def _init_schema(self):
         """初始化数据库表结构"""
-        schema_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-            'db', 'user_management_schema.sql'
-        )
+        schema_path = str(paths.PROJECT_ROOT / 'db' / 'user_management_schema.sql')
         if os.path.exists(schema_path):
             self.execute_sql_file(schema_path)
 

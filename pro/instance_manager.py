@@ -19,6 +19,10 @@ from dataclasses import dataclass, asdict
 import hashlib
 import base64
 
+from core import paths
+
+paths.ensure_migrated()
+
 # Fernet 密码加密
 try:
     from cryptography.fernet import Fernet
@@ -150,7 +154,7 @@ class InstanceGroup:
 class InstanceManager:
     """实例管理器"""
 
-    def __init__(self, data_dir: str = "pro_data"):
+    def __init__(self, data_dir: str = str(paths.PRO_DATA_DIR)):
         self.data_dir = data_dir
         self.instances_db = os.path.join(data_dir, "instances.db")
         self.groups_db = os.path.join(data_dir, "groups.db")

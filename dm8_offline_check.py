@@ -30,6 +30,7 @@ import time
 from pathlib import Path
 from datetime import datetime
 from collections import defaultdict
+from core import paths
 
 # ── DM8 存储常量（来自 DM8 官方公开文档）──────────────────────────
 # DM8 支持的页大小选项（官方手册明确列出）
@@ -918,8 +919,7 @@ def generate_offline_report_word(result: dict, output_path: str = '') -> str:
 
     # ── 封面 ──────────────────────────────────────────────────
     # Logo
-    logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                             'dbcheck_logo.png')
+    logo_path = str(paths.LOGO_PATH)
     if os.path.exists(logo_path):
         logo_para = doc.add_paragraph()
         logo_para.alignment = WD_ALIGN_PARAGRAPH.CENTER

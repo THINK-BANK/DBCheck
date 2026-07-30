@@ -15,6 +15,10 @@ import logging
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 
+from core import paths
+
+paths.ensure_migrated()
+
 from .base import BaseBackupEngine, BackupResult
 from .mysql_backup import MySQLBackupEngine
 from .pg_backup import PGBackupEngine
@@ -39,11 +43,11 @@ _ENGINE_REGISTRY = {
 class BackupManager:
     """统一备份管理器（单例）"""
 
-    def __init__(self, data_dir: str = "pro_data",
+    def __init__(self, data_dir: str = str(paths.PRO_DATA_DIR),
                  backup_dir: str = None,
                  config_path: str = None):
         self.data_dir = data_dir
-        self.backup_dir = backup_dir or os.path.join(data_dir, "..", "backups")
+        self.backup_dir = backup_dir or str(paths.BACKUPS_DIR)
         self.config_path = config_path or os.path.join(data_dir, "backup_config.json")
         self.db_file = os.path.join(data_dir, "backup_history.db")
 

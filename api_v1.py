@@ -29,6 +29,10 @@ import sqlite3
 from datetime import datetime
 from flask import Blueprint, request, jsonify
 
+from core import paths
+
+paths.ensure_migrated()
+
 # ── 日志 ─────────────────────────────────────────────────────
 logger = logging.getLogger(__name__)
 
@@ -48,7 +52,7 @@ _inspect_lock = threading.Lock()
 
 def _get_key_db():
     """获取 key 数据库连接"""
-    db_path = os.path.join(os.path.dirname(__file__), 'pro_data', 'api_keys.db')
+    db_path = str(core.paths.PRO_DATA_DIR / 'api_keys.db')
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row

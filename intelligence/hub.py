@@ -25,6 +25,10 @@ from .planner import plan_sequence
 from .registry import registry
 from .specialists import register_all
 
+from core import paths
+
+paths.ensure_migrated()
+
 # 旧版巡检记录生成 instance_id 时使用的前缀（兼容历史数据）
 _LEGACY_PREFIX = {
     "mysql": "mysql",
@@ -66,8 +70,7 @@ def _get_instance_manager_db() -> Optional[str]:
         pass
     # 防御性回退：若 Pro 模块导入失败，按默认路径查找
     try:
-        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        fallback = os.path.join(base, "pro_data", "pro_history.db")
+        fallback = str(paths.PRO_DATA_DIR / "pro_history.db")
         if os.path.exists(fallback):
             return fallback
     except Exception:

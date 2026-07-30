@@ -31,7 +31,7 @@ if not exist ".deps_installed" (
 )
 
 REM 初始化 RBAC 种子数据
-if not exist "pro_data\.rbac_seeded" (
+if not exist "data/pro_data\.rbac_seeded" (
     echo.
     echo 初始化 RBAC 用户管理系统...
     python -m user_management.seed

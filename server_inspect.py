@@ -13,6 +13,10 @@ server_inspect.py — 独立服务器巡检模块
 import os
 import json
 import platform
+from core import paths
+
+paths.ensure_migrated()
+
 import socket
 import sqlite3
 from datetime import datetime
@@ -1080,13 +1084,13 @@ def generate_server_report(info, output_dir=None):
         return False, 'python-docx 未安装'
 
     if not output_dir:
-        output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'reports')
+        output_dir = str(core.paths.REPORTS_DIR)
     os.makedirs(output_dir, exist_ok=True)
 
     doc = Document()
 
     # ── 封面 ──
-    logo_path = os.path.join(os.path.dirname(__file__), 'dbcheck_logo.png')
+    logo_path = str(paths.LOGO_PATH)
     if os.path.exists(logo_path):
         p = doc.add_paragraph()
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -1725,7 +1729,7 @@ def generate_server_share_html(result, output_dir=None):
     返回 (ok, filepath_or_error)
     """
     if not output_dir:
-        output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'reports')
+        output_dir = str(core.paths.REPORTS_DIR)
     os.makedirs(output_dir, exist_ok=True)
 
     score = result.get('health_score', 0)

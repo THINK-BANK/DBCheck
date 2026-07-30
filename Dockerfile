@@ -8,8 +8,8 @@
 #   docker run -d -p 5003:5003 \
 #     --memory=2g --memory-swap=2g \
 #     -v dbcheck_data:/app/data \
-#     -v dbcheck_pro_data:/app/pro_data \
-#     -v dbcheck_reports:/app/reports \
+#     -v dbcheck_pro_data:/app/data/pro_data \
+#     -v dbcheck_reports:/app/data/reports \
 #     jackge12345/dbcheck:latest
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -114,7 +114,7 @@ ENV PYTHONMEMORYLIMIT=2g
 RUN echo 26.7.30.1 > /app/VERSION.txt
 
 # Ensure data and pro_data directories exist for volume mounts
-RUN mkdir -p /app/data /app/pro_data /app/reports
+RUN mkdir -p /app/data /app/data/pro_data /app/data/reports
 
 EXPOSE 5003
 

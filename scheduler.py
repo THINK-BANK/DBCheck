@@ -17,8 +17,12 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.jobstores.memory import MemoryJobStore
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-CONFIG_FILE = os.path.join(SCRIPT_DIR, 'scheduler_jobs.json')
-LOG_FILE = os.path.join(SCRIPT_DIR, 'scheduler.log')
+from core import paths
+
+paths.ensure_migrated()
+
+CONFIG_FILE = str(paths.SCHEDULER_JOBS)
+LOG_FILE = str(paths.SCHEDULER_LOG)
 
 # ── 日志配置 ────────────────────────────────────────────────
 logger = logging.getLogger('scheduler')

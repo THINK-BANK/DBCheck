@@ -17,10 +17,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 
+from core import paths
+
 logger = logging.getLogger(__name__)
 
+# 旧路径一次性迁移（幂等；仅当检测到遗留旧路径时触发，异常降级不阻断启动）
+paths.ensure_migrated()
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_BACKUPS_DIR = os.path.join(BASE_DIR, 'data_backups')
+DATA_BACKUPS_DIR = str(core.paths.BACKUPS_DIR)
 
 # DBCheck 自身数据文件清单（相对路径）
 CRITICAL_FILES = [
@@ -28,11 +33,11 @@ CRITICAL_FILES = [
     {'path': 'data/server_history.db', 'name': '服务器巡检历史', 'category': 'data', 'required': True},
     {'path': 'data/inspection.db', 'name': '巡检配置数据库', 'category': 'config', 'required': True},
     {'path': '.db_key', 'name': '密码加密密钥', 'category': 'security', 'required': True},
-    {'path': 'user_management/db/um_rbac.db', 'name': 'RBAC权限管理数据库', 'category': 'security', 'required': True},
+    {'path': str(core.paths.USER_DB_DIR.relative_to(core.paths.PROJECT_ROOT) / 'um_rbac.db'), 'name': 'RBAC权限管理数据库', 'category': 'security', 'required': True},
 ]
 
 CRITICAL_DIRS = [
-    {'path': 'pro_data', 'name': 'Pro版数据目录', 'category': 'pro', 'required': True},
+    {'path': str(core.paths.PRO_DATA_DIR.relative_to(core.paths.PROJECT_ROOT)), 'name': 'Pro版数据目录', 'category': 'pro', 'required': True},
 ]
 
 

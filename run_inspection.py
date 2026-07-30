@@ -38,6 +38,9 @@ import os
 import sys
 import traceback
 from datetime import datetime
+from core import paths
+
+paths.ensure_migrated()
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -120,7 +123,7 @@ def run_mysql(db_info, inspector_name, ssh_info=None):
     if not ifile:
         raise RuntimeError("Word 模板创建失败")
 
-    reports_dir = os.path.join(SCRIPT_DIR, "reports")
+    reports_dir = str(core.paths.REPORTS_DIR)
     os.makedirs(reports_dir, exist_ok=True)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     file_name = f"MySQL巡检报告_{db_info['label']}_{timestamp}.docx"
@@ -181,7 +184,7 @@ def run_mariadb(db_info, inspector_name, ssh_info=None):
     if not ifile:
         raise RuntimeError("Word 模板创建失败")
 
-    reports_dir = os.path.join(SCRIPT_DIR, "reports")
+    reports_dir = str(core.paths.REPORTS_DIR)
     os.makedirs(reports_dir, exist_ok=True)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     file_name = f"MariaDB巡检报告_{db_info['label']}_{timestamp}.docx"
@@ -242,7 +245,7 @@ def run_oceanbase(db_info, inspector_name, ssh_info=None):
     if not ifile:
         raise RuntimeError("Word 模板创建失败")
 
-    reports_dir = os.path.join(SCRIPT_DIR, "reports")
+    reports_dir = str(core.paths.REPORTS_DIR)
     os.makedirs(reports_dir, exist_ok=True)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     file_name = f"OceanBase巡检报告_{db_info['label']}_{timestamp}.docx"
@@ -302,7 +305,7 @@ def run_pg(db_info, inspector_name, ssh_info=None):
     if not ifile:
         raise RuntimeError("Word 模板创建失败")
 
-    reports_dir = os.path.join(SCRIPT_DIR, "reports")
+    reports_dir = str(core.paths.REPORTS_DIR)
     os.makedirs(reports_dir, exist_ok=True)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     file_name = f"PostgreSQL巡检报告_{db_info['label']}_{timestamp}.docx"
@@ -383,7 +386,7 @@ def run_oracle_full(db_info, inspector_name, ssh_info=None):
         args.ssh_pass = ''
         args.ssh_key  = ''
     # 输出目录
-    args.output     = os.path.join(SCRIPT_DIR, "reports")
+    args.output     = str(core.paths.REPORTS_DIR)
     args.zip        = False
     args.inspector  = inspector_name or ''
     args.desensitize = bool(db_info.get('desensitize', False))
@@ -429,7 +432,7 @@ def run_dm(db_info, inspector_name, ssh_info=None):
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
 
-    reports_dir = os.path.join(SCRIPT_DIR, "reports")
+    reports_dir = str(core.paths.REPORTS_DIR)
     os.makedirs(reports_dir, exist_ok=True)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     file_name = f"DM8巡检报告_{db_info['label']}_{timestamp}.docx"
@@ -523,7 +526,7 @@ def run_tidb(db_info, inspector_name, ssh_info=None):
     if not ifile:
         raise RuntimeError("Word 模板创建失败")
 
-    reports_dir = os.path.join(SCRIPT_DIR, "reports")
+    reports_dir = str(core.paths.REPORTS_DIR)
     os.makedirs(reports_dir, exist_ok=True)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     file_name = f"TiDB巡检报告_{db_info['label']}_{timestamp}.docx"
@@ -584,7 +587,7 @@ def run_ivorysql(db_info, inspector_name, ssh_info=None):
     if not ifile:
         raise RuntimeError("Word 模板创建失败")
 
-    reports_dir = os.path.join(SCRIPT_DIR, "reports")
+    reports_dir = str(core.paths.REPORTS_DIR)
     os.makedirs(reports_dir, exist_ok=True)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     file_name = f"IvorySQL巡检报告_{db_info['label']}_{timestamp}.docx"
@@ -633,7 +636,7 @@ def run_yashandb(db_info, inspector_name, ssh_info=None):
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
 
-    reports_dir = os.path.join(SCRIPT_DIR, "reports")
+    reports_dir = str(core.paths.REPORTS_DIR)
     os.makedirs(reports_dir, exist_ok=True)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     file_name = f"YashanDB巡检报告_{db_info['label']}_{timestamp}.docx"
@@ -685,7 +688,7 @@ def run_gbase(db_info, inspector_name, ssh_info=None):
     mod.infos = _FakeInfos()
     spec.loader.exec_module(mod)
 
-    reports_dir = os.path.join(SCRIPT_DIR, "reports")
+    reports_dir = str(core.paths.REPORTS_DIR)
     os.makedirs(reports_dir, exist_ok=True)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     file_name = f"GBase巡检报告_{db_info['label']}_{timestamp}.docx"
@@ -721,7 +724,7 @@ def run_kingbase(db_info, inspector_name, ssh_info=None):
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
 
-    reports_dir = os.path.join(SCRIPT_DIR, "reports")
+    reports_dir = str(core.paths.REPORTS_DIR)
     os.makedirs(reports_dir, exist_ok=True)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     file_name = f"KingbaseES巡检报告_{db_info['label']}_{timestamp}.docx"
@@ -774,7 +777,7 @@ def run_config_baseline(db_info, db_type, output_format='txt'):
     """
     import importlib.util
     
-    reports_dir = os.path.join(SCRIPT_DIR, "reports")
+    reports_dir = str(core.paths.REPORTS_DIR)
     os.makedirs(reports_dir, exist_ok=True)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     
@@ -844,7 +847,7 @@ def run_index_health(db_info, db_type, output_format='txt'):
     """
     import importlib.util
     
-    reports_dir = os.path.join(SCRIPT_DIR, "reports")
+    reports_dir = str(core.paths.REPORTS_DIR)
     os.makedirs(reports_dir, exist_ok=True)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     

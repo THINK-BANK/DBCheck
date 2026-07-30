@@ -33,7 +33,7 @@ if [ ! -f ".deps_installed" ]; then
 fi
 
 # 初始化 RBAC 种子数据（如需要）
-if [ ! -f "pro_data/.rbac_seeded" ]; then
+if [ ! -f "data/pro_data/.rbac_seeded" ]; then
     echo ""
     echo "🔐 初始化 RBAC 用户管理系统..."
     $PYTHON -m user_management.seed
