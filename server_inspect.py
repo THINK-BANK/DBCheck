@@ -1084,7 +1084,7 @@ def generate_server_report(info, output_dir=None):
         return False, 'python-docx 未安装'
 
     if not output_dir:
-        output_dir = str(core.paths.REPORTS_DIR)
+        output_dir = str(paths.REPORTS_DIR)
     os.makedirs(output_dir, exist_ok=True)
 
     doc = Document()
@@ -1729,7 +1729,7 @@ def generate_server_share_html(result, output_dir=None):
     返回 (ok, filepath_or_error)
     """
     if not output_dir:
-        output_dir = str(core.paths.REPORTS_DIR)
+        output_dir = str(paths.REPORTS_DIR)
     os.makedirs(output_dir, exist_ok=True)
 
     score = result.get('health_score', 0)

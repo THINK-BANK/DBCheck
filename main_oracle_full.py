@@ -3439,7 +3439,7 @@ def single_inspection(args):
 
     # ── 6. 保存报告 ────────────────────────────────────────────────────────
     print(f"\n[{GREEN}6/6{RESET}] {_t('oracle_log_save_report')}")
-    output_dir = args.output or str(core.paths.REPORTS_DIR)
+    output_dir = args.output or str(paths.REPORTS_DIR)
     os.makedirs(output_dir, exist_ok=True)
 
     ver_tag  = ver_major or 'DB'
@@ -3525,7 +3525,7 @@ def interactive_single_inspection():
             ssh_host, ssh_user, ssh_pass = None, None, None
 
     # ── 输出选项 ───────────────────────────────────────────────
-    output_dir = _input(f"\n{GREEN}{t('oracle_output_dir')}{RESET}", str(core.paths.REPORTS_DIR))
+    output_dir = _input(f"\n{GREEN}{t('oracle_output_dir')}{RESET}", str(paths.REPORTS_DIR))
     inspector  = _input(f"{GREEN}{t('oracle_inspector_name')}{RESET}", 'dbcheck')
 
     # ── 构造 args ───────────────────────────────────────────────

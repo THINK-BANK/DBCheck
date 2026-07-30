@@ -52,7 +52,7 @@ _inspect_lock = threading.Lock()
 
 def _get_key_db():
     """获取 key 数据库连接"""
-    db_path = str(core.paths.PRO_DATA_DIR / 'api_keys.db')
+    db_path = str(paths.PRO_DATA_DIR / 'api_keys.db')
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row

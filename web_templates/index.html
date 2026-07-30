@@ -3194,13 +3194,13 @@ function showShareLinkDialog(url) {
   const inputId = 'share-input-' + Date.now();
   const html =
     '<div id="' + backdropId + '" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:999999;display:flex;align-items:center;justify-content:center">' +
-      '<div style="background:#1A2338;border:1px solid #2A3650;border-radius:12px;padding:24px;max-width:500px;width:90%;max-height:calc(100vh - 32px);overflow-y:auto">' +
-        '<h3 style="margin:0 0 12px;color:#F8F9FA;font-size:16px">📤 分享链接</h3>' +
-        '<p style="margin:0 0 12px;color:#94A3B8;font-size:13px">链接已生成，请复制后分享：</p>' +
-        '<input id="' + inputId + '" type="text" value="' + escHtml(url) + '" readonly style="width:100%;padding:10px;background:#0D1426;border:1px solid #2A3650;border-radius:6px;color:#0A2A6E;font-size:13px;margin-bottom:16px" onclick="this.select()">' +
+      '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:24px;max-width:500px;width:90%;max-height:calc(100vh - 32px);overflow-y:auto">' +
+        '<h3 style="margin:0 0 12px;color:var(--text);font-size:16px">📤 分享链接</h3>' +
+        '<p style="margin:0 0 12px;color:var(--text-muted);font-size:13px">链接已生成，请复制后分享：</p>' +
+        '<input id="' + inputId + '" type="text" value="' + escHtml(url) + '" readonly style="width:100%;padding:10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;margin-bottom:16px" onclick="this.select()">' +
         '<div style="display:flex;gap:8px;justify-content:flex-end">' +
           '<button id="copy-btn-' + inputId + '" style="padding:8px 16px;background:#238636;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px">复制链接</button>' +
-          '<button onclick="document.getElementById(\'' + backdropId + '\').remove()" style="padding:8px 16px;background:#2A3650;color:#CBD5E1;border:none;border-radius:6px;cursor:pointer;font-size:13px">关闭</button>' +
+          '<button onclick="document.getElementById(\'' + backdropId + '\').remove()" style="padding:8px 16px;background:var(--surface2);color:var(--text-muted);border:none;border-radius:6px;cursor:pointer;font-size:13px">关闭</button>' +
         '</div>' +
       '</div>' +
     '</div>';
@@ -14016,11 +14016,12 @@ function renderHostPanel() {
   const src = latest.host_collector_source;
   if (badge) {
     let txt, bg, fg;
-    if (src === 'ebpf') { txt = i18n('monitor.host_src_ebpf') || '内核级 eBPF'; bg = 'rgba(63,185,80,.18)'; fg = '#00C8A0'; }
-    else if (src === 'psutil') { txt = i18n('monitor.host_src_psutil') || 'psutil 用户态'; bg = 'rgba(59,130,246,.18)'; fg = '#0A2A6E'; }
-    else if (src === 'shell') { txt = i18n('monitor.host_src_shell') || 'Shell /proc 零依赖'; bg = 'rgba(59,130,246,.18)'; fg = '#0A2A6E'; }
-    else if (src === 'unavailable') { txt = i18n('monitor.host_src_unavailable') || '宿主资源不可用'; bg = 'rgba(139,148,158,.18)'; fg = '#94A3B8'; }
-    else { txt = i18n('monitor.host_src_none') || '暂无宿主数据'; bg = 'rgba(139,148,158,.12)'; fg = '#94A3B8'; }
+    const isLight = getTheme() === 'light';
+    if (src === 'ebpf') { txt = i18n('monitor.host_src_ebpf') || '内核级 eBPF'; bg = 'rgba(63,185,80,.18)'; fg = isLight ? '#047857' : '#00C8A0'; }
+    else if (src === 'psutil') { txt = i18n('monitor.host_src_psutil') || 'psutil 用户态'; bg = 'rgba(59,130,246,.18)'; fg = isLight ? '#0A2A6E' : '#60A5FA'; }
+    else if (src === 'shell') { txt = i18n('monitor.host_src_shell') || 'Shell /proc 零依赖'; bg = 'rgba(59,130,246,.18)'; fg = isLight ? '#0A2A6E' : '#60A5FA'; }
+    else if (src === 'unavailable') { txt = i18n('monitor.host_src_unavailable') || '宿主资源不可用'; bg = 'rgba(139,148,158,.18)'; fg = isLight ? '#64748B' : '#94A3B8'; }
+    else { txt = i18n('monitor.host_src_none') || '暂无宿主数据'; bg = 'rgba(139,148,158,.12)'; fg = isLight ? '#64748B' : '#94A3B8'; }
     badge.textContent = txt;
     badge.style.background = bg; badge.style.color = fg; badge.style.border = '1px solid ' + fg;
     badge.title = (src === 'unavailable' && latest.host_error)
@@ -18528,7 +18529,7 @@ async function deleteBackupHistory(recordId) {
     <div class="about-hero">
       <button class="about-close-btn" onclick="closeAboutModal()">✕</button>
       <div class="about-hero-inner">
-        <img class="about-logo" src="/dbcheck_logo.png" alt="DBCheck">
+        <img class="about-logo" src="/dbcheck_logo_icon.png" alt="DBCheck">
         <div class="about-hero-text">
           <h2>DBCheck</h2>
           <div class="about-sub">Database Intelligent Inspector <span id="about-version">{{ version }}</span></div>
