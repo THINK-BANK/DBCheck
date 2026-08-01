@@ -106,8 +106,8 @@ def _read_latest(instance_id: str) -> dict:
 
         from modules.pro.metrics_collector import MetricsStore
 
-        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        db_path = os.path.join(base, "data", "pro_metrics.db")
+        from modules.core import paths
+        db_path = os.path.join(str(paths.DATA_DIR), "pro_metrics.db")
         if os.path.exists(db_path):
             return MetricsStore(db_path).get_latest(instance_id) or {}
     except Exception:

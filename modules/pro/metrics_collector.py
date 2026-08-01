@@ -284,9 +284,8 @@ def _host_unavailable(reason: str) -> dict:
 class MetricsCollector:
     def __init__(self, socketio=None, db_path: str = None, interval: int = DEFAULT_INTERVAL):
         if db_path is None:
-            base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            data_dir = os.path.join(base, 'data')
-            db_path = os.path.join(data_dir, 'pro_metrics.db')
+            from modules.core import paths
+            db_path = os.path.join(str(paths.DATA_DIR), 'pro_metrics.db')
         self.store = MetricsStore(db_path)
         self.socketio = socketio
         self.interval = interval
