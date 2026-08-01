@@ -8,7 +8,7 @@ DBCheck 专业版是一款商业、跨平台的数据库自动化健康巡检工
 
 > 官网：[https://dbcheck.top](https://dbcheck.top) &nbsp;|&nbsp; 邮箱：sdfiyon@gmail.com
 > 
-> Language: [English](./README.md) | 语言：[中文](./README_zh.md)
+> Language: [English](../README.md) | 语言：[中文](./README_zh.md)
 
 [![Version](https://img.shields.io/badge/版本-v26.7.30.1-blue.svg)]()
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)]()
@@ -81,8 +81,8 @@ docker run -d -p 5003:5003 \
 ### docker-compose（推荐）
 
 ```bash
-curl -o docker-compose.yml https://raw.githubusercontent.com/fiyo/DBCheck/main/docker-compose.yml
-docker compose up -d
+curl -o deploy/docker-compose.yml https://raw.githubusercontent.com/fiyo/DBCheck/main/deploy/docker-compose.yml
+docker compose -f deploy/docker-compose.yml up -d
 ```
 
 > **GBase 8s 特别说明**：Docker 镜像已预装 JDK + JDBC 驱动，添加 GBase 数据源后直接可用，无需额外配置。
@@ -102,7 +102,7 @@ git clone https://github.com/fiyo/DBCheck.git
 cd DBCheck
 
 # 安装依赖
-pip install -r requirements.txt
+pip install -r deploy/requirements.txt
 
 # 启动 Web UI
 python web_ui.py
@@ -113,8 +113,8 @@ python web_ui.py
 ### CLI 命令行模式
 
 ```bash
-python main.py           # 中文界面
-python main.py --lang en # 英文界面
+python -m entrypoints.cli           # 中文界面
+python -m entrypoints.cli --lang en # 英文界面
 python web_ui.py         # Web 界面
 ```
 
@@ -490,7 +490,7 @@ Web UI 可视化编辑各库关键参数的推荐值、阈值和合规规则。�
 ### 多语言与主题
 
 - **支持 9 种语言**：简体中文（默认）、English、繁體中文、日本語、한국어、Español、Français、Deutsch、Русский
-- 可随时通过 Web UI 语言选择器（右上角）或 CLI 参数（`python main.py --lang <语言码>`）切换
+- 可随时通过 Web UI 语言选择器（右上角）或 CLI 参数（`python -m entrypoints.cli --lang <语言码>`）切换
 - 界面文字、菜单、报告模板、AI 诊断标签均已本地化
 - 支持深色 / 浅色主题，偏好自动保存
 

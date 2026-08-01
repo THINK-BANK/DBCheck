@@ -42,7 +42,7 @@ echo.
 echo [2/5] Installing dependencies (this may take a few minutes)...
 echo [    ] You will see pip progress output below.
 echo.
-pip install -r requirements.txt
+pip install -r deploy/requirements.txt
 if errorlevel 1 (
     echo [ERROR] Failed to install dependencies.
     pause

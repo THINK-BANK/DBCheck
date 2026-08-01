@@ -67,7 +67,7 @@ def encrypt_password(plain: str, key_material: Optional[str] = None) -> str:
     仅在无法导入 DBCheck 时回退到 AUTOBACKUP_KEY 逻辑（兼容独立 CLI / 旧数据）。
     """
     try:
-        from pro.instance_manager import _encrypt_pwd
+        from modules.pro.instance_manager import _encrypt_pwd
         return _encrypt_pwd(plain)
     except Exception:
         pass
@@ -101,7 +101,7 @@ def decrypt_password(cipher: str, key_material: Optional[str] = None) -> str:
         return f.decrypt(token.encode()).decode()
     # 非 enc: 前缀：尝试 DBCheck 加密格式（base64(Fernet)，无前缀）
     try:
-        from pro.instance_manager import _decrypt_pwd
+        from modules.pro.instance_manager import _decrypt_pwd
         return _decrypt_pwd(cipher)
     except Exception:
         return cipher
@@ -114,7 +114,7 @@ def _try_dbcheck_decrypt(text: str) -> Optional[str]:
     使备份任务执行时能与 DBCheck 共用同一套密钥体系。
     """
     try:
-        from pro.instance_manager import _get_fernet
+        from modules.pro.instance_manager import _get_fernet
         import base64
         f = _get_fernet()
         if f is None:
@@ -1024,7 +1024,7 @@ def main() -> int:
     history = HistoryStore(log_dir)
 
     if args.web:
-        from web import run_web_server
+        from modules.web import run_web_server
         web_cfg = global_cfg.get("web", {})
         host = args.host or web_cfg.get("host", "0.0.0.0")
         port = args.port or int(web_cfg.get("port", 8080))

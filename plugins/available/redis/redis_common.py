@@ -354,7 +354,7 @@ class RedisCommonMixin:
 
         # 1) 智能分析：运行内置规则引擎
         try:
-            from analyzer import smart_analyze_redis, smart_analyze_redis_cluster
+            from modules.inspection.analyzer import smart_analyze_redis, smart_analyze_redis_cluster
             if self.db_type == 'redis-cluster':
                 self.context['auto_analyze'] = list(smart_analyze_redis_cluster(self.context))
             else:
@@ -366,7 +366,7 @@ class RedisCommonMixin:
         # 2) AI 诊断（可选，依赖 dbc_config.json 配置；未配置时为空，报告显示「未启用」）
         self.context['ai_advice'] = ''
         try:
-            from analyzer import AIAdvisor
+            from modules.inspection.analyzer import AIAdvisor
             # 项目根目录的 dbc_config.json（插件自身目录下没有该文件，需向上回溯查找）
             _here = os.path.dirname(os.path.abspath(__file__))
             cfg_path = None

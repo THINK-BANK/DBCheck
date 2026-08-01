@@ -36,7 +36,7 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
-from core import paths  # noqa: E402
+from modules.core import paths  # noqa: E402
 
 # 确保项目根目录（DBCheck 根目录）在 sys.path 中，便于 `from pro import ...`
 _BASE_DIR = str(paths.PROJECT_ROOT)
@@ -49,7 +49,7 @@ def _resolve_ds_id(arg_ds_id):
 
     枚举 API 取自 instance_manager（get_instance_manager().get_all_instances）。
     """
-    from pro import get_instance_manager
+    from modules.pro import get_instance_manager
     mgr = get_instance_manager()
     if arg_ds_id:
         return arg_ds_id
@@ -73,7 +73,7 @@ def _main():
     )
     args = parser.parse_args()
 
-    from pro import get_instance_manager
+    from modules.pro import get_instance_manager
     mgr = get_instance_manager()
 
     ds_id = _resolve_ds_id(args.ds_id)

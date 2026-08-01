@@ -35,7 +35,7 @@ print('inspection.db tables ready.')
 
 # Initialize default inspection templates (skip if already exist)
 echo "==> Initializing default inspection templates..."
-python /app/inspection_init_db.py 2>&1 || echo "WARNING: inspection_init_db.py failed"
+python /app/inspection/init_db.py 2>&1 || echo "WARNING: inspection_init_db.py failed"
 
 # Check drivers status
 DRIVER_COUNT=$(find /app/drivers -type f 2>/dev/null | wc -l)

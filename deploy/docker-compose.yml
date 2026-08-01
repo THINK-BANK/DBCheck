@@ -3,8 +3,8 @@ version: "3.8"
 services:
   dbcheck:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: deploy/Dockerfile
     image: jackge12345/dbcheck:latest
     container_name: dbcheck
     restart: unless-stopped
@@ -18,7 +18,7 @@ services:
       # Persist generated reports
       - dbcheck_reports:/app/data/reports
       # Mount drivers directory (read-only)
-      - ./drivers:/app/drivers:ro
+      - ../drivers:/app/drivers:ro
     environment:
       - TZ=Asia/Shanghai
       - FLASK_ENV=production

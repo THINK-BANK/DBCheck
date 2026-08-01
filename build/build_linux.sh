@@ -63,7 +63,7 @@ if ! command -v pyinstaller &> /dev/null; then
 fi
 
 echo "[3/5] Installing project dependencies..."
-pip install -r requirements.txt --quiet
+pip install -r deploy/requirements.txt --quiet
 
 echo "[4/5] Building executable..."
 # Clean old build artifacts (NOT the build/ directory)

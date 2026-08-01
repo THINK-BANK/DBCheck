@@ -15,7 +15,7 @@ DBCheck 官方插件 —— 数据库字符集与排序规则检查
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from plugin_core import InspectionPlugin, InspectionQuery, RiskItem, register
+from modules.pluginkit.core import InspectionPlugin, InspectionQuery, RiskItem, register
 
 
 class CharsetChecker(InspectionPlugin):

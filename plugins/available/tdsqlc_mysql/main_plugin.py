@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 # 复用内核 MySQL 巡检器（位于仓库根目录 main_mysql.py）
-from main_mysql import MySQLInspector
+from modules.entrypoints.main_mysql import MySQLInspector
 
 
 def test_connection(host, port, user, password, database=None):
@@ -105,7 +105,7 @@ def get_task_config():
 
 # ── 注册插件（无侵入式架构）──────────────────────────────────────────
 try:
-    from plugin_core import InspectionPlugin, register
+    from modules.pluginkit.core import InspectionPlugin, register
 
     class TdsqlcMysqlPluginAdapter(InspectionPlugin):
         """TDSQL-C MySQL 插件适配器（实现标准接口）。"""

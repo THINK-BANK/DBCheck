@@ -13,10 +13,10 @@ PROJECT_DIR = os.getcwd()
 # NOTE: 'data' is a runtime directory (SQLite DBs), not packaged.
 data_dirs = [
     'web_templates', 'i18n', 'templates',
-    'rag', 'pro', 'data/pro_data',
+    'modules/rag', 'modules/pro', 'data/pro_data',
     'drivers',
     'plugins',          # oracle_jdbc 等插件由 plugin_loader 动态加载，需随包复制
-    'user_management',  # RBAC 蓝图模板(html)与初始化库(schema)需随包复制
+    'modules/user_management',  # RBAC 蓝图模板(html)与初始化库(schema)需随包复制
     'db',               # user_management_schema.sql 建表脚本需随包复制
 ]
 
@@ -74,16 +74,13 @@ a = Analysis(
         'greenlet',
         'engineio.async_drivers.gevent',
         'socketio.async_server.gevent',
-        # App modules
-        'main', 'main_mysql', 'main_pg', 'main_oracle_full',
-        'main_dm', 'main_sqlserver', 'main_tidb', 'main_ivorysql', 'main_yashandb', 'main_kingbase', 'main_gbase',
-        'analyzer', 'config_baseline', 'server_inspect',
-        'run_inspection', 'inspection_init_db', 'inspection_engine',
-        'inspection_dal', 'inspection_api', 'api_v1',
-        'auth', 'notifier', 'scheduler', 'db_history',
-        'monitor_engine', 'monitor_queries', 'pdf_export',
-        'slow_query_analyzer', 'ssh_tunnel', 'desensitize',
-        'index_health', 'version', 'mod_logger',
+        # App modules（已统一迁入 modules/ 命名空间；列举各子包，PyInstaller 递归收集全部子模块）
+        'modules.entrypoints', 'modules.inspection', 'modules.web',
+        'modules.pro', 'modules.rag', 'modules.user_management',
+        'modules.desensitize', 'modules.notify', 'modules.monitor',
+        'modules.server', 'modules.skill', 'modules.ssh', 'modules.ingest',
+        'modules.intelligence', 'modules.core', 'modules.config',
+        'modules.db_types', 'modules.disaster_recovery', 'modules.pluginkit',
     ],
     hookspath=[],
     hooksconfig={},

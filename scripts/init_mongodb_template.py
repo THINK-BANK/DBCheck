@@ -24,9 +24,9 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
-from core import paths  # noqa: E402
+from modules.core import paths  # noqa: E402
 
-from inspection_dal import (
+from modules.inspection.dal import (
     init_database,
     create_template,
     create_chapter,

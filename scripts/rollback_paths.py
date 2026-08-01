@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2025-2026 fiyo (Jack Ge) <sdfiyon@gmail.com>
+# Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
+
 """DBCheck 旧路径回滚脚本。
 
 依据 ``<DATA_DIR>/.migration_manifest.json`` 中已迁移（status==done）的条目，
@@ -23,7 +27,7 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
-from core import paths  # noqa: E402
+from modules.core import paths  # noqa: E402
 
 
 def _read_manifest() -> dict:

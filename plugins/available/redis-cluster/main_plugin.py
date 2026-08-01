@@ -30,7 +30,7 @@ _plugin_dir = str(Path(__file__).parent)
 if _plugin_dir not in sys.path:
     sys.path.insert(0, _plugin_dir)
 
-from inspection_engine import (
+from modules.inspection.engine import (
     BaseInspectionEngine,
     LocalSystemInfoCollector,
     RemoteSystemInfoCollector,

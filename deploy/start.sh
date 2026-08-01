@@ -1,12 +1,15 @@
 #!/bin/bash
 # ============================================
 # DBCheck 启动脚本 (含 RBAC 用户管理模块)
+# 说明：本脚本位于 deploy/，自动切换到仓库根目录执行，
+#       以便 web_ui.py / user_management / data/ 等相对路径解析正确。
 # ============================================
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-cd "$SCRIPT_DIR"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+cd "$REPO_ROOT"
 
 echo "=========================================="
 echo "  DBCheck - 数据库健康巡检平台"
@@ -26,8 +29,8 @@ echo "✅ Python: $($PYTHON --version)"
 if [ ! -f ".deps_installed" ]; then
     echo ""
     echo "📦 安装项目依赖..."
-    pip3 install -r requirements.txt --break-system-packages 2>/dev/null || \
-    pip3 install -r requirements.txt
+    pip3 install -r deploy/requirements.txt --break-system-packages 2>/dev/null || \
+    pip3 install -r deploy/requirements.txt
     touch .deps_installed
     echo "✅ 依赖安装完成"
 fi
@@ -49,4 +52,4 @@ echo ""
 echo "   默认管理员: admin / admin123"
 echo ""
 
-$PYTHON web_ui.py
+$PYTHON web_ui.py >> data/logs/web_service_restart.log 2>&1

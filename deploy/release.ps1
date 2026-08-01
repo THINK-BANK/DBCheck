@@ -61,7 +61,7 @@ Write-Host "  OK: Pulled latest code" -ForegroundColor Green
 Write-Host "[3/4] Updating version files..." -ForegroundColor Yellow
 
 # Update version.py
-$VersionPy = Join-Path $ProjectRoot "version.py"
+$VersionPy = Join-Path $ProjectRoot "..\config\version.py"
 if (Test-Path $VersionPy) {
     $lines = Get-Content $VersionPy -Encoding UTF8
     $newLines = @()
@@ -100,7 +100,7 @@ if (Test-Path $Dockerfile) {
 Write-Host "[4/4] Committing, pushing, and creating tag..." -ForegroundColor Yellow
 
 # Commit and push (only version files, avoid staging runtime data/ or untracked files)
-git add version.py Dockerfile
+git add config/version.py deploy/Dockerfile
 git diff --cached --quiet 2>$null
 if ($LASTEXITCODE -eq 0) {
     Write-Host "  WARN: Nothing to commit, skipping commit" -ForegroundColor Yellow

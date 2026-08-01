@@ -21,7 +21,7 @@ import traceback
 from flask import Blueprint, request, jsonify, send_file
 from werkzeug.utils import secure_filename
 
-from inspection_dal import (
+from modules.inspection.dal import (
     get_db_connection,
     create_template,
     get_template,
@@ -872,7 +872,7 @@ def api_get_baselines():
     :return: JSON 响应，包含基线配置列表
     """
     try:
-        from inspection_dal import get_baselines_by_db_type
+        from modules.inspection.dal import get_baselines_by_db_type
         
         db_type = request.args.get('db_type')
         enabled_only = request.args.get('enabled_only', 'true').lower() == 'true'
@@ -881,7 +881,7 @@ def api_get_baselines():
             baselines = get_baselines_by_db_type(db_type, enabled_only)
         else:
             # 如果没有指定 db_type，返回所有基线配置
-            from inspection_dal import get_db_connection
+            from modules.inspection.dal import get_db_connection
             conn = get_db_connection()
             cursor = conn.cursor()
             
@@ -926,7 +926,7 @@ def api_create_baseline():
     :return: JSON 响应，包含新创建的基线配置 ID
     """
     try:
-        from inspection_dal import create_baseline
+        from modules.inspection.dal import create_baseline
         
         data = request.get_json()
         
@@ -987,7 +987,7 @@ def api_update_baseline(baseline_id):
     :return: JSON 响应，包含更新结果
     """
     try:
-        from inspection_dal import update_baseline
+        from modules.inspection.dal import update_baseline
         
         data = request.get_json()
         
@@ -1033,7 +1033,7 @@ def api_delete_baseline(baseline_id):
     :return: JSON 响应，包含删除结果
     """
     try:
-        from inspection_dal import delete_baseline
+        from modules.inspection.dal import delete_baseline
         
         success = delete_baseline(baseline_id)
         
@@ -1064,7 +1064,7 @@ def api_init_baselines():
     :return: JSON 响应，包含初始化结果
     """
     try:
-        from inspection_dal import init_default_baselines
+        from modules.inspection.dal import init_default_baselines
 
         init_default_baselines()
 
@@ -1090,7 +1090,7 @@ def api_force_reset_baselines():
     :return: JSON 响应，包含重置结果
     """
     try:
-        from inspection_dal import force_reset_baselines
+        from modules.inspection.dal import force_reset_baselines
 
         data = request.get_json(silent=True) or {}
         db_type = data.get('db_type')

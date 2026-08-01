@@ -2,9 +2,10 @@
 REM ============================================
 REM DBCheck 启动脚本 (含 RBAC 用户管理模块)
 REM Windows 版本
+REM 说明：本脚本位于 deploy/，自动切换到仓库根目录执行
 REM ============================================
 
-cd /d "%~dp0"
+cd /d "%~dp0.."
 
 echo ==========================================
 echo   DBCheck - 数据库健康巡检平台
@@ -25,7 +26,7 @@ REM 安装依赖（如需要）
 if not exist ".deps_installed" (
     echo.
     echo 安装项目依赖...
-    pip install -r requirements.txt
+    pip install -r deploy/requirements.txt
     type nul > .deps_installed
     echo [OK] 依赖安装完成
 )
@@ -47,5 +48,5 @@ echo.
 echo   默认管理员: admin / admin123
 echo.
 
-python web_ui.py
+python web_ui.py >> data\logs\web_service_restart.log 2>&1
 pause

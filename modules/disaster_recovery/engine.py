@@ -155,7 +155,7 @@ def create_plan(payload: Dict[str, Any]) -> Dict[str, Any]:
             connection_id = (payload.get("connection_id") or "").strip()
             if not password and connection_id:
                 # 未输入密码且选了数据源：自动从 DBCheck 数据源取密码
-                from pro.instance_manager import InstanceManager
+                from modules.pro.instance_manager import InstanceManager
                 inst = InstanceManager().get_instance_decrypted(connection_id)
                 if not inst or not inst.get("password"):
                     raise ValueError("无法从数据源获取密码，请手动填写或检查数据源配置")
@@ -168,7 +168,7 @@ def create_plan(payload: Dict[str, Any]) -> Dict[str, Any]:
             }
             if password:
                 # 复用 DBCheck 数据源密码加密（.db_key Fernet + base64），不再引入 AUTOBACKUP_KEY
-                from pro.instance_manager import _encrypt_pwd
+                from modules.pro.instance_manager import _encrypt_pwd
                 task["database"]["password"] = _encrypt_pwd(password)
 
         cfg.setdefault("tasks", []).append(task)
@@ -278,7 +278,7 @@ def get_status() -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 def list_connections() -> List[Dict[str, Any]]:
     try:
-        from pro.instance_manager import InstanceManager
+        from modules.pro.instance_manager import InstanceManager
 
         im = InstanceManager()
         # 取原始密码字段（加密串），仅用于判断是否存在密码，再脱敏返回

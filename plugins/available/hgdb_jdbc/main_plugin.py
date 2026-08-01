@@ -87,7 +87,7 @@ def _load_own_jdbc_jvm():
 _PROJECT_ROOT = os.path.abspath(os.path.join(_PLUGIN_DIR, "..", "..", ".."))
 
 # BaseInspectionEngine 必须在模块级导入（类继承需要）
-from inspection_engine import (
+from modules.inspection.engine import (
     BaseInspectionEngine,
     LocalSystemInfoCollector,
     RemoteSystemInfoCollector,
@@ -348,7 +348,7 @@ class HgdbJdbcInspector(BaseInspectionEngine):
     def get_template_id(self):
         """返回 inspection_template 表的 template_id。"""
         try:
-            from inspection_dal import get_templates_by_db_type
+            from modules.inspection.dal import get_templates_by_db_type
             templates = get_templates_by_db_type("hgdb")
             return templates[0]['id'] if templates else None
         except Exception as e:
@@ -500,7 +500,7 @@ class HgdbJdbcInspector(BaseInspectionEngine):
 
         # 慢查询深度分析（hgdb 无独立分析器时降级为 None）
         try:
-            from slow_query_analyzer import get_slow_query_analyzer
+            from modules.inspection.slow_query import get_slow_query_analyzer
             self.context['slow_query_result'] = get_slow_query_analyzer('hgdb').analyze(self.conn).to_dict()
         except Exception as e:
             print(f"[HGDB] 慢查询分析跳过: {e}")
@@ -508,7 +508,7 @@ class HgdbJdbcInspector(BaseInspectionEngine):
 
         # 索引健康分析（hgdb 无独立分析器时降级为 None）
         try:
-            from index_health import get_index_health
+            from modules.inspection.index_health import get_index_health
             self.context['index_health_result'] = get_index_health('hgdb', self.conn)
         except Exception as e:
             print(f"[HGDB] 索引健康分析跳过: {e}")
@@ -523,14 +523,14 @@ class HgdbJdbcInspector(BaseInspectionEngine):
 
         # 智能分析（复用 PG 兼容分析器，异常降级空列表）
         try:
-            from analyzer import smart_analyze_pg
+            from modules.inspection.analyzer import smart_analyze_pg
             self.context['auto_analyze'] = smart_analyze_pg(self.context) or []
         except Exception as e:
             print(f"[HGDB] 智能分析失败: {e}")
             self.context['auto_analyze'] = []
         # 规则引擎（YAML 规则，pro/rules/builtin/hgdb.yaml）—— HGDB 专属检查
         try:
-            from pro.rule_engine import analyze_with_plugins
+            from modules.pro.rule_engine import analyze_with_plugins
             rule_issues = analyze_with_plugins('hgdb', self.context)
             if rule_issues:
                 if not isinstance(self.context.get('auto_analyze'), list):
@@ -688,7 +688,7 @@ def get_task_config():
 
 # ── 注册插件（无侵入式架构）──────────────────────────────────────────
 try:
-    from plugin_core import InspectionPlugin, register
+    from modules.pluginkit.core import InspectionPlugin, register
 
     class HgdbJdbcPluginAdapter(InspectionPlugin):
         """HGDB JDBC 插件适配器（实现标准接口）。"""
@@ -719,7 +719,7 @@ try:
             print("[HGDB] 开始初始化数据（模板 + 基线）...")
             try:
                 import sqlite3  # noqa: F401
-                from inspection_dal import (
+                from modules.inspection.dal import (
                     get_templates_by_db_type,
                     create_template,
                     create_chapter,
@@ -832,7 +832,7 @@ try:
             """插件卸载：清理 hgdb 的模板与基线数据。"""
             print("[HGDB] 开始清理数据...")
             try:
-                from inspection_dal import (
+                from modules.inspection.dal import (
                     get_templates_by_db_type,
                     get_baselines_by_db_type,
                     delete_template,

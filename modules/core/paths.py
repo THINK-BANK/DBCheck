@@ -1,0 +1,94 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2025-2026 fiyo (Jack Ge) <sdfiyon@gmail.com>
+# Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
+
+"""DBCheck 中央路径配置与迁移引导模块。
+
+集中管理项目内所有关键路径，供各模块统一引用，避免散落的硬编码相对路径。
+阶段3 的数据路径迁移会在此处暴露常量；本模块同时提供幂等的 ``ensure_migrated()``
+入口，供 ``data_manager.py`` / ``web_ui.py`` 在导入时触发一次性旧路径迁移。
+"""
+
+import sys
+from pathlib import Path
+
+
+def _project_root() -> Path:
+    """返回项目根目录。
+
+    - 打包（frozen）环境：使用可执行文件所在目录。
+    - 普通 Python 运行：使用本文件的上两级目录（core/ 的父目录）。
+    """
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    # core 现已迁入 modules/（modules/core/paths.py），
+    # 需上溯三级才能到达项目根目录 D:/DBCheck
+    return Path(__file__).resolve().parent.parent.parent
+
+
+PROJECT_ROOT = _project_root()
+ASSETS_DIR = PROJECT_ROOT / "assets"
+DATA_DIR = PROJECT_ROOT / "data"
+PRO_DATA_DIR = DATA_DIR / "pro_data"
+REPORTS_DIR = DATA_DIR / "reports"
+BACKUPS_DIR = DATA_DIR / "backups"
+USER_DB_DIR = DATA_DIR / "user_db"
+LOG_DIR = DATA_DIR / "logs"
+SCHEDULER_LOG = LOG_DIR / "scheduler.log"
+RESTART_LOG = LOG_DIR / "web_service_restart.log"
+PYTEST_LOG = LOG_DIR / "pytest_p0.log"
+SCHEDULER_JOBS = DATA_DIR / "scheduler_jobs.json"
+DB_KEY_PATH = PROJECT_ROOT / ".db_key"
+INSPECTION_DB = DATA_DIR / "inspection.db"
+LOGO_PATH = ASSETS_DIR / "brand" / "dbcheck_logo.png"
+AWR_UPLOADS_DIR = DATA_DIR / "awr_uploads"
+
+# 旧路径（兼容解析用，供阶段3 迁移与兼容）
+PRO_DATA_DIR_LEGACY = PROJECT_ROOT / "pro_data"
+REPORTS_DIR_LEGACY = PROJECT_ROOT / "reports"
+BACKUPS_DIR_LEGACY = PROJECT_ROOT / "data_backups"
+USER_DB_DIR_LEGACY = PROJECT_ROOT / "user_management" / "db"
+
+
+def resolve(new: Path, old: Path) -> Path:
+    """优先返回新路径；若新路径不存在则回退到旧路径；都不存在时返回新路径。"""
+    return new if new.exists() else (old if old.exists() else new)
+
+
+_MANIFEST = DATA_DIR / ".migration_manifest.json"
+_BACKUP_ROOT = DATA_DIR / ".migration_backup"
+
+
+# ── 配置 / 数据资产目录（根目录文件梳理迁移，T1 新增）──────────────────
+CONFIG_DIR = PROJECT_ROOT / "modules" / "config"
+BUILTIN_REGISTRY_JSON = CONFIG_DIR / "builtin_registry.json"
+BUILTIN_TYPES_JSON = CONFIG_DIR / "builtin_types.json"
+QUOTES_JSON = CONFIG_DIR / "dbcheck-quotes.json"
+VERSION_JSON = CONFIG_DIR / "version.json"
+BATCH_TEMPLATE_DIR = CONFIG_DIR / "batch_templates"
+
+
+def ensure_migrated():
+    """幂等地执行一次旧路径迁移（若检测到遗留旧路径）。
+
+    降级策略：迁移过程出现异常时仅打印告警并继续执行，不阻断应用启动。
+    """
+    try:
+        legacy_exists = any(
+            p.exists()
+            for p in (
+                PRO_DATA_DIR_LEGACY,
+                REPORTS_DIR_LEGACY,
+                BACKUPS_DIR_LEGACY,
+                USER_DB_DIR_LEGACY,
+                PROJECT_ROOT / "scheduler.log",
+                PROJECT_ROOT / "scheduler_jobs.json",
+                PROJECT_ROOT / "awr_uploads",
+            )
+        )
+        if legacy_exists:
+            from scripts.migrate_legacy_paths import run
+
+            run()
+    except Exception as e:  # 降级：迁移失败不阻断启动
+        print(f"[migration] 自动迁移跳过（降级旧路径）: {e}")

@@ -121,7 +121,7 @@ class JdbcConnectionWrapper:
 
 
 # ── Oracle JDBC 巡检器 ─────────────────────────────────────────────────────────
-from inspection_engine import BaseInspectionEngine
+from modules.inspection.engine import BaseInspectionEngine
 
 class OracleJdbcInspector(BaseInspectionEngine):
     """Oracle JDBC 巡检器"""
@@ -252,7 +252,7 @@ class OracleJdbcInspector(BaseInspectionEngine):
         :return: template_id: int
         """
         try:
-            from inspection_dal import get_templates_by_db_type
+            from modules.inspection.dal import get_templates_by_db_type
             templates = get_templates_by_db_type("oracle_jdbc")
             return templates[0]['id'] if templates else None
         except Exception as e:
@@ -447,7 +447,7 @@ def parse_connection_result(ok: bool, msg: Any) -> Dict[str, Any]:
 # ── 注册插件（无侵入式架构）─────────────────────────────────────────────
 # 直接在文件中定义适配器类，避免模块导入问题
 try:
-    from plugin_core import InspectionPlugin, register
+    from modules.pluginkit.core import InspectionPlugin, register
     
     class OracleJdbcPluginAdapter(InspectionPlugin):
         """Oracle JDBC 插件适配器（实现标准接口）"""
@@ -478,7 +478,7 @@ try:
             print(f"[Oracle JDBC] 开始初始化数据（参照 Oracle 11g）...")
             try:
                 import json
-                from inspection_dal import (
+                from modules.inspection.dal import (
                     get_templates_by_db_type,
                     create_template,
                     create_chapter,
@@ -529,7 +529,7 @@ try:
                     chapter_title_zh = chapter_data['chapter_title_zh']
                     
                     # 检查是否已存在章节（幂等性）
-                    from inspection_dal import get_db_connection
+                    from modules.inspection.dal import get_db_connection
                     conn = get_db_connection(db_path) if db_path else get_db_connection()
                     cursor = conn.cursor()
                     cursor.execute("""
@@ -623,7 +623,7 @@ try:
             """插件卸载时调用：清理模板和基线数据（插件独立，不依赖平台）"""
             print(f"[Oracle JDBC] 开始清理数据...")
             try:
-                from inspection_dal import (
+                from modules.inspection.dal import (
                     get_db_connection,
                     get_templates_by_db_type,
                     get_baselines_by_db_type,

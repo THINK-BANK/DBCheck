@@ -34,7 +34,7 @@ _plugin_dir = str(Path(__file__).parent)
 if _plugin_dir not in sys.path:
     sys.path.insert(0, _plugin_dir)
 
-from inspection_engine import (
+from modules.inspection.engine import (
     BaseInspectionEngine,
     LocalSystemInfoCollector,
     RemoteSystemInfoCollector,
@@ -172,7 +172,7 @@ class MongodbInspector(BaseInspectionEngine):
             template_id: int 或 None
         """
         try:
-            from inspection_dal import get_templates_by_db_type
+            from modules.inspection.dal import get_templates_by_db_type
             templates = get_templates_by_db_type("mongodb")
             return templates[0]['id'] if templates else None
         except Exception as e:
@@ -970,7 +970,7 @@ class MongodbInspector(BaseInspectionEngine):
             if not baselines:
                 # 降级到 inspection_dal
                 try:
-                    from inspection_dal import get_baselines_by_db_type
+                    from modules.inspection.dal import get_baselines_by_db_type
                     baselines = get_baselines_by_db_type(self.db_type, enabled_only=True)
                 except Exception as e:
                     print(f"[WARN] 加载基线配置失败: {e}")

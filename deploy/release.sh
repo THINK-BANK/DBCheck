@@ -53,7 +53,7 @@ echo "  ✓ 已拉取最新代码"
 
 # ── 3. 更新 version.py ─────────────────────────────────
 echo "[3/7] 更新 version.py (__version__ = '$VERSION_WITH_V')..."
-VERSION_PY="$PROJECT_ROOT/version.py"
+VERSION_PY="$PROJECT_ROOT/../config/version.py"
 if [[ -f "$VERSION_PY" ]]; then
     sed -i 's/^__version__\s*=.*/__version__ = "'"$VERSION_WITH_V"'"/' "$VERSION_PY"
     echo "  ✓ version.py 已更新"
@@ -73,7 +73,7 @@ fi
 
 # ── 5. 提交并推送代码 ────────────────────────────────
 echo "[5/7] 提交并推送代码..."
-git add version.py Dockerfile release.sh 2>/dev/null
+git add config/version.py deploy/Dockerfile deploy/release.sh 2>/dev/null
 git add -A 2>/dev/null
 COMMIT_MSG="Release $VERSION_WITH_V"
 if git diff --cached --quiet 2>/dev/null; then

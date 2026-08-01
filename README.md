@@ -8,7 +8,7 @@ DBCheck Professional is a commercial, cross-platform database health inspection 
 
 > Website: [https://dbcheck.top](https://dbcheck.top) &nbsp;|&nbsp; Email: sdfiyon@gmail.com
 > 
-> Language: [English](./README.md) | 语言：[中文](./README_zh.md)
+> Language: [English](./README.md) | 语言：[中文](./docs/README_zh.md)
 
 [![Version](https://img.shields.io/badge/Version-v26.7.30.1-blue.svg)]()
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)]()
@@ -81,8 +81,8 @@ Visit **http://localhost:5003**. Default credentials are `admin` / `admin123` (c
 ### docker-compose (Recommended)
 
 ```bash
-curl -o docker-compose.yml https://raw.githubusercontent.com/fiyo/DBCheck/main/docker-compose.yml
-docker compose up -d
+curl -o deploy/docker-compose.yml https://raw.githubusercontent.com/fiyo/DBCheck/main/deploy/docker-compose.yml
+docker compose -f deploy/docker-compose.yml up -d
 ```
 
 > **GBase 8s Note**: The Docker image is pre-installed with JDK + JDBC driver. GBase data sources work out of the box — no extra configuration needed.
@@ -102,7 +102,7 @@ git clone https://github.com/fiyo/DBCheck.git
 cd DBCheck
 
 # Install dependencies
-pip install -r requirements.txt
+pip install -r deploy/requirements.txt
 
 # Start Web UI
 python web_ui.py
@@ -114,8 +114,8 @@ Visit **http://localhost:5003**.
 ### CLI Mode
 
 ```bash
-python main.py           # Chinese interface (default)
-python main.py --lang en # English interface
+python -m entrypoints.cli           # Chinese interface (default)
+python -m entrypoints.cli --lang en # English interface
 python web_ui.py         # Web interface
 ```
 
@@ -490,7 +490,7 @@ Upload PDF / Word / Markdown / TXT documents for automatic vectorization. AI ret
 ### Multi-Language & Themes
 
 - **9 languages supported**: 中文 (default), English, Traditional Chinese (繁體中文), Japanese (日本語), Korean (한국어), Spanish (Español), French (Français), German (Deutsch), Russian (Русский)
-- Switch anytime via the Web UI language selector (top-right) or the CLI argument (`python main.py --lang <code>`)
+- Switch anytime via the Web UI language selector (top-right) or the CLI argument (`python -m entrypoints.cli --lang <code>`)
 - UI text, menus, report templates, and AI diagnostic labels are all localized
 - Dark / Light theme support with automatic preference saving
 

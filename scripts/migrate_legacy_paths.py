@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2025-2026 fiyo (Jack Ge) <sdfiyon@gmail.com>
+# Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
+
 """DBCheck 旧路径迁移脚本（幂等）。
 
 将历史散落在仓库根/旧目录中的图片、脚本、数据目录统一迁移到新结构：
@@ -28,7 +32,7 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
-from core import paths  # noqa: E402
+from modules.core import paths  # noqa: E402
 
 
 # 源相对路径 -> 目标相对路径（均以 PROJECT_ROOT 拼接）

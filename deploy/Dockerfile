@@ -40,7 +40,7 @@ WORKDIR /build
 # pyodbc is installed via pip; the actual ODBC driver (msodbcsql18)
 # must be installed at runtime if SQL Server support is needed.
 # See docs/enable-sqlserver.md for instructions.
-COPY requirements-docker.txt .
+COPY deploy/requirements-docker.txt .
 RUN python -m venv /opt/venv \
     && /opt/venv/bin/pip install --no-cache-dir --upgrade pip \
     && /opt/venv/bin/pip install --no-cache-dir -r requirements-docker.txt \
@@ -98,7 +98,7 @@ COPY --from=builder /opt/venv /opt/venv
 COPY --from=builder /build /app
 
 # Copy entrypoint script and make it executable
-COPY docker-entrypoint.sh /usr/local/bin/
+COPY deploy/docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 WORKDIR /app

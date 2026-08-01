@@ -25,7 +25,7 @@ import traceback
 import time
 import re
 from datetime import datetime
-from core import paths
+from modules.core import paths
 # docx 相关导入改为延迟导入（在 generate_report 相关方法中导入）
 # from docx import Document
 # from docx.shared import Pt, RGBColor, Inches, Cm
@@ -34,7 +34,7 @@ from core import paths
 # from docx.oxml.ns import qn
 # from docx.oxml import parse_xml
 
-import configparser
+import modules.config as configparser
 import importlib
 import io
 import json
@@ -51,21 +51,8 @@ try:
 except ImportError:
     paramiko = None
 
-# 导入根 inspection_engine 的共享系统资源渲染函数。
-# 注意：本文件自身也叫 inspection_engine.py，若按模块名导入会导入自身（不含该函数），
-# 故先尝试普通导入，失败（AttributeError/ImportError）再按绝对路径加载根模块。
-try:
-    from inspection_engine import render_system_resource_chapter
-except Exception:
-    import importlib.util as _ilu
-    import os as _os
-    _root_ie_path = _os.path.abspath(
-        _os.path.join(_os.path.dirname(__file__), "..", "..", "..", "inspection_engine.py")
-    )
-    _root_ie_spec = _ilu.spec_from_file_location("_root_inspection_engine", _root_ie_path)
-    _root_ie_mod = _ilu.module_from_spec(_root_ie_spec)
-    _root_ie_spec.loader.exec_module(_root_ie_mod)
-    render_system_resource_chapter = _root_ie_mod.render_system_resource_chapter
+# 共享系统资源渲染函数（来自核心巡检引擎包，绝对导入）
+from modules.inspection.engine import render_system_resource_chapter
 
 # ── 健康检查评分阈值 ─────────────────────────────
 HEALTH_THRESHOLD = {'excellent': 90, 'good': 75, 'fair': 60, 'poor': 0}
@@ -644,7 +631,7 @@ class BaseInspectionEngine:
         self.print_progress_bar(current_step, total_steps, prefix=_prog_prefix, suffix=self._t(f'{self.db_type}_progress_ai', default='dm8_progress_ai'))
         self.context['ai_advice'] = ''
         try:
-            from analyzer import AIAdvisor
+            from modules.inspection.analyzer import AIAdvisor
             import json as _json
             cfg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dbc_config.json')
             ai_cfg = {}
@@ -682,12 +669,12 @@ class BaseInspectionEngine:
         # 9. 慢查询深度分析（P2）— 按 db_type 选择分析器
         self.context['slow_query_result'] = None
         try:
-            from slow_query_analyzer import get_slow_query_analyzer
+            from modules.inspection.slow_query import get_slow_query_analyzer
             analyzer = get_slow_query_analyzer(self.db_type)
             if self.conn:
                 ai_advisor = None
                 try:
-                    from analyzer import AIAdvisor
+                    from modules.inspection.analyzer import AIAdvisor
                     import json as _json
                     cfg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dbc_config.json')
                     ai_cfg = {}
@@ -730,7 +717,7 @@ class BaseInspectionEngine:
         self.context['config_baseline_result'] = None
         if self.db_type == 'dm':
             try:
-                from config_baseline import check_dm_config_baseline
+                from modules.inspection.config_baseline import check_dm_config_baseline
                 if self.conn:
                     print("\n\U0001F539 " + self._t('dm8_cli_config_baseline_checking'))
                     cb_result = check_dm_config_baseline(self.conn)
@@ -749,7 +736,7 @@ class BaseInspectionEngine:
         self.context['index_health_result'] = None
         if self.db_type == 'dm':
             try:
-                from index_health import analyze_dm_indexes
+                from modules.inspection.index_health import analyze_dm_indexes
                 if self.conn:
                     print("\n\U0001F50D " + self._t('dm8_cli_index_health_checking'))
                     ih_result = analyze_dm_indexes(self.conn)
@@ -1211,7 +1198,7 @@ class BaseInspectionEngine:
     def _render_context(self, output_file, inspector_name="Jack"):
         """从数据库加载模板配置，渲染 _chapters 到 context"""
         try:
-            from inspection_dal import (
+            from modules.inspection.dal import (
                 get_default_template,
                 get_chapters_by_template,
                 get_queries_by_chapter,
@@ -1321,7 +1308,7 @@ class BaseInspectionEngine:
     def _check_baselines(self):
         """执行基线配置检查，结果存入 self.context['baseline_results']"""
         try:
-            from inspection_dal import get_baselines_by_db_type
+            from modules.inspection.dal import get_baselines_by_db_type
             
             baselines = get_baselines_by_db_type(self.db_type, enabled_only=True)
             if not baselines:

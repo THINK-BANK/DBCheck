@@ -990,7 +990,8 @@
                 if (data.code === 0) {
                     localStorage.setItem('token', data.data.token);
                     localStorage.setItem('user', JSON.stringify(data.data.user));
-                    window.location.href = '/';
+                    // 携带 JWT 跳转，服务端 index() 一次性建立会话（兼容 Cookie 未发送的场景）
+                    window.location.href = '/?token=' + encodeURIComponent(data.data.token);
                 } else {
                     errorEl.textContent = data.msg || (i18n('login.error_failed') || '登录失败');
                     errorEl.classList.add('show');
