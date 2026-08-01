@@ -19822,7 +19822,7 @@ function mkdirRemote() {
   </div>
   <div class="sb-item" id="sb-inspection">
     <span>⏱️</span>
-    <span data-i18n="webui.status_last_inspect">上次巡检</span>
+    <span>累计巡检</span>
     <span class="sb-val" id="sb-last-inspect">--</span>
   </div>
   <div class="sb-item">
@@ -19846,14 +19846,14 @@ function mkdirRemote() {
   updateTime();
   setInterval(updateTime, 1000);
 
-  // 上次巡检时间（从 /api/home_stats 获取）
+  // 累计巡检次数（从 /api/home_stats 获取）
   function updateLastInspect(){
     fetch('/api/home_stats').then(r=>r.json()).then(d=>{
       if(!d.success) return;
       var stats = d.stats || {};
       var total = stats.inspection_total || 0;
       var el = document.getElementById('sb-last-inspect');
-      if(el) el.textContent = total > 0 ? '共 '+total+' 次巡检' : '暂无数据';
+      if(el) el.textContent = total > 0 ? total + ' 次' : '暂无数据';
     }).catch(()=>{});
   }
   updateLastInspect();
