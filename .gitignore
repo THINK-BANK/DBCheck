@@ -102,12 +102,10 @@ docs/design/
 #       该目录整体被 git 忽略，避免污染版本库。
 qa-temp/
 
-# 正式 pytest 测试套件（tests/）需纳入版本控制：
-# 上面全局忽略的 test_*.py / check_*.py 等针对仓库根目录的临时脚本，
-# 不应用于 tests/ 下的规范测试用例，故在此显式放行。
-!tests/
-!tests/test_*.py
-!tests/conftest.py
+# 正式 pytest 测试套件（tests/）改为本地-only，不纳入版本控制：
+# 仓库根目录的临时脚本（test_*.py / check_*.py）仍按上方全局忽略；
+# tests/ 下用例仅本地回归使用，不进版本库（CI 不再运行 pytest 步骤）。
+tests/
 
 # 署名机制核心文件：必须纳入版本控制（覆盖上方 *.md / check_*.py 全局忽略）
 # AGENTS.md = 给 AI 编码助手的强制署名约束；scripts/check_license_headers.py = CI 检测脚本
