@@ -2071,31 +2071,35 @@ async function executeFixSql(taskId, sql) {
   .ai-chat-panel.open { right: 0; }
 }
 
-/* 小屏幕浮动按钮 */
+/* 桌面端收起 AI 聊天框 */
+.ai-chat-panel.collapsed { right: -432px; transition: right 0.3s ease; }
+/* 主内容区随面板收起自适应撑满 */
+.main-content.ai-panel-collapsed { margin-right: 0; }
+
+/* AI 面板浮动展开按钮（桌面端 + 移动端共用基础样式） */
 #ai-chat-fab {
   display: none;
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #00C8A0, #0A2A6E);
+  border: none;
+  color: #fff;
+  font-size: 24px;
+  cursor: pointer;
+  z-index: 9998;
+  box-shadow: 0 4px 16px rgba(46,160,67,0.4);
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
 }
+#ai-chat-fab:hover { transform: scale(1.1); }
+/* 移动端默认显示 FAB（当面板关闭时 JS 控制 display） */
 @media (max-width: 1100px) {
-  #ai-chat-fab {
-    display: flex;
-    position: fixed;
-    bottom: 24px;
-    right: 24px;
-    width: 56px;
-    height: 56px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #00C8A0, #0A2A6E);
-    border: none;
-    color: #fff;
-    font-size: 24px;
-    cursor: pointer;
-    z-index: 9998;
-    box-shadow: 0 4px 16px rgba(46,160,67,0.4);
-    align-items: center;
-    justify-content: center;
-    transition: all 0.3s ease;
-  }
-  #ai-chat-fab:hover { transform: scale(1.1); }
+  #ai-chat-fab { display: flex; }
 }
 
 /* ─── 聊天头部 */
@@ -6416,6 +6420,17 @@ curl -H "X-API-Key: YOUR_API_KEY" http://localhost:5003/api/v1/inspect/{task_id}
             </label>
             <div style="font-size:11.5px;color:var(--text-muted);margin-top:4px;margin-left:24px" data-i18n="webui.ai_online_enable_hint">
               默认关闭，数据仅在本地处理。开启后可调用 OpenAI / DeepSeek 等远程 API，数据将通过网络发送至第三方
+            </div>
+          </div>
+
+          <!-- 显示/隐藏 AI 巡检助手（全局，持久化） -->
+          <div class="form-group" style="background:var(--surface2);border-radius:8px;padding:12px 14px">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+              <input type="checkbox" id="show-ai-assistant-toggle" style="width:auto;margin:0" onchange="onShowAiAssistantChange()"/>
+              <span style="font-weight:600">显示 AI 巡检助手（右侧聊天框）</span>
+            </label>
+            <div style="font-size:11.5px;color:var(--text-muted);margin-top:4px;margin-left:24px">
+              关闭后右侧 AI 巡检助手聊天框默认隐藏，对所有用户生效。
             </div>
           </div>
 
@@ -15096,16 +15111,73 @@ function _renderMarkdownTable(text) {
 // 全局变量：由 showPage() 更新
 let _currentPage = 'dashboard';
 
-// 小屏幕：切换 AI 面板显示/隐藏
+// 切换 AI 面板显示/隐藏（兼容桌面端收起 + 移动端滑出）
 function toggleAiChatPanel() {
   const panel = document.getElementById('ai-chat-sidebar');
   const fab = document.getElementById('ai-chat-fab');
-  const isOpen = panel.classList.contains('open');
-  panel.classList.toggle('open');
-  if (fab) fab.style.display = isOpen ? 'flex' : 'none';
-  // 小屏幕时显示/隐藏面板内的关闭按钮
-  const closeBtn = panel.querySelector('.chat-panel-close');
-  if (closeBtn) closeBtn.style.display = isOpen ? 'none' : 'inline-block';
+  const mainContent = document.querySelector('.main-content');
+  const isMobile = window.matchMedia('(max-width: 1100px)').matches;
+  if (isMobile) {
+    // 移动端：用 .open 类滑出/收起
+    panel.classList.toggle('open');
+    if (fab) fab.style.display = panel.classList.contains('open') ? 'flex' : 'none';
+    if (mainContent) mainContent.classList.toggle('ai-panel-collapsed', !panel.classList.contains('open'));
+  } else {
+    // 桌面端：用 .collapsed 类收起/展开，收起时显示浮动按钮可再展开
+    panel.classList.toggle('collapsed');
+    const collapsed = panel.classList.contains('collapsed');
+    if (fab) fab.style.display = collapsed ? 'flex' : 'none';
+    if (mainContent) mainContent.classList.toggle('ai-panel-collapsed', collapsed);
+  }
+}
+
+// 设置页：全局开关「显示 AI 巡检助手」
+function onShowAiAssistantChange() {
+  const t = document.getElementById('show-ai-assistant-toggle');
+  const show = !!t.checked;
+  const isMobile = window.matchMedia('(max-width: 1100px)').matches;
+  fetch('/api/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ show_ai_assistant: show })
+  }).then(function(r){ return r.json(); }).then(function(d){
+    if (!d.ok) { toastError(d.error || '保存失败'); t.checked = !show; return; }
+    const panel = document.getElementById('ai-chat-sidebar');
+    const fab = document.getElementById('ai-chat-fab');
+    const mainContent = document.querySelector('.main-content');
+    if (show) {
+      panel.classList.remove('collapsed');
+      if (fab) fab.style.display = isMobile ? 'flex' : 'none';
+      if (mainContent) mainContent.classList.remove('ai-panel-collapsed');
+    } else {
+      panel.classList.add('collapsed');
+      if (fab) fab.style.display = 'none';
+      if (mainContent) mainContent.classList.add('ai-panel-collapsed');
+    }
+    toast(show ? '已显示 AI 巡检助手' : '已隐藏 AI 巡检助手');
+  }).catch(function(e){ toastError('保存失败: ' + e.message); t.checked = !show; });
+}
+
+// 页面加载时同步「显示 AI 巡检助手」全局开关 + 面板初始状态
+function syncShowAiAssistant() {
+  fetch('/api/config').then(function(r){ return r.json(); }).then(function(cfg){
+    const show = cfg.show_ai_assistant !== false; // 默认显示
+    const t = document.getElementById('show-ai-assistant-toggle');
+    if (t) t.checked = show;
+    const panel = document.getElementById('ai-chat-sidebar');
+    const fab = document.getElementById('ai-chat-fab');
+    const mainContent = document.querySelector('.main-content');
+    const isMobile = window.matchMedia('(max-width: 1100px)').matches;
+    if (show) {
+      if (panel) panel.classList.remove('collapsed');
+      if (fab) fab.style.display = isMobile ? 'flex' : 'none';
+      if (mainContent) mainContent.classList.remove('ai-panel-collapsed');
+    } else {
+      if (panel) panel.classList.add('collapsed');
+      if (fab) fab.style.display = 'none';
+      if (mainContent) mainContent.classList.add('ai-panel-collapsed');
+    }
+  }).catch(function(){});
 }
 
 function getChatContext() {
@@ -16535,7 +16607,7 @@ async function deleteBackupHistory(recordId) {
     <span id="chat-mode-badge" class="chat-mode-badge" style="font-size:11px;padding:2px 8px;border-radius:10px;background:rgba(76,175,80,0.15);color:#00C8A0;margin-left:8px;display:none">问答模式</span>
     <button class="chat-close" onclick="clearChatSession()" title="清空对话" style="font-size:16px;color:var(--text-secondary);background:none;border:none;cursor:pointer;padding:4px 8px;margin-right:4px">🗑</button>
     <!-- 小屏幕关闭按钮 -->
-    <button class="chat-close chat-panel-close" onclick="toggleAiChatPanel()" title="关闭" style="font-size:18px;display:none">✕</button>
+    <button class="chat-close chat-panel-close" onclick="toggleAiChatPanel()" title="关闭" style="font-size:18px">✕</button>
   </div>
   <div class="chat-messages" id="chat-messages">
     <div class="chat-msg ai" id="chat-welcome">
@@ -20661,6 +20733,7 @@ const STATIC_DB_PH_MAP = {'pg':'postgres','ivorysql':'postgres','kingbase':'king
   // 页面加载时初始化
   document.addEventListener('DOMContentLoaded', () => {
     loadDbTypes();
+    syncShowAiAssistant();
   });
   </script>
 </body>

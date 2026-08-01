@@ -187,6 +187,77 @@ except ImportError:
     _socketio_async_mode = 'threading'
 socketio = SocketIO(cors_allowed_origins='*', async_mode=_socketio_async_mode)
 
+# ── 强制退出机制（Ctrl+C / 关闭窗口 必杀，独立于 gevent/Python signal） ──
+import threading as _shutdown_threading
+import time as _shutdown_time
+
+_SHUTDOWN_EVENT = _shutdown_threading.Event()
+_CTRL_HANDLER_KEEPALIVE = None  # 模块级保活 Win32 回调，防止被 GC 回收后失效
+
+
+def _hard_exit():
+    """C 层立即终止整个进程（含所有后台/非 daemon 线程）。
+
+    等价于关闭终端窗口，干净且不阻塞——这是解决 Ctrl+C 无反应的最终手段。
+    """
+    os._exit(0)
+
+
+def _request_shutdown():
+    """请求关闭：置位事件并立即强制退出（双重保险）。"""
+    try:
+        _SHUTDOWN_EVENT.set()
+    except Exception:
+        pass
+    _hard_exit()
+
+
+def _console_ctrl_handler(ctrl_type):
+    """Windows 控制台 Ctrl+C / Ctrl+Break / 关闭窗口 事件处理器（在独立 OS 线程中运行）。"""
+    _request_shutdown()
+    return True
+
+
+def _register_console_ctrl_handler():
+    """注册 / 重注册 Windows 控制台级 Ctrl+C 处理器（OS 层，绕开 gevent/Python signal 接管）。
+
+    先移除旧的再添加新的，保证幂等、不产生重复项；
+    后注册者 LIFO 顺序下「最先被调用」，从而始终优先于服务自身注册的 handler。
+    """
+    global _CTRL_HANDLER_KEEPALIVE
+    if platform.system().lower() != 'windows':
+        return
+    try:
+        import ctypes
+        import ctypes.wintypes
+        _kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
+        _CTRL_CB = ctypes.WINFUNCTYPE(ctypes.wintypes.BOOL, ctypes.wintypes.DWORD)
+        if _CTRL_HANDLER_KEEPALIVE is not None:
+            try:
+                _kernel32.SetConsoleCtrlHandler(_CTRL_HANDLER_KEEPALIVE, False)
+            except Exception:
+                pass
+        cb = _CTRL_CB(_console_ctrl_handler)
+        _kernel32.SetConsoleCtrlHandler(cb, True)
+        _CTRL_HANDLER_KEEPALIVE = cb  # 模块级保活，绝不被 GC
+    except Exception:
+        pass
+
+
+def _deferred_reregister_ctrl_handler():
+    """服务启动后延迟重注册，确保本 handler 在 LIFO 顺序中排最前（最先被调用）。"""
+    try:
+        _shutdown_time.sleep(1.5)
+        _register_console_ctrl_handler()
+    except Exception:
+        pass
+
+
+def _shutdown_watchdog():
+    """看门狗兜底：事件一旦置位立即强制退出，防止任何路径遗漏导致进程僵死。"""
+    _SHUTDOWN_EVENT.wait()
+    _hard_exit()
+
 # ── 本地模块 ──────────────────────────────────────────────
 try:
     import modules.entrypoints.main_mysql as main_mysql
@@ -2551,7 +2622,8 @@ def api_get_config():
         'oracle_client_lib_dir': cfg.get('oracle_client_lib_dir', ''),
         'yashandb_driver_lib_dir': cfg.get('yashandb_driver_lib_dir', ''),
         'language': cfg.get('language', 'zh'),
-        'notification': cfg.get('notification', {'enabled': False})
+        'notification': cfg.get('notification', {'enabled': False}),
+        'show_ai_assistant': cfg.get('show_ai_assistant', True)
     })
 
 @app.route('/api/config', methods=['POST'])
@@ -2568,6 +2640,8 @@ def api_save_config():
         existing['yashandb_driver_lib_dir'] = data['yashandb_driver_lib_dir']
     if 'notification' in data:
         existing['notification'] = data['notification']
+    if 'show_ai_assistant' in data:
+        existing['show_ai_assistant'] = bool(data['show_ai_assistant'])
     with open(cfg_path, 'w', encoding='utf-8') as f:
         json.dump(existing, f, ensure_ascii=False, indent=4)
     return jsonify({'ok': True})
@@ -9316,26 +9390,18 @@ def api_dm8_offline_report(task_id):
 
 
 def main():
-    # ── 信号处理：确保 Ctrl+C 能正确退出 ──
-    def _hard_exit():
-        """无条件强制退出整个进程（含所有后台/非 daemon 线程）。
-
-        等价于关闭终端窗口，干净且不阻塞——这是解决 Ctrl+C 无反应的最终手段。
-        """
-        os._exit(0)
-
+    # ── 信号处理：确保 Ctrl+C / 关闭窗口 能正确退出 ──
     def signal_handler(sig, frame):
-        """处理 Ctrl+C / SIGTERM：尽量立即退出。
+        """处理 Ctrl+C / SIGTERM：立即强制退出。
 
-        关键约束：信号处理函数里严禁调用会 import 模块或 join 线程的清理逻辑
-        （如 unload_all_plugins()）——一旦卡住，Ctrl+C 就会“看似无效”。
-        这里只做极简强制退出（os._exit 在 C 层立即终止整个进程）。
+        严禁调用任何会 import 模块或 join 线程的清理逻辑（如 unload_all_plugins），
+        否则 Ctrl+C 会“看似无效”。这里只做极简强制退出。
         """
         try:
             print(f"\n\n[主程序] 收到退出信号 {sig}，正在强制退出...")
         except Exception:
             pass
-        _hard_exit()
+        _request_shutdown()
 
     # 1) Python 标准信号（gevent 未接管时生效；Windows 下 SIGBREAK 更能穿透阻塞）
     try:
@@ -9347,28 +9413,19 @@ def main():
         # 非主线程中无法注册信号，依赖下方 Windows 控制台处理器兜底
         pass
 
-    # 2) Windows 控制台级处理器（关键兜底）：
-    #    Flask-SocketIO 启用 gevent 异步模式时会接管 Python 的 signal，
-    #    导致 Ctrl+C 看似无效；SetConsoleCtrlHandler 在 OS 层捕获 Ctrl+C / Ctrl+Break /
-    #    关闭窗口事件，不被 gevent 吞掉，且 PyInstaller 打包构建同样有效。
-    if platform.system().lower() == 'windows':
-        try:
-            import ctypes
-            import ctypes.wintypes
-            _kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
-            _CTRL_CB = ctypes.WINFUNCTYPE(ctypes.wintypes.BOOL, ctypes.wintypes.DWORD)
-
-            def _console_ctrl_handler(ctrl_type):
-                # ctrl_type: 0=CTRL_C_EVENT, 1=CTRL_BREAK_EVENT, 2=CTRL_CLOSE_EVENT ...
-                _hard_exit()  # 直接退出，不在控制台处理器线程里 print（避免关闭时死锁）
-                return True   # 声明已处理，阻止后续默认终止流程
-
-            _console_ctrl_cb = _CTRL_CB(_console_ctrl_handler)
-            _kernel32.SetConsoleCtrlHandler(_console_ctrl_cb, True)
-            # 保活引用，避免回调被 GC 回收后失效
-            _console_ctrl_handler_ref = _console_ctrl_cb
-        except Exception:
-            pass
+    # 2) Windows 控制台级处理器（关键兜底，OS 层捕获，gevent 吞不掉、PyInstaller 同样有效）
+    _register_console_ctrl_handler()
+    # 服务启动后 gevent/WSGI 可能再次注册 Ctrl handler（LIFO 下会排到我前面），
+    # 故延迟重注册一次，确保本 handler 始终「最后注册=最先调用」。
+    try:
+        _shutdown_threading.Thread(target=_deferred_reregister_ctrl_handler, daemon=True).start()
+    except Exception:
+        pass
+    # 3) 看门狗兜底：事件置位即强制退出，防任何路径遗漏
+    try:
+        _shutdown_threading.Thread(target=_shutdown_watchdog, daemon=True).start()
+    except Exception:
+        pass
     
     _setup_driver_paths()
     # ── 初始化插件系统 ──
