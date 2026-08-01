@@ -3,15 +3,22 @@
 # 用法:
 #   ./scripts/build.sh              # 构建基础版（不含 DM8）
 #   ./scripts/build.sh --full      # 构建全量版（含 DM8，需要 drivers/dm8/ 下有 dmpython wheel）
-#   ./scripts/build.sh --push     # 构建后推送到 Docker Hub
+#   ./scripts/build.sh --push     # 构建后推送到 Docker Hub 与 GHCR
 #   ./scripts/build.sh --full --push
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-IMAGE_NAME="jackge12345/dbcheck"
-VERSION="v2.5.3"
+# 镜像名（Docker Hub + GHCR 双源）
+DHUB_IMAGE="jackge12345/dbcheck"
+GHCR_IMAGE="ghcr.io/fiyo/dbcheck"
+
+# 版本号（与 modules/config/version.py 保持一致）
+VERSION="v26.8.1.1"
+
+# 应用端口（与 deploy/Dockerfile EXPOSE 及 web 默认端口一致）
+APP_PORT="5003"
 
 FULL_MODE=0
 PUSH_MODE=0
@@ -23,7 +30,7 @@ for arg in "$@"; do
         --help|-h)
             echo "用法: $0 [--full] [--push]"
             echo "  --full   构建全量版（含 DM8，需 drivers/dm8/ 下有驱动）"
-            echo "  --push   构建完成后推送到 Docker Hub"
+            echo "  --push   构建完成后推送到 Docker Hub 与 GHCR"
             exit 0
             ;;
     esac
@@ -61,27 +68,35 @@ else
     echo "==> 构建基础版（不含 DM8）..."
 fi
 
-# 构建
-docker build \
+# 标签定义：两个仓库各打 版本号 + latest
+TAGS="-t ${DHUB_IMAGE}:${VERSION}${TAG_SUFFIX} -t ${DHUB_IMAGE}:latest${TAG_SUFFIX}"
+TAGS="${TAGS} -t ${GHCR_IMAGE}:${VERSION}${TAG_SUFFIX} -t ${GHCR_IMAGE}:latest${TAG_SUFFIX}"
+
+# 构建（Dockerfile 位于 deploy/ 下，构建上下文为仓库根 PROJECT_DIR）
+docker build -f deploy/Dockerfile \
     $BUILD_ARGS \
-    -t "${IMAGE_NAME}:${VERSION}${TAG_SUFFIX}" \
-    -t "${IMAGE_NAME}:latest${TAG_SUFFIX}" \
+    $TAGS \
     .
 
 echo ""
 echo "✅ 构建完成！"
-echo "   镜像: ${IMAGE_NAME}:${VERSION}${TAG_SUFFIX}"
-echo "   镜像: ${IMAGE_NAME}:latest${TAG_SUFFIX}"
+echo "   镜像:"
+echo "     ${DHUB_IMAGE}:${VERSION}${TAG_SUFFIX}"
+echo "     ${DHUB_IMAGE}:latest${TAG_SUFFIX}"
+echo "     ${GHCR_IMAGE}:${VERSION}${TAG_SUFFIX}"
+echo "     ${GHCR_IMAGE}:latest${TAG_SUFFIX}"
 
 # 推送
 if [ "$PUSH_MODE" = "1" ]; then
     echo ""
-    echo "==> 推送到 Docker Hub..."
-    docker push "${IMAGE_NAME}:${VERSION}${TAG_SUFFIX}"
-    docker push "${IMAGE_NAME}:latest${TAG_SUFFIX}"
+    echo "==> 推送到 Docker Hub 与 GHCR..."
+    docker push "${DHUB_IMAGE}:${VERSION}${TAG_SUFFIX}"
+    docker push "${DHUB_IMAGE}:latest${TAG_SUFFIX}"
+    docker push "${GHCR_IMAGE}:${VERSION}${TAG_SUFFIX}"
+    docker push "${GHCR_IMAGE}:latest${TAG_SUFFIX}"
     echo "✅ 推送完成！"
 fi
 
 echo ""
 echo "==> 运行命令："
-echo "   docker run -d -p 5000:5000 -v dbcheck_data:/app/data -v dbcheck_reports:/app/reports ${IMAGE_NAME}:latest${TAG_SUFFIX}"
+echo "   docker run -d -p ${APP_PORT}:${APP_PORT} -v dbcheck_data:/app/data -v dbcheck_reports:/app/reports ${DHUB_IMAGE}:latest${TAG_SUFFIX}"
