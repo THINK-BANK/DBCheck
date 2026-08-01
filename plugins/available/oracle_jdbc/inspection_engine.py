@@ -1266,6 +1266,11 @@ class BaseInspectionEngine:
                     'queries': chapter_queries,
                 })
 
+            # 仅保留含查询的章节，并重排章节序号为连续的 1..N
+            # （无论用户选中哪些章，报告中章节序号必须连续）
+            _chapters = [c for c in _chapters if c.get('queries')]
+            for _idx, _ch in enumerate(_chapters, start=1):
+                _ch['chapter_number'] = _idx
             self.context['_chapters'] = _chapters
             print(f"[INFO] 已加载 {len(_chapters)} 个章节，共 {total_queries} 个查询")
 
@@ -1536,7 +1541,7 @@ class BaseInspectionEngine:
                 r.font.name = '微软雅黑'
                 r._element.rPr.rFonts.set(qn('w:eastAsia'), '微软雅黑')
                 r.font.bold = True
-                r.font.size = Pt(max(9, 16 - level * 2))
+                r.font.size = Pt(max(9, 18 - level * 2))
                 r.font.color.rgb = RGBColor(0, 51, 102)
                 i += 1
                 continue
@@ -1726,7 +1731,7 @@ class BaseInspectionEngine:
                     run.font.name = '微软雅黑'
                     run._element.rPr.rFonts.set(_qn('w:eastAsia'), '微软雅黑')
                     run.font.color.rgb = _RGBColor(0, 51, 102)
-                    run.font.size = _Pt(14) if level == 1 else _Pt(12)
+                    run.font.size = _Pt(16) if level == 1 else _Pt(14)
                 return h
             
             def _ch_prefix(n, sub=None):
@@ -1903,7 +1908,7 @@ class BaseInspectionEngine:
                     run.font.name = '微软雅黑'
                     run._element.rPr.rFonts.set(qn('w:eastAsia'), '微软雅黑')
                     run.font.color.rgb = RGBColor(0, 51, 102)
-                    run.font.size = Pt(16) if level == 1 else Pt(12)
+                    run.font.size = Pt(16) if level == 1 else Pt(14)
                     run.font.bold = True
                 return h
             

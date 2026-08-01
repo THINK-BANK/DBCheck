@@ -18,6 +18,7 @@
 - 调用 collect_data() 采集数据
 - 调用 generate_report() 生成报告
 """
+from core.paths import PROJECT_ROOT
 import os
 import sys
 import sqlite3
@@ -50,6 +51,9 @@ try:
     import paramiko
 except ImportError:
     paramiko = None
+
+# ── 巡检「章节可选」共享过滤 helper（逻辑单点）────────────────────────────
+from inspection.chapter_filter import build_chapter_filter_sql
 
 # ── 健康检查评分阈值 ─────────────────────────────
 HEALTH_THRESHOLD = {'excellent': 90, 'good': 75, 'fair': 60, 'poor': 0}
@@ -304,7 +308,7 @@ def render_system_resource_chapter(doc, context, lang, chapter_prefix=''):
             run.font.name = '微软雅黑'
             run._element.rPr.rFonts.set(qn('w:eastAsia'), '微软雅黑')
             run.font.color.rgb = RGBColor(0, 51, 102)
-            run.font.size = Pt(14) if level == 1 else Pt(12)
+            run.font.size = Pt(16) if level == 1 else Pt(14)
         return h
 
     def _fmt_kv_table(rows):
@@ -434,7 +438,8 @@ class BaseInspectionEngine:
     - 调用 generate_report() 生成报告
     """
     
-    def __init__(self, host, port, user, password, database=None, ssh_info=None, template_id=None):
+    def __init__(self, host, port, user, password, database=None, ssh_info=None,
+                 template_id=None, chapter_ids=None):
         self.host = host
         self.port = int(port)
         self.user = user
@@ -442,6 +447,8 @@ class BaseInspectionEngine:
         self.database = database
         self.ssh_info = ssh_info or {}
         self._template_id = template_id  # 用户显式指定的模板 ID
+        # 用户显式勾选的章节 ID 列表；None/不传 = 全量（不过滤）；列表 = 仅巡检选中章
+        self.chapter_ids = chapter_ids
         self.conn = None
         self.cursor = None
         self.context = {}
@@ -495,7 +502,7 @@ class BaseInspectionEngine:
             return self._template_id
         # 2. 否则根据 db_type 从数据库自动查询默认模板
         try:
-            _db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'inspection.db')
+            _db_path = os.path.join(str(PROJECT_ROOT), 'data', 'inspection.db')
             if not os.path.exists(_db_path):
                 return None
             _conn = sqlite3.connect(_db_path)
@@ -536,7 +543,7 @@ class BaseInspectionEngine:
         try:
             if not sql_templates or sql_templates == '':
                 # 从 inspection.db 加载查询，直接用 dict 存储，避免 configparser 解析问题
-                _db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'inspection.db')
+                _db_path = os.path.join(str(PROJECT_ROOT), 'data', 'inspection.db')
                 if not os.path.exists(_db_path):
                     print(self._t(f'{self.db_type}_sql_template_fail', default='dm8_sql_template_fail').format(e="inspection.db 不存在"))
                     return self.context
@@ -544,23 +551,25 @@ class BaseInspectionEngine:
                 import sqlite3
                 conn_db = sqlite3.connect(_db_path)
                 c = conn_db.cursor()
+                # 章节可选过滤：None=全量；列表=仅选中章（参数化，禁止拼接）
+                _chap_frag, _chap_params = build_chapter_filter_sql(self.chapter_ids)
                 if self._template_id is not None:
                     c.execute('''
                         SELECT q.query_key, q.query_sql
                         FROM inspection_query q
                         JOIN inspection_chapter ch ON q.chapter_id = ch.id
-                        WHERE ch.template_id = ? AND q.enabled = 1
+                        WHERE ch.template_id = ? AND q.enabled = 1''' + _chap_frag + '''
                         ORDER BY ch.sort_order, q.sort_order
-                    ''', (self._template_id,))
+                    ''', (self._template_id, *_chap_params))
                 else:
                     c.execute('''
                         SELECT q.query_key, q.query_sql
                         FROM inspection_query q
                         JOIN inspection_chapter ch ON q.chapter_id = ch.id
                         JOIN inspection_template t ON ch.template_id = t.id
-                        WHERE t.db_type = ? AND q.enabled = 1
+                        WHERE t.db_type = ? AND q.enabled = 1''' + _chap_frag + '''
                         ORDER BY ch.sort_order, q.sort_order
-                    ''', (self.db_type,))
+                    ''', (self.db_type, *_chap_params))
                 queries = c.fetchall()
 
                 # 直接用 dict 存储，不再经过 configparser
@@ -769,7 +778,7 @@ class BaseInspectionEngine:
         # 仅做「探测是否启用」式低风险检查，未启用特性不产出，不影响主规则结果。
         if self.db_type == 'mariadb' and self.conn:
             try:
-                from analyzer import smart_analyze_mariadb_extras
+                from inspection.analyzer import smart_analyze_mariadb_extras
                 _mariadb_extras = smart_analyze_mariadb_extras(self.context, self.conn)
                 if _mariadb_extras:
                     self.context['auto_analyze'].extend(_mariadb_extras)
@@ -796,9 +805,9 @@ class BaseInspectionEngine:
         self.print_progress_bar(current_step, total_steps, prefix=_prog_prefix, suffix=self._t(f'{self.db_type}_progress_ai', default='dm8_progress_ai'))
         self.context['ai_advice'] = ''
         try:
-            from analyzer import AIAdvisor
+            from inspection.analyzer import AIAdvisor
             import json as _json
-            cfg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dbc_config.json')
+            cfg_path = os.path.join(str(PROJECT_ROOT), 'dbc_config.json')
             ai_cfg = {}
             if os.path.exists(cfg_path):
                 with open(cfg_path, 'r', encoding='utf-8') as f:
@@ -834,14 +843,14 @@ class BaseInspectionEngine:
         # 9. 慢查询深度分析（P2）— 按 db_type 选择分析器
         self.context['slow_query_result'] = None
         try:
-            from slow_query_analyzer import get_slow_query_analyzer
+            from inspection.slow_query import get_slow_query_analyzer
             analyzer = get_slow_query_analyzer(self.db_type)
             if self.conn:
                 ai_advisor = None
                 try:
-                    from analyzer import AIAdvisor
+                    from inspection.analyzer import AIAdvisor
                     import json as _json
-                    cfg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dbc_config.json')
+                    cfg_path = os.path.join(str(PROJECT_ROOT), 'dbc_config.json')
                     ai_cfg = {}
                     if os.path.exists(cfg_path):
                         with open(cfg_path, 'r', encoding='utf-8') as f:
@@ -882,7 +891,7 @@ class BaseInspectionEngine:
         self.context['config_baseline_result'] = None
         if self.db_type == 'dm':
             try:
-                from config_baseline import check_dm_config_baseline
+                from inspection.config_baseline import check_dm_config_baseline
                 if self.conn:
                     print("\n\U0001F539 " + self._t('dm8_cli_config_baseline_checking'))
                     cb_result = check_dm_config_baseline(self.conn)
@@ -901,7 +910,7 @@ class BaseInspectionEngine:
         self.context['index_health_result'] = None
         if self.db_type == 'dm':
             try:
-                from index_health import analyze_dm_indexes
+                from inspection.index_health import analyze_dm_indexes
                 if self.conn:
                     print("\n\U0001F50D " + self._t('dm8_cli_index_health_checking'))
                     ih_result = analyze_dm_indexes(self.conn)
@@ -971,7 +980,7 @@ class BaseInspectionEngine:
     def _load_chapters_from_db(self):
         """从 inspection.db 加载章节结构"""
         try:
-            _db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'inspection.db')
+            _db_path = os.path.join(str(PROJECT_ROOT), 'data', 'inspection.db')
             if not os.path.exists(_db_path):
                 return []
             
@@ -984,11 +993,12 @@ class BaseInspectionEngine:
                 _conn.close()
                 return []
             
-            # 加载章节
+            # 加载章节（章节可选过滤：None=全量；列表=仅选中章；alias='' 因无表别名）
+            _chap_frag, _chap_params = build_chapter_filter_sql(self.chapter_ids, alias='')
             _cur.execute(
                 "SELECT id, chapter_number, chapter_title_zh, chapter_title_en "
-                "FROM inspection_chapter WHERE template_id=? ORDER BY chapter_number",
-                (template_id,))
+                "FROM inspection_chapter WHERE template_id=?" + _chap_frag + " ORDER BY chapter_number",
+                (template_id, *_chap_params))
             
             _chapters = []
             for _ch_row in _cur.fetchall():
@@ -1320,7 +1330,7 @@ class BaseInspectionEngine:
         from docx.oxml.ns import qn
         from docx.oxml import parse_xml
         
-        template_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
+        template_path = os.path.join(str(PROJECT_ROOT), "templates")
         tpl_file = os.path.join(template_path, f"{self.db_type}_wordtemplates_v1.0.docx")
         
         if os.path.exists(tpl_file):
@@ -1392,7 +1402,7 @@ class BaseInspectionEngine:
     def _render_context(self, output_file, inspector_name="Jack"):
         """从数据库加载模板配置，渲染 _chapters 到 context"""
         try:
-            from inspection_dal import (
+            from inspection.dal import (
                 get_default_template,
                 get_chapters_by_template,
                 get_queries_by_chapter,
@@ -1409,8 +1419,8 @@ class BaseInspectionEngine:
             tpl_name = template.get('template_name_zh', '') or template.get('template_name', '')
             print(f"[INFO] 使用模板: {tpl_name} (id={template_id})")
 
-            # 2. 加载章节和查询
-            chapters = get_chapters_by_template(template_id)
+            # 2. 加载章节和查询（章节可选过滤：仅保留选中章；固定四章在 _append_chapters 另行追加）
+            chapters = get_chapters_by_template(template_id, chapter_ids=self.chapter_ids)
             _chapters = []
 
             total_queries = 0
@@ -1447,6 +1457,11 @@ class BaseInspectionEngine:
                     'queries': chapter_queries,
                 })
 
+            # 仅保留含查询的章节，并重排章节序号为连续的 1..N
+            # （无论用户选中哪些章，报告中章节序号必须连续）
+            _chapters = [c for c in _chapters if c.get('queries')]
+            for _idx, _ch in enumerate(_chapters, start=1):
+                _ch['chapter_number'] = _idx
             self.context['_chapters'] = _chapters
             print(f"[INFO] 已加载 {len(_chapters)} 个章节，共 {total_queries} 个查询")
 
@@ -1497,7 +1512,7 @@ class BaseInspectionEngine:
     def _check_baselines(self):
         """执行基线配置检查，结果存入 self.context['baseline_results']"""
         try:
-            from inspection_dal import get_baselines_by_db_type
+            from inspection.dal import get_baselines_by_db_type
             
             baselines = get_baselines_by_db_type(self.db_type, enabled_only=True)
             if not baselines:
@@ -1719,7 +1734,7 @@ class BaseInspectionEngine:
                 r.font.name = '微软雅黑'
                 r._element.rPr.rFonts.set(qn('w:eastAsia'), '微软雅黑')
                 r.font.bold = True
-                r.font.size = Pt(max(9, 16 - level * 2))
+                r.font.size = Pt(max(9, 18 - level * 2))
                 r.font.color.rgb = RGBColor(0, 51, 102)
                 i += 1
                 continue
@@ -1909,7 +1924,7 @@ class BaseInspectionEngine:
                     run.font.name = '微软雅黑'
                     run._element.rPr.rFonts.set(_qn('w:eastAsia'), '微软雅黑')
                     run.font.color.rgb = _RGBColor(0, 51, 102)
-                    run.font.size = _Pt(14) if level == 1 else _Pt(12)
+                    run.font.size = _Pt(16) if level == 1 else _Pt(14)
                 return h
             
             def _ch_prefix(n, sub=None):
@@ -2086,7 +2101,7 @@ class BaseInspectionEngine:
                     run.font.name = '微软雅黑'
                     run._element.rPr.rFonts.set(qn('w:eastAsia'), '微软雅黑')
                     run.font.color.rgb = RGBColor(0, 51, 102)
-                    run.font.size = Pt(16) if level == 1 else Pt(12)
+                    run.font.size = Pt(16) if level == 1 else Pt(14)
                     run.font.bold = True
                 return h
             
