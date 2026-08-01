@@ -1242,6 +1242,8 @@ select option { background: var(--surface2); }
 }
 .status-bar .sb-dot.warn { background: #f97316; box-shadow: 0 0 6px #f9731688; }
 .status-bar .sb-val { color: var(--text); font-weight: 600; }
+.status-bar .sb-item.sb-brand { gap: 8px; }
+.status-bar .version-badge { margin-top: 0; }
 body { padding-bottom: 32px !important; }
 .overview-card .card-count {
   font-size: 32px; font-weight: 700;
@@ -5166,8 +5168,6 @@ function formatBytes(bytes) {
 
     <div class="sidebar-footer">
       <button class="sidebar-toggle" onclick="toggleSidebar()" title="折叠/展开菜单" id="sidebar-toggle-btn">«</button>
-      <span class="version-badge" id="version-badge">{{ version }}</span>
-      <span style="margin-left:auto;font-size:10px;color:var(--text-muted,#8a8f98);white-space:nowrap;">DBCheck · <a href="https://github.com/fiyo/DBCheck" target="_blank" style="color:inherit;">fiyo</a></span>
     </div>
   </aside>
 
@@ -19816,14 +19816,9 @@ function mkdirRemote() {
   <script src="/static/js/server_thresholds.js"></script>
 <!-- 底部状态栏 -->
 <div class="status-bar" id="status-bar">
-  <div class="sb-item">
-    <span class="sb-dot"></span>
-    <span data-i18n="webui.status_running">运行中</span>
-  </div>
-  <div class="sb-item">
-    <span>📊</span>
-    <span data-i18n="webui.status_version">版本</span>
-    <span class="sb-val" id="footer-version">v2.5.1</span>
+  <div class="sb-item sb-brand">
+    <span class="version-badge" id="version-badge">{{ version }}</span>
+    <span style="font-size:10px;color:var(--text-muted,#8a8f98);white-space:nowrap;">DBCheck · <a href="https://github.com/fiyo/DBCheck" target="_blank" style="color:inherit;">fiyo</a></span>
   </div>
   <div class="sb-item" id="sb-inspection">
     <span>⏱️</span>

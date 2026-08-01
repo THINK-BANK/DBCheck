@@ -1,5 +1,8 @@
 # Changelog
 
+## v26.8.1.1 (2026-08-01)
+- **版本号更新**：各源文件版本标记 v26.7.30.1 → v26.8.1.1（version.py / version.json / skill `dbcheck` `scripts/version.py` / README + README_zh 徽章 / Dockerfile `VERSION.txt` / CHANGELOG 顶段）。
+
 ## v26.7.30.1 (2026-07-30)
 - **版本统一**：各源文件版本标记 v26.7.29.2 → v26.7.30.1（version.py / version.json / skill `dbcheck` `scripts/version.py` / README + README_zh 徽章 / CHANGELOG 顶段），官网（website 分支）同步更新至 v26.7.30.1（index.html meta/og 描述、hero 版本徽章、新增 website `version.json`）。
 - **VI 视觉升级与登录页重设计**：整体配色由藏青→科技绿改为藏青→浅蓝（绿色仅作点缀）；SVG 图标系统替代 Font Awesome；官网 hero 区突出 IP 吉祥物浣熊；Web UI 登录页重写为左右分栏布局（品牌区吉祥物 + 玻璃拟态登录卡片）并接入 9 语言 i18n 切换；侧边栏/登录页 logo 去白底并放大。

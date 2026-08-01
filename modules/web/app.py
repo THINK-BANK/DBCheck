@@ -5005,7 +5005,7 @@ def api_pro_status():
     try:
         from modules.pro import is_pro, get_edition
         from modules.pro import get_instance_manager
-        import modules.pro.version as pro_version
+        from modules.config.version import __version__ as pro_version_str
 
         im = get_instance_manager()
         stats = im.get_statistics()
@@ -5016,8 +5016,8 @@ def api_pro_status():
             'ok': True,
             'is_pro': pro_flag,
             'edition': edition_name,
-            'version': getattr(pro_version, '__version__', '2.3.8'),
-            'release_date': getattr(pro_version, '__release_date__', ''),
+            'version': pro_version_str,
+            'release_date': '',
             'license': {
                 'valid': pro_flag,
                 'type': edition_name,
