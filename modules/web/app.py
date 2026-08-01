@@ -12,11 +12,20 @@ DBCheck Web UI - Flask 应用
 # gevent.monkey.patch_all()
 
 from modules.core.paths import PROJECT_ROOT
-import os, sys, platform, threading, datetime, json, uuid, time, re, random, sqlite3
+import os, sys, platform, threading, datetime, json, uuid, time, re, random, sqlite3, secrets
 import signal
 import traceback
 import io
 from pathlib import Path
+
+# ── B 方案：会话/JWT 密钥默认每次启动随机生成（进程级稳定）──────────
+# 重启后旧 Flask 会话 cookie 与 JWT 均失效 → 必须重新登录。
+# 生产环境可设环境变量 DBCheck_SECRET_KEY / JWT_SECRET 固定密钥
+# （多实例/集群部署时必须一致，否则互不相认）。
+if not os.environ.get('DBCheck_SECRET_KEY'):
+    os.environ['DBCheck_SECRET_KEY'] = secrets.token_hex(32)
+if not os.environ.get('JWT_SECRET'):
+    os.environ['JWT_SECRET'] = secrets.token_hex(32)
 
 # 全局基础目录（开发模式用 __file__，PyInstaller 打包后用 exe 目录）
 if getattr(sys, "frozen", False):
@@ -194,12 +203,9 @@ except ImportError:
 # 静态资源已收口到 assets/web/（阶段5：原 web_templates 下的 static/、icons/ 及各 png/ico/js 等）。
 # 因 static_url_path='/'，前端所有绝对引用（/static/...、/icons/...、/xxx.png 等）自动映射到 static_folder 根。
 app = Flask(__name__, template_folder=str(PROJECT_ROOT / 'web_templates'), static_folder=str(PROJECT_ROOT / 'assets' / 'web'), static_url_path='/')
-# 稳定的会话密钥：跨进程重启保持一致，否则旧会话 cookie 失效 → 登录后循环跳回登录页。
-# 约定与 web/auth.py 的 JWT_SECRET 一致：优先取环境变量，否则用固定默认值（生产环境可用 DBCheck_SECRET_KEY 覆盖）。
-app.config['SECRET_KEY'] = os.environ.get(
-    'DBCheck_SECRET_KEY',
-    'dbcheck-flask-session-secret-change-in-production'
-)
+# 会话密钥取自环境变量 DBCheck_SECRET_KEY（已在启动时为未设置的情况种入进程级随机值）。
+# 重启后旧会话 cookie 失效，需重新登录；生产可固定该环境变量保持登录态。
+app.config['SECRET_KEY'] = os.environ['DBCheck_SECRET_KEY']
 socketio.init_app(app)
 
 # ── 实时监控采集器（v2.10）────────────────────────────────────
@@ -9311,25 +9317,58 @@ def api_dm8_offline_report(task_id):
 
 def main():
     # ── 信号处理：确保 Ctrl+C 能正确退出 ──
+    def _hard_exit():
+        """无条件强制退出整个进程（含所有后台/非 daemon 线程）。
+
+        等价于关闭终端窗口，干净且不阻塞——这是解决 Ctrl+C 无反应的最终手段。
+        """
+        os._exit(0)
+
     def signal_handler(sig, frame):
-        """处理 Ctrl+C 信号"""
-        print("\n\n[主程序] 收到退出信号，正在关闭...")
-        # 清理资源（如果有）
+        """处理 Ctrl+C / SIGTERM：尽量立即退出。
+
+        关键约束：信号处理函数里严禁调用会 import 模块或 join 线程的清理逻辑
+        （如 unload_all_plugins()）——一旦卡住，Ctrl+C 就会“看似无效”。
+        这里只做极简强制退出（os._exit 在 C 层立即终止整个进程）。
+        """
         try:
-            from modules.pluginkit.loader import unload_all_plugins
-            unload_all_plugins()
-        except:
+            print(f"\n\n[主程序] 收到退出信号 {sig}，正在强制退出...")
+        except Exception:
             pass
-        print("[主程序] 已退出")
-        os._exit(0)  # 使用 os._exit(0) 强制退出
-    
-    # 注册信号处理
-    signal.signal(signal.SIGINT, signal_handler)  # Ctrl+C
-    signal.signal(signal.SIGTERM, signal_handler)  # kill 命令
-    
+        _hard_exit()
+
+    # 1) Python 标准信号（gevent 未接管时生效；Windows 下 SIGBREAK 更能穿透阻塞）
+    try:
+        signal.signal(signal.SIGINT, signal_handler)   # Ctrl+C
+        signal.signal(signal.SIGTERM, signal_handler)  # kill / docker stop
+        if platform.system().lower() == 'windows':
+            signal.signal(signal.SIGBREAK, signal_handler)
+    except ValueError:
+        # 非主线程中无法注册信号，依赖下方 Windows 控制台处理器兜底
+        pass
+
+    # 2) Windows 控制台级处理器（关键兜底）：
+    #    Flask-SocketIO 启用 gevent 异步模式时会接管 Python 的 signal，
+    #    导致 Ctrl+C 看似无效；SetConsoleCtrlHandler 在 OS 层捕获 Ctrl+C / Ctrl+Break /
+    #    关闭窗口事件，不被 gevent 吞掉，且 PyInstaller 打包构建同样有效。
     if platform.system().lower() == 'windows':
-        # Windows 需要额外处理
-        signal.signal(signal.SIGBREAK, signal_handler)  # Ctrl+Break
+        try:
+            import ctypes
+            import ctypes.wintypes
+            _kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
+            _CTRL_CB = ctypes.WINFUNCTYPE(ctypes.wintypes.BOOL, ctypes.wintypes.DWORD)
+
+            def _console_ctrl_handler(ctrl_type):
+                # ctrl_type: 0=CTRL_C_EVENT, 1=CTRL_BREAK_EVENT, 2=CTRL_CLOSE_EVENT ...
+                _hard_exit()  # 直接退出，不在控制台处理器线程里 print（避免关闭时死锁）
+                return True   # 声明已处理，阻止后续默认终止流程
+
+            _console_ctrl_cb = _CTRL_CB(_console_ctrl_handler)
+            _kernel32.SetConsoleCtrlHandler(_console_ctrl_cb, True)
+            # 保活引用，避免回调被 GC 回收后失效
+            _console_ctrl_handler_ref = _console_ctrl_cb
+        except Exception:
+            pass
     
     _setup_driver_paths()
     # ── 初始化插件系统 ──
