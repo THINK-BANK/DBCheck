@@ -5717,6 +5717,17 @@ function formatBytes(bytes) {
               </select>
               <div style="font-size:12px;color:var(--text-muted);margin-top:4px;" data-i18n="webui.template_hint">不选则自动根据数据库类型和版本匹配默认模板</div>
             </div>
+            <!-- 章节可选：多选区（默认隐藏，选了具体模板后才显示） -->
+            <div id="chapter-select-area" style="display:none;margin-top:16px;">
+              <div style="font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:8px;">
+                📑 <span data-i18n="webui.chapter_select_label">选择巡检章节</span>
+                <button type="button" class="btn btn-sm" style="padding:2px 8px;font-size:12px;border:1px solid var(--border);background:var(--surface2);color:var(--text);border-radius:4px;cursor:pointer;" onclick="selectAllChapters(true)">全选</button>
+                <button type="button" class="btn btn-sm" style="padding:2px 8px;font-size:12px;border:1px solid var(--border);background:var(--surface2);color:var(--text);border-radius:4px;cursor:pointer;" onclick="selectAllChapters(false)">反选</button>
+                <span id="chapter-count" style="font-size:12px;color:var(--text-muted);"></span>
+              </div>
+              <div id="chapter-checkbox-list" class="chapter-checkbox-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;"></div>
+              <div id="chapter-empty-tip" style="display:none;color:#e0533d;font-size:12px;margin-top:6px;" data-i18n="webui.chapter_empty_tip">请至少选择一个章节</div>
+            </div>
             <div style="padding:14px 16px;background:rgba(255,200,0,0.08);border:1px solid rgba(255,200,0,0.25);border-radius:10px;display:flex;align-items:center;gap:10px">
               <label style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none">
                 <input type="checkbox" id="f-desensitize" style="width:16px;height:16px;accent-color:#ffc800" />
@@ -5766,6 +5777,8 @@ function formatBytes(bytes) {
                 <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">📋 巡检模板</div>
                 <div id="cf-template" style="font-size:14px;font-weight:600"></div>
               </div>
+              <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;margin-top:10px;">📑 <span data-i18n="webui.chapter_select_label">巡检章节</span></div>
+              <div id="cf-chapters" style="font-size:14px;font-weight:600"></div>
             </div>
             <div class="btn-row" style="justify-content:space-between">
               <button class="btn btn-ghost" onclick="gotoStep(4)" data-i18n="webui.btn_prev">← 上一步</button>
@@ -8782,6 +8795,19 @@ function startWizard() {
   document.getElementById('db-test-status').innerHTML = '';
   document.getElementById('ssh-test-status').innerHTML = '';
 
+  // 清空章节多选状态（章节可选）
+  const _ca = document.getElementById('chapter-select-area');
+  if (_ca) _ca.style.display = 'none';
+  const _cl = document.getElementById('chapter-checkbox-list');
+  if (_cl) _cl.innerHTML = '';
+  const _cc = document.getElementById('cf-chapters');
+  if (_cc) _cc.textContent = '';
+  const _ct = document.getElementById('chapter-empty-tip');
+  if (_ct) _ct.style.display = 'none';
+  const _ccount = document.getElementById('chapter-count');
+  if (_ccount) _ccount.textContent = '';
+  window._chapterMap = {};
+
   gotoStep(1);
   showPage('wizard');
   // reset run panel
@@ -9137,6 +9163,8 @@ async function loadInspectionTemplatesForSelect(dbType, selectId) {
       if (data.data.length > 0) {
         const defaultOpt = Array.from(sel.options).find(o => o.dataset.isDefault === '1');
         sel.value = defaultOpt ? defaultOpt.value : sel.options[1].value;
+        // 章节可选：模板已自动选定，主动触发章节列表加载（程序化赋值不会触发 change）
+        if (typeof onTemplateChange === 'function') onTemplateChange();
       }
     }
   } catch(e) { /* 静默失败，不影响使用默认模板 */ }
@@ -9591,6 +9619,92 @@ async function executeFixSql(taskId, sql) {
 // ─── 模块级默认值（供 fillConfirmPanel / startInspection 共用） ───
 const userDefaults = { mysql: 'root', pg: 'postgres', oracle: 'system', dm: 'SYSDBA', sqlserver: 'sa', tidb: 'root', ivorysql: 'postgres', yashandb: 'sys' };
 
+// ─── 巡检章节可选（T5 向导章节多选） ───
+// window._chapterMap: 章节 id -> {number, title}，供 Step5 与 startInspection 使用
+window._chapterMap = window._chapterMap || {};
+
+// 模板变更：根据选中模板加载章节多选列表（默认全选）
+async function onTemplateChange() {
+  const sel = document.getElementById('f-template');
+  const area = document.getElementById('chapter-select-area');
+  const list = document.getElementById('chapter-checkbox-list');
+  const countEl = document.getElementById('chapter-count');
+  window._chapterMap = {};
+  if (!sel || !area || !list) return;
+  const tid = sel.value;
+  if (!tid) {
+    // 未选具体模板（默认模板自动匹配）→ 隐藏章节区，走全量巡检
+    area.style.display = 'none';
+    list.innerHTML = '';
+    if (countEl) countEl.textContent = '';
+    return;
+  }
+  try {
+    const res = await fetch('/api/inspection/templates/' + encodeURIComponent(tid) + '/chapters');
+    const data = await res.json();
+    list.innerHTML = '';
+    const chapters = (data && data.success && Array.isArray(data.data)) ? data.data : [];
+    if (chapters.length === 0) {
+      area.style.display = 'none';
+      if (countEl) countEl.textContent = '';
+      return;
+    }
+    chapters.forEach(function (ch) {
+      const id = ch.id;
+      const num = ch.chapter_number;
+      const title = ch.chapter_title_zh || ch.chapter_title_en || '';
+      window._chapterMap[id] = { number: num, title: title };
+      const label = document.createElement('label');
+      label.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:13px;padding:6px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer;';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.value = String(id);
+      cb.checked = true; // 默认全选
+      cb.addEventListener('change', updateChapterCount);
+      label.appendChild(cb);
+      const span = document.createElement('span');
+      const qc = (ch.query_count != null) ? (' (' + ch.query_count + '项)') : '';
+      span.textContent = '第' + num + '章 ' + title + qc;
+      label.appendChild(span);
+      list.appendChild(label);
+    });
+    area.style.display = '';
+    updateChapterCount();
+  } catch (e) {
+    console.error('[章节可选] 加载章节失败', e);
+    area.style.display = 'none';
+  }
+}
+
+// 全选 / 反选（selectAll=true 全选；false 反选）
+function selectAllChapters(selectAll) {
+  const list = document.getElementById('chapter-checkbox-list');
+  if (!list) return;
+  list.querySelectorAll('input[type=checkbox]').forEach(function (cb) {
+    cb.checked = selectAll ? true : !cb.checked;
+  });
+  updateChapterCount();
+}
+
+// 更新「已选 X/Y 章」计数
+function updateChapterCount() {
+  const list = document.getElementById('chapter-checkbox-list');
+  const countEl = document.getElementById('chapter-count');
+  if (!list || !countEl) return;
+  const all = list.querySelectorAll('input[type=checkbox]');
+  const checked = list.querySelectorAll('input[type=checkbox]:checked');
+  countEl.textContent = '已选 ' + checked.length + '/' + all.length + ' 章';
+}
+
+// 绑定 f-template 的 change 事件（仅绑定一次）
+(function bindChapterTemplateChange() {
+  const ft = document.getElementById('f-template');
+  if (ft && !ft._chapterBound) {
+    ft.addEventListener('change', onTemplateChange);
+    ft._chapterBound = true;
+  }
+})();
+
 // ─── Confirm Panel ───
 function fillConfirmPanel() {
   const typeLabels = {
@@ -9623,6 +9737,33 @@ function fillConfirmPanel() {
     document.getElementById('cf-template').textContent = selectedOpt.textContent;
   } else {
     document.getElementById('cf-template').textContent = '默认模板（自动选择）';
+  }
+
+  // 巡检章节（章节可选）：展示已选章节概览
+  const cfChapters = document.getElementById('cf-chapters');
+  if (cfChapters) {
+    const sel = document.getElementById('f-template');
+    const list = document.getElementById('chapter-checkbox-list');
+    const area = document.getElementById('chapter-select-area');
+    const areaVisible = !!(area && area.style.display !== 'none');
+    const hasList = !!(list && list.children.length > 0);
+    if (!sel || !sel.value || !areaVisible || !hasList) {
+      cfChapters.textContent = '全部章节';
+    } else {
+      const boxes = list.querySelectorAll('input[type=checkbox]');
+      const checked = list.querySelectorAll('input[type=checkbox]:checked');
+      if (checked.length === 0) {
+        cfChapters.textContent = '（未选择章节）';
+      } else if (checked.length === boxes.length) {
+        cfChapters.textContent = '全部章节';
+      } else {
+        const nums = Array.from(checked)
+          .map(function (cb) { return window._chapterMap[cb.value] ? window._chapterMap[cb.value].number : null; })
+          .filter(function (n) { return n != null; })
+          .sort(function (a, b) { return a - b; });
+        cfChapters.textContent = '第 ' + nums.join(',') + ' 章';
+      }
+    }
   }
 }
 
@@ -9673,6 +9814,29 @@ async function startInspection() {
   // 附加巡检模板 ID
   const templateId = document.getElementById('f-template')?.value;
   if (templateId) payload.template_id = parseInt(templateId);
+
+  // 巡检章节可选：收集勾选的章节 ID，空选拦截
+  const chapterArea = document.getElementById('chapter-select-area');
+  const chapterList = document.getElementById('chapter-checkbox-list');
+  const chapterVisible = !!(chapterArea && chapterArea.style.display !== 'none');
+  if (chapterVisible && chapterList) {
+    const allBoxes = Array.from(chapterList.querySelectorAll('input[type=checkbox]'));
+    const checkedBoxes = allBoxes.filter(function (cb) { return cb.checked; });
+    const emptyTip = document.getElementById('chapter-empty-tip');
+    if (emptyTip) emptyTip.style.display = 'none';
+    if (allBoxes.length > 0 && checkedBoxes.length === 0) {
+      // 选了具体模板但一个章节都没勾 → 拦截，不发起巡检
+      if (emptyTip) emptyTip.style.display = 'block';
+      btn.disabled = false;
+      btn.innerHTML = '🚀 开始巡检';
+      toastError('请至少选择一个章节');
+      return;
+    }
+    // 全部勾选（或章节区未展示）→ 不传 chapter_ids，走全量（等价旧行为）
+    if (allBoxes.length > 0 && checkedBoxes.length < allBoxes.length) {
+      payload.chapter_ids = checkedBoxes.map(function (cb) { return parseInt(cb.value, 10); });
+    }
+  }
 
   try {
     const res = await fetch('/api/start_inspection', {
@@ -12677,68 +12841,7 @@ async function executeFixSql(taskId, sql) {
 <!-- Toast 通知容器 -->
 <div id="toast-container" style="position:fixed;top:20px;right:20px;z-index:999999;display:flex;flex-direction:column;gap:10px;pointer-events:none"></div>
 
-<!-- 登录遮罩 - 新设计 2026-06-06 -->
-<div id="login-overlay" style="position:fixed;top:0;left:0;right:0;bottom:0;z-index:999999;display:none;">
-
-  <!-- 背景层 -->
-  <div class="bg-glow g1"></div>
-  <div class="bg-glow g2"></div>
-  <div class="bg-glow g3"></div>
-  <div class="bg-grid"></div>
-
-  <!-- 主题切换 -->
-  <button id="login-theme-toggle" onclick="toggleLoginTheme()" title="切换主题">🌓</button>
-
-  <!-- 登录卡片 -->
-  <div class="login-wrap">
-    <div class="login-card">
-
-      <!-- Logo 区域 -->
-      <div class="logo-area">
-        <div class="logo-ring">
-          <img src="/dbcheck_logo_icon.png" class="logo-img" alt="DBCheck"
-               onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-          <div class="logo-inner" style="display:none;">D</div>
-        </div>
-        <div class="login-title">DBCheck</div>
-        <div class="login-subtitle">智能数据库巡检与性能分析平台</div>
-      </div>
-
-      <!-- 表单 -->
-      <div class="form-group">
-        <label class="form-label">用户名</label>
-        <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-        <input id="login-user" type="text" class="form-input" placeholder="请输入用户名" autocomplete="username" autofocus>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">密码</label>
-        <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-        <input id="login-pass" type="password" class="form-input" placeholder="请输入密码" autocomplete="current-password">
-        <button type="button" class="pwd-toggle" onclick="toggleLoginPwd()" title="显示/隐藏密码">
-          <svg id="login-eye-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-        </button>
-      </div>
-
-      <div id="login-error" class="login-error"></div>
-
-      <button id="btn-login" class="login-btn" type="button" onclick="doLogin()">
-        <span id="btn-text">登  录</span>
-      </button>
-
-      <div style="margin-top:12px;text-align:center;">
-        <a href="/um/login" style="font-size:12px;color:var(--text-muted);text-decoration:none;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-muted)'">⚙️ RBAC 系统管理登录</a>
-      </div>
-
-      <div class="login-footer">
-        <span id="login-version">--</span> · DBCheck © 2026
-      </div>
-    </div>
-  </div>
-</div>
-
-  </div>
-</div>
+<!-- 登录遮罩已移除：统一使用 RBAC 系统管理登录页 /um/login -->
 
 <style>
 @keyframes fadeInUp {
@@ -14403,44 +14506,58 @@ function doPromptResolve(id) {
 // ─── Auth (Login / User Center) ─────────────────
 
 async function checkLogin() {
-  // 先检查 RBAC 登录状态
+  // 统一使用 RBAC 系统管理登录页（/um/login）
+  // 已在登录页时不二次重定向，避免自 bounce
+  if (location.pathname === '/um/login') return;
   try {
-    var token = localStorage.getItem('um_token');
+    // 方案A：刚从登录页带着新鲜 token 落地（/?token=...）时，优先用 URL 上的
+    // 新鲜 token 做 Bearer，而非 localStorage 中可能已过期的 stale token。
+    // 这样“刚登录完落地”永远用新鲜 token，绝不会因 stale token 误判踢回登录页（闪屏）。
+    var urlToken = '';
+    try { urlToken = new URLSearchParams(location.search).get('token') || ''; } catch (e) {}
+    var token = urlToken || localStorage.getItem('token') || '';
     var headers = {};
     if (token) headers['Authorization'] = 'Bearer ' + token;
-    var r = await fetch('/api/um/auth/status', { headers: headers });
+    // credentials:'include' 让服务端 login_required 的 Flask session 回落生效：
+    // 当 localStorage.token 过期但服务端 session 仍有效时，status 仍返回 200，避免首页闪现。
+    var r = await fetch('/api/um/auth/status', { headers: headers, credentials: 'include' });
+    // HTTP 非 2xx（如服务端重启中 5xx）：不清 token、不 bounce，等服务器就绪后刷新即可。
+    if (!r.ok) { console.warn('[Auth] status HTTP', r.status, '— 暂不跳转登录页'); return; }
     var d = await r.json();
-    if (d.code === 0 && d.data && d.data.logged_in) {
+    if (d.code === 0 && d.data && (d.data.logged_in || d.data.user)) {
+      // 仅当拿到的是“落地新鲜 token”时，用它覆盖 localStorage 中可能过期的 stale token；
+      // 普通刷新（token 来自 localStorage）不回写，避免把过期 token 重新持久化。
+      if (urlToken) {
+        localStorage.setItem('token', urlToken);
+        if (d.data.user) localStorage.setItem('user', JSON.stringify(d.data.user));
+        // 清理地址栏 ?token=，避免刷新被误当作“新鲜 token”再次兑换。
+        try { history.replaceState(null, '', location.pathname + location.hash); } catch (e) {}
+      }
       window._currentUser = d.data.user;
-      document.getElementById('login-overlay').style.display = 'none';
-      document.body.style.overflow = '';
       var ue = document.getElementById('topbar-user');
-      ue.style.display = '';
-      document.getElementById('topbar-user-name').textContent = d.data.user.nickname || d.data.user.username;
+      if (ue) ue.style.display = '';
+      var un = document.getElementById('topbar-user-name');
+      if (un) un.textContent = d.data.user.nickname || d.data.user.username;
       // 已登录，加载菜单权限
       loadVisibleMenus();
       return;
     }
-  } catch(e) {}
-  // RBAC 未登录，尝试旧接口（兼容）
-  try {
-    var r2 = await fetch('/api/auth/status');
-    var d2 = await r2.json();
-    if (!d2.logged_in) { showLogin(); return; }
-    document.getElementById('login-overlay').style.display = 'none';
-    document.body.style.overflow = '';
-    window._currentUser = d2.user;
-    var ue2 = document.getElementById('topbar-user');
-    ue2.style.display = '';
-    document.getElementById('topbar-user-name').textContent = d2.user.display_name || d2.user.username;
-  } catch(e) { showLogin(); }
+    // 鉴权失败（如 token 过期）：清理可能已失效的本地凭据，
+    // 避免带着永不过期的 stale token 反复 401 → 无限闪回循环（方案B）。
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+  } catch(e) {
+    // 网络异常/解析失败（多为服务端重启瞬断 OR stale 状态）：不清 token、不 bounce，
+    // 避免“重启服务期间旧标签页被踢出登录”或因瞬时抖动导致的回环。
+    // 仅当服务端“明确返回未登录(401/code!=0)”时才在上方清理凭据并跳登录页。
+    console.warn('[Auth] status 请求异常', e, '— 暂不跳转登录页');
+    return;
+  }
+  // 未登录或鉴权失败，跳转 RBAC 登录页
+  window.location.href = '/um/login';
 }
 
-function showLogin() {
-  applyI18N();  // 确保登录页翻译生效
-  document.getElementById('login-overlay').style.display = 'flex';
-  document.body.style.overflow = 'hidden';
-}
+
 
 function toggleUserMenu() {
   var dd = document.getElementById('user-dropdown');
@@ -14455,37 +14572,7 @@ document.addEventListener('click', function(e) {
   }
 });
 
-async function doLogin() {
-  var u = document.getElementById('login-user').value.trim();
-  var p = document.getElementById('login-pass').value;
-  var err = document.getElementById('login-error');
-  err.style.display = 'none';
-  err.textContent = '';
-  if (!u || !p) { err.textContent = i18n('webui.login_error_empty'); err.style.display = ''; return; }
-  try {
-    // 调用 RBAC 登录接口
-    var r = await fetch('/api/um/auth/login', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({username: u, password: p})
-    });
-    var d = await r.json();
-    if (d.code === 0 && d.data && d.data.token) {
-      localStorage.setItem('um_token', d.data.token);
-      window._currentUser = d.data.user;
-      document.getElementById('login-overlay').style.display = 'none';
-      document.body.style.overflow = '';
-      var ue = document.getElementById('topbar-user');
-      ue.style.display = '';
-      document.getElementById('topbar-user-name').textContent = d.data.user.nickname || d.data.user.username;
-      // 登录成功后加载菜单权限
-      loadVisibleMenus();
-    } else {
-      err.textContent = i18n(d.msg) || i18n('webui.login_error');
-      err.style.display = '';
-    }
-  } catch(e) { err.textContent = i18n('webui.network_error'); err.style.display = ''; }
-}
+
 
 async function doLogout() {
   // 调用 RBAC 退出登录接口
@@ -14493,7 +14580,7 @@ async function doLogout() {
     await fetch('/api/um/auth/logout', {method:'POST', credentials: 'include'});
   } catch(e) {}
   // 只清除认证 token，保留主题设置（dbcheck-theme）
-  localStorage.removeItem('um_token');
+  localStorage.removeItem('token');
   // 跳转到 RBAC 登录页
   window.location.href = '/um/login';
 }
@@ -14587,11 +14674,7 @@ async function changePassword() {
 
 checkLogin();
 
-// 绑定登录按钮（确保函数已定义）
-document.addEventListener('DOMContentLoaded', function() {
-  var btn = document.getElementById('btn-login');
-  if (btn) btn.addEventListener('click', doLogin);
-});
+
 
 function copyNewApiKey() {
   var code = document.getElementById('apikey-new-value').textContent;
@@ -16453,7 +16536,6 @@ async function deleteBackupHistory(recordId) {
     <button class="chat-close" onclick="clearChatSession()" title="清空对话" style="font-size:16px;color:var(--text-secondary);background:none;border:none;cursor:pointer;padding:4px 8px;margin-right:4px">🗑</button>
     <!-- 小屏幕关闭按钮 -->
     <button class="chat-close chat-panel-close" onclick="toggleAiChatPanel()" title="关闭" style="font-size:18px;display:none">✕</button>
-  </div>
   </div>
   <div class="chat-messages" id="chat-messages">
     <div class="chat-msg ai" id="chat-welcome">
@@ -20306,7 +20388,7 @@ function mkdirRemote() {
   async function loadVisibleMenus() {
     try {
       // 带 JWT token 请求
-      var token = localStorage.getItem('um_token');
+      var token = localStorage.getItem('token');
       var headers = {};
       if (token) headers['Authorization'] = 'Bearer ' + token;
       var res = await fetch('/api/um/user/menus', {
