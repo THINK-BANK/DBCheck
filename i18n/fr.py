@@ -834,7 +834,7 @@ FR.update({
     "remote_shell.upload_file": "Télécharger le fichier",
     "remote_shell.upload_script": "Télécharger le script",
     "report.ai_chapter": "Suggestions de diagnostic intelligent IA",
-    "report.ai_disabled": "Le diagnostic AI n'est pas activé. Si vous souhaitez l'activer, veuillez configurer le backend dans l'interface utilisateur Web \"Paramètres de diagnostic AI\" (prend en charge Ollama local ou un modèle en ligne)",
+    "report.ai_disabled": "Le diagnostic AI n'a donné aucun résultat. Si vous avez activé un modèle en ligne ou Ollama local dans l'interface web « Paramètres de diagnostic AI », vérifiez l'URL de l'API, la clé et la connectivité réseau puis réessayez ; sinon, activez-le dans les Paramètres de diagnostic AI.",
     "report.ai_disclaimer": "Les suggestions suivantes sont automatiquement générées par le grand modèle AI sur la base de ces données d'inspection et sont à titre de référence uniquement. Les opérations réelles doivent être soigneusement évaluées en fonction du scénario commercial.",
     "report.ai_title": "Recommandations de diagnostic IA",
     "report.ch1": "Informations sur l'hôte du système d'exploitation",

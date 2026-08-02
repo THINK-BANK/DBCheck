@@ -834,7 +834,7 @@ ES.update({
     "remote_shell.upload_file": "Cargar archivo",
     "remote_shell.upload_script": "Cargar script",
     "report.ai_chapter": "Sugerencias de diagnóstico inteligente de AI",
-    "report.ai_disabled": "El diagnóstico AI no está habilitado. Si desea habilitarlo, configure el backend en la interfaz de usuario web \"Configuración de diagnóstico de IA\" (admite Ollama local o modelo en línea)",
+    "report.ai_disabled": "El diagnóstico AI no devolvió resultados. Si ha habilitado un modelo en línea o Ollama local en la interfaz web «Configuración de diagnóstico de IA», verifique la URL de la API, la clave y la conectividad de red y reintente; de lo contrario, actívelo en Configuración de diagnóstico de IA.",
     "report.ai_disclaimer": "Las siguientes sugerencias son generadas automáticamente por el modelo grande de AI en función de estos datos de inspección y son solo para referencia. Las operaciones reales deben evaluarse cuidadosamente en función del escenario empresarial.",
     "report.ai_title": "Recomendaciones de diagnóstico de IA",
     "report.ch1": "Información del host del sistema operativo",

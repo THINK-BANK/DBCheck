@@ -800,45 +800,17 @@ class BaseInspectionEngine:
             elif problem_count <= 3:
                 self.context.update({"health_status": "良好"})
         
-        # 8. AI 诊断
+        # 8. AI 诊断（统一接口）
+        from modules.inspection.analyzer import run_ai_diagnosis
         current_step = total_steps - 2
         self.print_progress_bar(current_step, total_steps, prefix=_prog_prefix, suffix=self._t(f'{self.db_type}_progress_ai', default='dm8_progress_ai'))
-        self.context['ai_advice'] = ''
-        try:
-            from modules.inspection.analyzer import AIAdvisor
-            import json as _json
-            cfg_path = os.path.join(str(PROJECT_ROOT), 'dbc_config.json')
-            ai_cfg = {}
-            if os.path.exists(cfg_path):
-                with open(cfg_path, 'r', encoding='utf-8') as f:
-                    ai_cfg = _json.load(f).get('ai', {})
-            _online_enabled = ai_cfg.get('online_enabled', False)
-            if _online_enabled:
-                _adv_backend = ai_cfg.get('online_backend', 'openai')
-                _adv_api_url = ai_cfg.get('online_api_url') or None   # 传 None，让 AIAdvisor 用其内部 online_api_url
-                _adv_model = ai_cfg.get('online_model') or None       # 传 None，让 AIAdvisor 用其内部 online_model
-            else:
-                _adv_backend = ai_cfg.get('backend')
-                _adv_api_url = ai_cfg.get('api_url')
-                _adv_model = ai_cfg.get('model')
-            advisor = AIAdvisor(
-                backend=_adv_backend,
-                api_key=ai_cfg.get('api_key'),
-                api_url=_adv_api_url,
-                model=_adv_model
-            )
-            if advisor.enabled:
-                label = self.context.get('co_name', [{}])[0].get('DB_NAME', 'Unknown')
-                print(self._t(f'{self.db_type}_ai_calling', default="dm8_ai_calling").format(backend=advisor.backend, model=advisor.model))
-                
-                # 调试：打印版本信息
-                _version_debug = self.context.get('version')
-                print(f"[DEBUG] AI诊断前 version 信息: {_version_debug}")
-                
-                ai_advice = advisor.diagnose(self.db_type, label, self.context, self.context.get('auto_analyze', []), lang=self._lang)
-                self.context['ai_advice'] = ai_advice
-        except Exception:
-            self.context['ai_advice'] = ''
+        self.context['ai_advice'] = run_ai_diagnosis(
+            self.db_type,
+            self.context.get('co_name', [{}])[0].get('DB_NAME', 'Unknown'),
+            self.context,
+            lang=getattr(self, '_lang', 'zh'),
+            timeout=600,
+        )
         
         # 9. 慢查询深度分析（P2）— 按 db_type 选择分析器
         self.context['slow_query_result'] = None

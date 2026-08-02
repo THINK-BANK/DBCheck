@@ -11292,8 +11292,9 @@ async function saveAIConfig() {
   if (backend === 'openai' && onlineEnabled) {
     cfg.api_key = document.getElementById('ai-api-key').value;
     cfg.online_backend = 'openai';
-    cfg.online_api_url = document.getElementById('ai-api-url').value || 'https://api.openai.com/v1';
-    cfg.online_model = document.getElementById('ai-model').value || 'gpt-4o-mini';
+    // 去除首尾空白，避免粘贴 API 地址带入的前导/尾随空格导致诊断静默失败
+    cfg.online_api_url = (document.getElementById('ai-api-url').value || '').trim() || 'https://api.openai.com/v1';
+    cfg.online_model = (document.getElementById('ai-model').value || '').trim() || 'gpt-4o-mini';
     cfg.timeout = parseInt(document.getElementById('ai-timeout').value) || 600;
     // 保存 RAG 配置（在线模型也可使用 RAG）
     cfg.rag = {
@@ -11305,8 +11306,8 @@ async function saveAIConfig() {
     };
   } else if (backend === 'ollama') {
     cfg.api_key = '';
-    cfg.api_url  = document.getElementById('ai-ollama-url').value || 'http://localhost:11434';
-    cfg.model    = document.getElementById('ai-ollama-model').value || 'qwen2.5:7b';
+    cfg.api_url  = (document.getElementById('ai-ollama-url').value || '').trim() || 'http://localhost:11434';
+    cfg.model    = (document.getElementById('ai-ollama-model').value || '').trim() || 'qwen2.5:7b';
     cfg.timeout  = parseInt(document.getElementById('ai-timeout').value) || 600;
     // 保存 RAG 配置
     cfg.rag = {
@@ -14263,6 +14264,78 @@ function renderHostTopProcs(latest) {
   box.innerHTML = html;
 }
 
+// ── 全局图表实例注册表 ──
+// 包装 echarts.init 自动收集所有图表实例，彻底解决两类漏网：
+//  1) 跨 <script> 块 const/let 作用域隔离导致变量（如 hostResChart、函数内局部 chart）不可见；
+//  2) 非标准容器（如首页 .db-type-chart 数据库类型饼图）不在已知变量/选择器中。
+window.__DBCHECK_CHARTS__ = window.__DBCHECK_CHARTS__ || [];
+function ensureChartPatch() {
+  if (typeof echarts === 'undefined' || !echarts.init || echarts.__dbcheckPatched) return;
+  var _orig = echarts.init;
+  echarts.init = function () {
+    var inst = _orig.apply(echarts, arguments);
+    try { if (inst && inst.resize) window.__DBCHECK_CHARTS__.push(inst); } catch (_) {}
+    return inst;
+  };
+  echarts.__dbcheckPatched = true;
+}
+
+// 在 AI 面板展开/收起导致 .main-content 宽度变化后，统一重绘所有 ECharts。
+// 三重保险：① 已知实例变量；② 全局注册表（覆盖作用域隔离/非标准容器）；
+//           ③ getInstanceByDom 扫描已知容器兜底（含 .db-type-chart）。
+function resizeAllCharts() {
+  ensureChartPatch();
+  try {
+    // ① 已知实例变量（兼容既有写法）
+    Object.values(healthCharts || {}).forEach(function (c) { c && c.resize && c.resize(); });
+    Object.values(monitorCharts || {}).forEach(function (c) { c && c.resize && c.resize(); });
+    if (hostResChart && hostResChart.resize) hostResChart.resize();
+    if (hostEbpfChart && hostEbpfChart.resize) hostEbpfChart.resize();
+    // ② 全局注册表（自动收集，含 .db-type-chart 等任意实例）；同时清理已销毁实例防数组膨胀
+    var reg = window.__DBCHECK_CHARTS__ || [];
+    var live = [];
+    for (var i = 0; i < reg.length; i++) {
+      var inst = reg[i];
+      if (inst && (!inst.isDisposed || !inst.isDisposed())) {
+        try { inst.resize(); } catch (_) {}
+        live.push(inst);
+      }
+    }
+    window.__DBCHECK_CHARTS__ = live;
+    // ③ 兜底：扫描已知容器（.health-chart-box 与首页 .db-type-chart），getInstanceByDom 抓取
+    if (typeof echarts !== 'undefined' && echarts.getInstanceByDom) {
+      document.querySelectorAll('.health-chart-box, .db-type-chart').forEach(function (box) {
+        try {
+          var inst = echarts.getInstanceByDom(box);
+          if (inst && (!inst.isDisposed || !inst.isDisposed())) inst.resize();
+        } catch (_) {}
+      });
+    }
+  } catch (_) {}
+}
+
+// 用 ResizeObserver 监听 .main-content 宽度变化，彻底解决隐藏/显示/窗口缩放时图表不自适应。
+// 直接观察「容器尺寸」而非猜测 setTimeout 时序，可覆盖任何导致宽度变化的场景。
+let _chartResizeObserver = null;
+let _chartResizeRAF = null;
+function initChartResizeObserver() {
+  if (_chartResizeObserver || typeof ResizeObserver === 'undefined') return;
+  var mainContent = document.querySelector('.main-content');
+  if (!mainContent) return;
+  _chartResizeObserver = new ResizeObserver(function () {
+    if (_chartResizeRAF) cancelAnimationFrame(_chartResizeRAF);
+    _chartResizeRAF = requestAnimationFrame(function () { resizeAllCharts(); });
+  });
+  _chartResizeObserver.observe(mainContent);
+}
+
+// 面板展开/收起的即时兜底：连续多次 resize 覆盖过渡期，与 ResizeObserver 互补。
+function scheduleResizeAllCharts() {
+  [0, 100, 200, 350, 500].forEach(function (delay) {
+    setTimeout(resizeAllCharts, delay);
+  });
+}
+
 // ─── 一键修复建议功能 ───────────────────────────────────────
 
 function copyFixSql(sql) {
@@ -15129,6 +15202,7 @@ function toggleAiChatPanel() {
     if (fab) fab.style.display = collapsed ? 'flex' : 'none';
     if (mainContent) mainContent.classList.toggle('ai-panel-collapsed', collapsed);
   }
+  scheduleResizeAllCharts();
 }
 
 // 设置页：全局开关「显示 AI 巡检助手」
@@ -15154,6 +15228,7 @@ function onShowAiAssistantChange() {
       if (fab) fab.style.display = 'none';
       if (mainContent) mainContent.classList.add('ai-panel-collapsed');
     }
+    scheduleResizeAllCharts();
     toast(show ? '已显示 AI 巡检助手' : '已隐藏 AI 巡检助手');
   }).catch(function(e){ toastError('保存失败: ' + e.message); t.checked = !show; });
 }
@@ -15177,6 +15252,7 @@ function syncShowAiAssistant() {
       if (fab) fab.style.display = 'none';
       if (mainContent) mainContent.classList.add('ai-panel-collapsed');
     }
+    scheduleResizeAllCharts();
   }).catch(function(){});
 }
 
@@ -20734,6 +20810,7 @@ const STATIC_DB_PH_MAP = {'pg':'postgres','ivorysql':'postgres','kingbase':'king
   document.addEventListener('DOMContentLoaded', () => {
     loadDbTypes();
     syncShowAiAssistant();
+    initChartResizeObserver();
   });
   </script>
 </body>

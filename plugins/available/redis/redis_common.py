@@ -363,55 +363,15 @@ class RedisCommonMixin:
             print(f"[{self._tag}] 智能分析失败: {e}")
             self.context['auto_analyze'] = []
 
-        # 2) AI 诊断（可选，依赖 dbc_config.json 配置；未配置时为空，报告显示「未启用」）
-        self.context['ai_advice'] = ''
-        try:
-            from modules.inspection.analyzer import AIAdvisor
-            # 项目根目录的 dbc_config.json（插件自身目录下没有该文件，需向上回溯查找）
-            _here = os.path.dirname(os.path.abspath(__file__))
-            cfg_path = None
-            _cur = _here
-            for _ in range(6):
-                _cand = os.path.join(_cur, 'dbc_config.json')
-                if os.path.exists(_cand):
-                    cfg_path = _cand
-                    break
-                _parent = os.path.dirname(_cur)
-                if _parent == _cur:
-                    break
-                _cur = _parent
-            if not cfg_path:
-                cfg_path = os.path.join(_here, 'dbc_config.json')
-            ai_cfg = {}
-            if os.path.exists(cfg_path):
-                with open(cfg_path, 'r', encoding='utf-8') as f:
-                    ai_cfg = _json.load(f).get('ai', {})
-            _online_enabled = ai_cfg.get('online_enabled', False)
-            if _online_enabled:
-                _adv_backend = ai_cfg.get('online_backend', 'openai')
-                _adv_api_url = ai_cfg.get('online_api_url') or None
-                _adv_model = ai_cfg.get('online_model') or None
-            else:
-                _adv_backend = ai_cfg.get('backend')
-                _adv_api_url = ai_cfg.get('api_url')
-                _adv_model = ai_cfg.get('model')
-            advisor = AIAdvisor(
-                backend=_adv_backend,
-                api_key=ai_cfg.get('api_key'),
-                api_url=_adv_api_url,
-                model=_adv_model
-            )
-            if advisor.enabled:
-                label = self.context.get('co_name', [{}])[0].get('DB_NAME', 'Unknown')
-                ai_advice = advisor.diagnose(
-                    self.db_type, label, self.context,
-                    self.context.get('auto_analyze', []),
-                    lang=getattr(self, '_lang', 'zh')
-                )
-                self.context['ai_advice'] = ai_advice
-        except Exception as e:
-            print(f"[{self._tag}] AI 诊断跳过: {e}")
-            self.context['ai_advice'] = ''
+        # 2) AI 诊断（统一接口，依赖 dbc_config.json 配置；未配置时为空，报告显示占位符）
+        from modules.inspection.analyzer import run_ai_diagnosis
+        self.context['ai_advice'] = run_ai_diagnosis(
+            self.db_type,
+            self.context.get('co_name', [{}])[0].get('DB_NAME', 'Unknown'),
+            self.context,
+            lang=getattr(self, '_lang', 'zh'),
+            timeout=600,
+        )
 
-        # 3) 健康评分依据（供 web_ui 计算 health_score / risk_level）
+        # 3) 健康评分依据（供 web_ui 计算 health_score / risk_level）依据（供 web_ui 计算 health_score / risk_level）
         self.context['risk_count'] = len(self.context.get('auto_analyze', []))

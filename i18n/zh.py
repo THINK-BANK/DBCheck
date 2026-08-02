@@ -598,7 +598,7 @@ ZI = {
     "report.fix_chapter": "修复速查",
     "report.ai_chapter": "AI 智能诊断建议",
     "report.ai_disclaimer": "以下建议由 AI 大模型基于本次巡检数据自动生成，仅供参考，实际操作请结合业务场景谨慎评估。",
-    "report.ai_disabled": "AI 诊断未启用。如需开启，请在 Web UI「AI 诊断设置」中配置后端（支持本地 Ollama 或在线模型）",
+    "report.ai_disabled": "AI 诊断暂未返回结果。若已在「AI 诊断设置」中启用在线模型或本地 Ollama，请检查 API 地址、密钥与网络连通性后重试；若尚未配置，请前往「AI 诊断设置」开启。",
     # P3: 配置基线和索引健康章节
     "report.config_baseline_chapter": "配置基线检查",
     "report.config_baseline_summary": "共 {critical} 项严重偏离 / {warning} 项警告 / {info} 项提示",

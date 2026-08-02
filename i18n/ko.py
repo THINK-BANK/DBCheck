@@ -834,7 +834,7 @@ KO.update({
     "remote_shell.upload_file": "파일 업로드",
     "remote_shell.upload_script": "스크립트 업로드",
     "report.ai_chapter": "AI 지능형 진단 제안",
-    "report.ai_disabled": "AI 진단이 활성화되지 않았습니다. 활성화하려면 웹 UI \"AI 진단 설정\"에서 백엔드를 구성하세요(로컬 Ollama 또는 온라인 모델 지원).",
+    "report.ai_disabled": "AI 진단 결과가 없습니다. 웹 UI 'AI 진단 설정'에서 온라인 모델 또는 로컬 Ollama를 활성화했다면 API 주소·키·네트워크 연결을 확인한 후 다시 시도하세요. 아직 설정하지 않았다면 'AI 진단 설정'에서 활성화하세요.",
     "report.ai_disclaimer": "다음 제안은 이 검사 데이터를 기반으로 AI 대형 모델에서 자동 생성되며 참고용입니다. 실제 운영은 비즈니스 시나리오에 따라 신중하게 평가되어야 합니다.",
     "report.ai_title": "AI 진단 권장 사항",
     "report.ch1": "OS 호스트 정보",

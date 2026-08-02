@@ -539,6 +539,16 @@ class HgdbJdbcInspector(BaseInspectionEngine):
         except Exception as e:
             print(f"[HGDB] 规则引擎检查跳过: {e}")
 
+        # AI 诊断（统一接口）—— 此前缺失导致第 7 章恒为空
+        from modules.inspection.analyzer import run_ai_diagnosis
+        self.context['ai_advice'] = run_ai_diagnosis(
+            'hgdb',
+            self.context.get('co_name', [{}])[0].get('DB_NAME') or getattr(self, 'host', '') or self.db_type,
+            self.context,
+            lang=getattr(self, '_lang', 'zh'),
+            timeout=600,
+        )
+
         print(f"[HGDB] 数据采集完成，context keys: {list(self.context.keys())}")
         return self.context
 

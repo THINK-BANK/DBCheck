@@ -834,7 +834,7 @@ DE.update({
     "remote_shell.upload_file": "Datei hochladen",
     "remote_shell.upload_script": "Skript hochladen",
     "report.ai_chapter": "Intelligente KI-Diagnosevorschläge",
-    "report.ai_disabled": "AI-Diagnose ist nicht aktiviert. Wenn Sie es aktivieren möchten, konfigurieren Sie bitte das Backend in der Web-Benutzeroberfläche „AI-Diagnoseeinstellungen“ (unterstützt lokales Ollama oder Online-Modell).",
+    "report.ai_disabled": "Die AI-Diagnose lieferte kein Ergebnis. Wenn Sie in der Web-Benutzeroberfläche „AI-Diagnoseeinstellungen“ ein Online-Modell oder lokales Ollama aktiviert haben, prüfen Sie bitte API-URL, Schlüssel und Netzwerkverbindung und versuchen Sie es erneut; andernfalls aktivieren Sie es dort.",
     "report.ai_disclaimer": "Die folgenden Vorschläge werden automatisch vom großen KI-Modell auf Basis dieser Inspektionsdaten generiert und dienen nur als Referenz. Der tatsächliche Betrieb sollte sorgfältig auf der Grundlage des Geschäftsszenarios bewertet werden.",
     "report.ai_title": "Empfehlungen zur KI-Diagnose",
     "report.ch1": "OS-Hostinformationen",

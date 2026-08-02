@@ -550,6 +550,16 @@ class UxdbJdbcInspector(BaseInspectionEngine):
             print(f"[UXDB] 规则引擎检查跳过: {e}")
 
         print(f"[UXDB] 数据采集完成，context keys: {list(self.context.keys())}")
+
+        # AI 诊断（统一接口）
+        from modules.inspection.analyzer import run_ai_diagnosis
+        self.context['ai_advice'] = run_ai_diagnosis(
+            self.db_type,
+            getattr(self, 'host', '') or self.db_type,
+            self.context,
+            lang=getattr(self, '_lang', 'zh'),
+            timeout=600,
+        )
         return self.context
 
 

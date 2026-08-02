@@ -834,7 +834,7 @@ JA.update({
     "remote_shell.upload_file": "ファイルをアップロード",
     "remote_shell.upload_script": "スクリプトのアップロード",
     "report.ai_chapter": "AI インテリジェント診断提案",
-    "report.ai_disabled": "AI 診断が有効になっていません。有効にしたい場合は、Web UI の「AI 診断設定」でバックエンドを構成してください (ローカル Ollama またはオンラインモデルをサポートします)",
+    "report.ai_disabled": "AI 診断の結果がありません。Web UI の「AI 診断設定」でオンラインモデルまたはローカル Ollama を有効にしている場合は、API アドレス・キー・ネットワーク接続を確認してから再試行してください。まだ設定していない場合は「AI 診断設定」で有効にしてください。",
     "report.ai_disclaimer": "次の提案は AI によって提供されます。大規模なモデルは、以下に基づいて自動的に生成されます。検査データは参考用です。実際の運用についてはビジネスシナリオに基づいて慎重に評価してください。",
     "report.ai_title": "AI 診断の提案",
     "report.ch1": "OSホスト情報",

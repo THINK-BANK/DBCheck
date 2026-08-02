@@ -1365,8 +1365,9 @@ class AIAdvisor:
                 _cfg = _full_cfg.get('ai', {})
                 _online_enabled = _cfg.get('online_enabled', False)
                 _online_backend = _cfg.get('online_backend', 'openai')
-                _online_api_url = _cfg.get('online_api_url', 'https://api.openai.com/v1')
-                _online_model = _cfg.get('online_model', 'gpt-4o-mini')
+                # 规范化：去除首尾空白，避免用户粘贴 API 地址时带入的前导/尾随空格导致请求 URL 非法（静默失败）
+                _online_api_url = (_cfg.get('online_api_url') or 'https://api.openai.com/v1').strip()
+                _online_model = (_cfg.get('online_model') or 'gpt-4o-mini').strip()
                 _config_api_key = _cfg.get('api_key', '')
                 _config_rag = _cfg.get('rag', {})
         except Exception:
@@ -1404,7 +1405,8 @@ class AIAdvisor:
         else:
             self.api_key = ''
 
-        self.api_url = resolved_url
+        # 规范化：去除首尾空白（防御真实配置 / 传参中可能携带的空格，避免请求 URL 非法而静默失败）
+        self.api_url = (resolved_url or '').strip()
 
         # ── 模型选择 ──
         if self.backend == 'openai':
@@ -1773,8 +1775,8 @@ class AIAdvisor:
         """调用 OpenAI 协议兼容的远程 API（/v1/chat/completions）"""
         import urllib.request
         import json as _json
-        # 规范化 URL：去掉尾部斜杠，确保以 /v1 结尾，追加 /chat/completions
-        url = self.api_url.rstrip('/')
+        # 规范化 URL：去掉首尾空白与尾部斜杠，确保以 /v1 结尾，追加 /chat/completions
+        url = self.api_url.strip().rstrip('/')
         if not url.endswith('/v1'):
             if '/v1/' in url:
                 url = url[:url.index('/v1') + 3]
@@ -2648,3 +2650,50 @@ def run_full_analysis(db_type: str, host: str, port, label: str,
     if db_type == 'mariadb':
         result['mariadb_extras'] = mariadb_extras
     return result
+
+
+def run_ai_diagnosis(db_type, label, context, issues=None, lang='zh', timeout=600):
+    """统一的 AI 诊断调用接口（所有插件 / 内置引擎共用，避免重复实现与静默失败）。
+
+    自动读取 dbc_config.json 的 ai 配置、构造 AIAdvisor 并调用 diagnose。
+    返回诊断文本；未启用或失败时返回空字符串，并打印分级日志
+    （[AI] / [WARN] / [ERROR]），这些前缀不在前端日志过滤列表，巡检日志面板可见。
+
+    :param db_type: 数据库类型标识('mysql','pg','oracle','hgdb','redis','db2','clickhouse','mongodb','uxdb',...)
+    :param label:   数据库标签（host / 实例名），用于 Prompt 展示
+    :param context: 采集得到的 context dict（diagnose 内部按需提取指标）
+    :param issues:  风险项列表（auto_analyze 结果）；省略时从 context['auto_analyze'] 取
+    :param lang:    语言 'zh' / 'en'
+    :param timeout: 请求超时（秒）
+    :return:        诊断文本或 ''
+    """
+    if issues is None:
+        issues = context.get('auto_analyze', []) or []
+    try:
+        _backend = 'openai'
+        try:
+            import os as _os, json as _json
+            _p = _os.path.join(str(PROJECT_ROOT), 'dbc_config.json')
+            if _os.path.exists(_p):
+                with open(_p, 'r', encoding='utf-8') as _f:
+                    _ai = _json.load(_f).get('ai', {})
+                _backend = _ai.get('online_backend', 'openai') or 'openai'
+        except Exception:
+            pass
+        advisor = AIAdvisor(backend=_backend)
+        if not advisor.enabled:
+            print(f"[AI] 诊断被禁用（backend={advisor.backend}）；请确认 dbc_config.json 的 ai.online_enabled=true 且 backend={_backend}")
+            return ''
+        print(f"[AI] 诊断已启用，准备调用 backend={advisor.backend} model={advisor.model} url={advisor.api_url}")
+        advice = advisor.diagnose(db_type, label, context, issues, lang=lang, timeout=timeout)
+        if not advice:
+            print(f"[WARN] AI 诊断返回空字符串（db_type={db_type}）；请检查 API 地址/密钥/网络/模型")
+        else:
+            print(f"[AI] 诊断完成，长度={len(advice)}")
+        return advice or ''
+    except Exception as e:
+        print(f"[ERROR] AI 诊断异常被暴露: {e}")
+        import traceback
+        traceback.print_exc()
+        return ''
+

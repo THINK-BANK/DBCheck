@@ -191,7 +191,6 @@ socketio = SocketIO(cors_allowed_origins='*', async_mode=_socketio_async_mode)
 import threading as _shutdown_threading
 import time as _shutdown_time
 
-_SHUTDOWN_EVENT = _shutdown_threading.Event()
 _CTRL_HANDLER_KEEPALIVE = None  # 模块级保活 Win32 回调，防止被 GC 回收后失效
 
 
@@ -204,11 +203,7 @@ def _hard_exit():
 
 
 def _request_shutdown():
-    """请求关闭：置位事件并立即强制退出（双重保险）。"""
-    try:
-        _SHUTDOWN_EVENT.set()
-    except Exception:
-        pass
+    """请求关闭：立即强制退出（最短路，不依赖任何清理逻辑）。"""
     _hard_exit()
 
 
@@ -244,19 +239,25 @@ def _register_console_ctrl_handler():
         pass
 
 
-def _deferred_reregister_ctrl_handler():
-    """服务启动后延迟重注册，确保本 handler 在 LIFO 顺序中排最前（最先被调用）。"""
+def _ctrl_keepalive_loop():
+    """持续保活：每 3 秒重注册 Windows 控制台 Ctrl handler，确保本 handler
+    在 LIFO 顺序中始终排最前（最先被调用）。这是解决「刚启动能停、运行一阵后
+    停不了」的关键——socketio/gevent 在运行期可能再次注册控制台 handler，
+    将其挤到我们前面；周期性重注册可保证我们永远抢占最前位置。"""
+    while True:
+        try:
+            _shutdown_time.sleep(3)
+            _register_console_ctrl_handler()
+        except Exception:
+            pass
+
+
+def _start_ctrl_keepalive():
+    """启动控制台 Ctrl handler 持续保活线程（daemon，不阻塞退出）。"""
     try:
-        _shutdown_time.sleep(1.5)
-        _register_console_ctrl_handler()
+        _shutdown_threading.Thread(target=_ctrl_keepalive_loop, daemon=True).start()
     except Exception:
         pass
-
-
-def _shutdown_watchdog():
-    """看门狗兜底：事件一旦置位立即强制退出，防止任何路径遗漏导致进程僵死。"""
-    _SHUTDOWN_EVENT.wait()
-    _hard_exit()
 
 # ── 本地模块 ──────────────────────────────────────────────
 try:
@@ -9390,9 +9391,9 @@ def api_dm8_offline_report(task_id):
 
 
 def main():
-    # ── 信号处理：确保 Ctrl+C / 关闭窗口 能正确退出 ──
-    def signal_handler(sig, frame):
-        """处理 Ctrl+C / SIGTERM：立即强制退出。
+    # ── 信号处理：确保 Ctrl+C / 关闭窗口 / SIGTERM 都能立即退出 ──
+    def _signal_handler(sig, frame):
+        """处理 Ctrl+C / Ctrl+Break / SIGTERM：立即强制退出。
 
         严禁调用任何会 import 模块或 join 线程的清理逻辑（如 unload_all_plugins），
         否则 Ctrl+C 会“看似无效”。这里只做极简强制退出。
@@ -9403,30 +9404,22 @@ def main():
             pass
         _request_shutdown()
 
-    # 1) Python 标准信号（gevent 未接管时生效；Windows 下 SIGBREAK 更能穿透阻塞）
+    # 1) Python 标准信号（在主线程注册；gevent 在子线程运行无法覆盖本注册，
+    #    Git Bash/MSYS2 下 Ctrl+C 走 SIGINT 也经此路径）
     try:
-        signal.signal(signal.SIGINT, signal_handler)   # Ctrl+C
-        signal.signal(signal.SIGTERM, signal_handler)  # kill / docker stop
+        signal.signal(signal.SIGINT, _signal_handler)   # Ctrl+C（cmd/PowerShell/Git Bash）
+        signal.signal(signal.SIGTERM, _signal_handler)  # kill / docker stop
         if platform.system().lower() == 'windows':
-            signal.signal(signal.SIGBREAK, signal_handler)
+            signal.signal(signal.SIGBREAK, _signal_handler)
     except ValueError:
         # 非主线程中无法注册信号，依赖下方 Windows 控制台处理器兜底
         pass
 
-    # 2) Windows 控制台级处理器（关键兜底，OS 层捕获，gevent 吞不掉、PyInstaller 同样有效）
+    # 2) Windows 控制台级处理器（OS 层，cmd/PowerShell 关闭窗口/Ctrl+C 必杀，
+    #    gevent 吞不掉、PyInstaller 同样有效）+ 持续保活确保永远抢在最前
     _register_console_ctrl_handler()
-    # 服务启动后 gevent/WSGI 可能再次注册 Ctrl handler（LIFO 下会排到我前面），
-    # 故延迟重注册一次，确保本 handler 始终「最后注册=最先调用」。
-    try:
-        _shutdown_threading.Thread(target=_deferred_reregister_ctrl_handler, daemon=True).start()
-    except Exception:
-        pass
-    # 3) 看门狗兜底：事件置位即强制退出，防任何路径遗漏
-    try:
-        _shutdown_threading.Thread(target=_shutdown_watchdog, daemon=True).start()
-    except Exception:
-        pass
-    
+    _start_ctrl_keepalive()
+
     _setup_driver_paths()
     # ── 初始化插件系统 ──
     # 主加载器切换为 plugin_core.load_plugins()（双类型支持）：
@@ -9445,13 +9438,31 @@ def main():
     port = 5003
     print(_t('webui.startup_msg').format(port=port))
     print("[提示] 按 Ctrl+C 停止服务\n")
-    
+
     _verify_agreement_integrity()
+
+    # 3) 将 server 放在 daemon 子线程运行，主线程仅做「等待退出」循环。
+    #    这样主线程始终保持「纯 Python 主线程」身份，注册的信号 handler 不会被
+    #    gevent/socketio 在 server 线程里的任何操作覆盖；任何退出信号（或控制台
+    #    事件）触发后，_request_shutdown() 直接 os._exit(0) 强杀整个进程。
+    def _run_server():
+        try:
+            socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)
+        except KeyboardInterrupt:
+            _request_shutdown()
+        except Exception as _e:
+            print(f"[主程序] server 异常: {_e}")
+
+    _server_thread = _shutdown_threading.Thread(target=_run_server, daemon=True)
+    _server_thread.start()
+
+    # 主线程：阻塞等待（不依赖 signal.pause，避免被 gevent 信号接管影响）
     try:
-        socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)
+        while True:
+            _shutdown_time.sleep(0.5)
     except KeyboardInterrupt:
-        print("\n[主程序] 收到 KeyboardInterrupt，正在退出...")
-        os._exit(0)
+        _request_shutdown()
+    _request_shutdown()
 
 
 if __name__ == '__main__':
