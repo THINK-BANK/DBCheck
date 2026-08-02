@@ -10044,7 +10044,7 @@ function pollStatus() {
                   <span class="issue-title">${c1}</span>
                 </div>
                 <div class="issue-desc">${issue.col3||''}</div>
-                ${(issue.fix_sql||'').trim()?`
+                ${(false)?`
                   <div class="fix-sql-box">
                     <div class="fix-sql-header"><span>修复建议 SQL：</span></div>
                     <pre class="fix-sql-code">${escapeHtml(issue.fix_sql)}</pre>
@@ -10126,6 +10126,7 @@ function pollStatus() {
           <div id="ai-advice-body" style="display:${ai.length > 200 ? 'none' : 'block'};margin-top:8px;padding:12px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text-main)">
             ${html}
           </div>
+          <div style="margin-top:8px;padding:8px 12px;background:var(--surface2);border:1px dashed var(--border);border-radius:8px;font-size:11.5px;color:var(--text-muted);font-style:italic;line-height:1.6">⚠️ ${i18n('report.ai_disclaimer')}</div>
         `;
           }  // end else (not error)
         }  // end if (ai)
@@ -10452,7 +10453,7 @@ function showReportIssues(filename, autoAnalyzeB64) {
               <span class="issue-title">${c1}</span>
             </div>
             <div class="issue-desc">${issue.col3||''}</div>
-            ${(issue.fix_sql||'').trim()?
+            ${(false)?
               '<div class="fix-sql-box" style="margin-top:8px">'+
                 '<div class="fix-sql-header"><span>修复建议 SQL：</span></div>'+
                 '<pre class="fix-sql-code">'+escapeHtml(issue.fix_sql)+'</pre>'+

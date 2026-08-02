@@ -1627,7 +1627,7 @@ class AIAdvisor:
         :param issues: smart_analyze_* 返回的风险列表
         :param timeout: 请求超时秒数
         :param lang: 'zh' 或 'en'，决定 AI 提示词语言
-        :return: AI 生成的建议文本，失败时返回空字符串
+        :return: AI 生成的建议文本；调用失败时返回以「⚠」开头的错误说明串（非空），便于前端错误卡与 Word 报告暴露真实失败原因
         """
         if not self.enabled:
             return ''
@@ -1732,7 +1732,9 @@ class AIAdvisor:
         except Exception as e:
             print(f"⚠️  AI 诊断调用失败 [{self.backend}]: {e}")
             import traceback; traceback.print_exc()
-            return ''
+            # 暴露真实失败原因：带 ⚠ 前缀的错误串会写入 ai_advice，
+            # 由 Web 错误卡（正则 ^⚠|timeout|失败|异常）与 Word 第8章展示，不再静默吞错。
+            return f"⚠ AI 诊断调用失败：{e}"
 
     def _call_llm(self, prompt: str, timeout: int = 60) -> str:
         """通用 LLM 调用入口，根据 backend 自动路由到对应后端方法"""
@@ -1815,10 +1817,27 @@ class AIAdvisor:
             _detail = _body[:2000] if _body else (e.reason or '')
             raise RuntimeError(f"AI 诊断 HTTP {e.code} @ {url}: {_detail}") from e
         # OpenAI 协议响应格式: choices[0].message.content
+        # ── 失败原因显式暴露：避免 HTTP 200 时的静默吞错 ──
+        # 1) HTTP 200 但响应体含 error（兼容网关/代理常用 200 返回错误体）
+        _error = data.get('error')
+        if _error:
+            if isinstance(_error, dict):
+                _err_msg = _error.get('message') or str(_error)
+            else:
+                _err_msg = str(_error)
+            raise RuntimeError("AI 服务返回错误: " + _err_msg)
+        # 2) choices 为空：模型名不匹配 / API Key 无效 / 网络异常 / 超时
         choices = data.get('choices', [])
-        if choices:
-            return choices[0].get('message', {}).get('content', '').strip()
-        return ''
+        if not choices:
+            raise RuntimeError(
+                "AI 服务返回空结果（choices 为空），请检查模型名称/API Key/网络或适当增大超时")
+        # 3) choices 非空但 content 为 None/空/纯空白（可能触发内容过滤或 max_tokens 不足）
+        _content = choices[0].get('message', {}).get('content')
+        if _content is None or str(_content).strip() == '':
+            raise RuntimeError(
+                "AI 返回内容为空（可能触发内容过滤或 max_tokens 不足），finish_reason=%s"
+                % choices[0].get('finish_reason'))
+        return str(_content).strip()
 
 
 # ═══════════════════════════════════════════════════════
@@ -2656,7 +2675,7 @@ def run_ai_diagnosis(db_type, label, context, issues=None, lang='zh', timeout=60
     """统一的 AI 诊断调用接口（所有插件 / 内置引擎共用，避免重复实现与静默失败）。
 
     自动读取 dbc_config.json 的 ai 配置、构造 AIAdvisor 并调用 diagnose。
-    返回诊断文本；未启用或失败时返回空字符串，并打印分级日志
+    返回诊断文本；未启用时返回空字符串，调用失败时返回以「⚠」开头的错误说明串（非空），并打印分级日志
     （[AI] / [WARN] / [ERROR]），这些前缀不在前端日志过滤列表，巡检日志面板可见。
 
     :param db_type: 数据库类型标识('mysql','pg','oracle','hgdb','redis','db2','clickhouse','mongodb','uxdb',...)

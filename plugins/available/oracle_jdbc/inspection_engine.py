@@ -1793,7 +1793,7 @@ class BaseInspectionEngine:
             issues = self.context.get("auto_analyze", [])
             if issues:
                 _add_heading(self._t(f'report.{self.db_type}_ch16_1', default='智能分析问题明细'), 2)
-                tbl = doc.add_table(rows=1+len(issues), cols=7, style='Table Grid')
+                tbl = doc.add_table(rows=1+len(issues), cols=6, style='Table Grid')
                 hdrs = [
                     self._t(f'report.{self.db_type}_col_seq', default='序号'),
                     self._t(f'report.{self.db_type}_col_item', default='检查项'),
@@ -1801,7 +1801,6 @@ class BaseInspectionEngine:
                     self._t(f'report.{self.db_type}_col_desc', default='描述'),
                     self._t(f'report.{self.db_type}_col_severity', default='严重度'),
                     self._t(f'report.{self.db_type}_col_owner', default='负责人'),
-                    self._t(f'report.{self.db_type}_col_fix', default='修复建议'),
                 ]
                 for j, (cell, ht) in enumerate(zip(tbl.rows[0].cells, hdrs)):
                     cell.text = ht
@@ -1819,8 +1818,7 @@ class BaseInspectionEngine:
                     row[3].text = x.get('col3','')
                     row[4].text = x.get('col4','')
                     row[5].text = x.get('col5','')
-                    row[6].text = x.get('fix_sql','')[:200]
-                    for j in range(7):
+                    for j in range(6):
                         for p in row[j].paragraphs:
                             for run in p.runs:
                                 run.font.size = Pt(9); run.font.name = '微软雅黑'
