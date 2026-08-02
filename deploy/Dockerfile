@@ -1,8 +1,20 @@
 ﻿# DBCheck v2.7.0 - Full Edition Dockerfile (with RBAC User Management)
 # Supports: MySQL, TiDB, PostgreSQL, IvorySQL, Oracle, SQL Server, DM8, YashanDB
 #
-# Build:
+# Build (single-arch, native host):
 #   docker build -t jackge12345/dbcheck:latest .
+#
+# Build & push MULTI-ARCH (linux/amd64 + linux/arm64) — recommended for mixed
+# x86 / ARM64 fleets (e.g. ARM64 信创服务器: 鲲鹏/Kunpeng, 飞腾). Requires Docker
+# Buildx + QEMU:
+#   ./scripts/build-multiarch.sh --push
+#   (or CI: .github/workflows/docker-multiarch.yml on tag push)
+#
+# WHY multi-arch matters: the old amd64-only image, when run on an ARM64 host
+# via qemu emulation, makes numpy 2.x abort with "NumPy X86_V2 unsupported".
+# A native arm64 image lets numpy / OpenJDK run without x86 emulation — crash gone.
+# NOTE: Oracle client libs in drivers.zip are x86_64; Oracle support is
+#       unavailable on arm64 (non-fatal — the image still builds & serves 5003).
 #
 # Run:
 #   docker run -d -p 5003:5003 \
@@ -111,7 +123,9 @@ ENV PYTHONUNBUFFERED=1
 ENV PYTHONMEMORYLIMIT=2g
 
 # Create VERSION.txt (without v prefix, matches Docker tag format)
-RUN echo 26.8.2.1 > /app/VERSION.txt
+# DBCHECK_VERSION 可在构建时覆盖: --build-arg DBCHECK_VERSION=v26.8.2.1
+ARG DBCHECK_VERSION=26.8.2.1
+RUN echo ${DBCHECK_VERSION} > /app/VERSION.txt
 
 # Ensure data and pro_data directories exist for volume mounts
 RUN mkdir -p /app/data /app/data/pro_data /app/data/reports

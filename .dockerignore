@@ -1,102 +1,41 @@
-# Docker ignore rules for DBCheck
-# Similar to .gitignore, files listed here will NOT be sent to Docker daemon
+# 构建上下文排除：加速构建 + 防止密钥/运行时数据被烤进镜像
 
-# Python
-__pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-.Python
-*.so
-*.egg-info/
-dist/
-build/
-eggs/
-*.egg
-
-# Virtual environments
-venv/
-env/
-ENV/
-.venv/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# Git
-.git/
+# VCS / CI（不需要进镜像）
+.git
+.github
 .gitignore
 .gitattributes
 
-# OS
-.DS_Store
-Thumbs.db
-desktop.ini
+# 构建/产物/依赖缓存
+dist
+build
+node_modules
+**/__pycache__
+**/*.pyc
+*.egg-info/
 
-# Project-specific (not needed in image)
-# SQLite DB files: shipped in image (already contain table structures and default data)
-# *.db
-# *.db-shm
-# *.db-wal
+# 测试 / 文档 / 运行时数据（绝不进镜像）
+tests
+docs
+data
+pro_data
+logs
 *.log
-logs/
 
-# Test / temp files
-test_*.py
-*_test.py
-tmp/
-temp/
-debug_*.py
-clean_*.py
-dedup_*.py
-fix_*.py
-rebuild_*.py
-apply_*.py
+# 密钥与运行时配置（绝不进入镜像）
+dbc_config.json
+ai_config.json
+.env
+.db_key
+notifier_config.json
+instances.json
 
-# Sensitive
-config.json
-secrets/
-*.pem
-*.key
-*.crt
-
-# Large binaries (all drivers — downloaded at build time from GitHub Releases)
-# 注意：Oracle JDBC 驱动不允许公开下载，必须打包在镜像中
+# 驱动目录：build 阶段从 GitHub Releases 下载 drivers.zip，本地仓库 drivers/ 不进构建上下文
+# 例外：Oracle JDBC 驱动不允许公开下载，必须打包进镜像，故保留 ojdbc 两个 jar
 drivers/
 !drivers/ojdbc6.jar
 !drivers/ojdbc8.jar
 
-# Documentation (optional, keep if you want docs in image)
-# *.md
-# !README.md
-
-# ═══════════════════════════════════════════════════════════════════
-#  阶段6（T3）：可发布干净基线 — 构建上下文排除运行时数据 / 密钥 / 本地配置
-# ═══════════════════════════════════════════════════════════════════
-
-# 运行时数据目录（必须排除，避免把本地 data 带进镜像）
-data/
-data/.migration_backup/
-data/.migration_manifest.json
-.migration_backup/
-.migration_manifest.json
-
-# 密钥 / 凭据（.db_key 不以 .key 结尾，*.key 无法命中，需显式排除）
-.db_key
-
-# 本地配置文件（含密钥 / 运行时配置，不得进入镜像）
-# 说明：上方 config.json 仅精确命中 config.json，无法命中带前缀的本地配置，
-#       故此处显式列出 dbc_config.json / ai_config.json / notifier_config.json /
-#       instances.json；另补充 .env（密钥集中地）。
-dbc_config.json
-ai_config.json
-notifier_config.json
-instances.json
-.env
-
-# Python 测试缓存（非运行时需要）
-.pytest_cache/
+# OS 噪声
+.DS_Store
+Thumbs.db
