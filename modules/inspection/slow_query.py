@@ -1607,6 +1607,7 @@ def get_slow_query_analyzer(db_type: str) -> BaseSlowQueryAnalyzer:
         'mariadb':   MySQLSlowQueryAnalyzer,  # MariaDB 复用 MySQL 慢查询分析器（协议兼容）
         'oceanbase': OceanBaseSlowQueryAnalyzer,  # OceanBase MySQL 租户走 GV$OB_SQL_AUDIT
         'pg':        PGSlowQueryAnalyzer,
+        'hgdb':      PGSlowQueryAnalyzer,  # HGDB V9 为 PostgreSQL 14 内核，复用 PG 慢查询分析器
         'oracle':    OracleSlowQueryAnalyzer,
         'sqlserver': SQLServerSlowQueryAnalyzer,
         'dm':        DMSlowQueryAnalyzer,

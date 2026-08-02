@@ -1346,6 +1346,9 @@ def get_index_health(db_type, conn, days_threshold=90):
         return analyze_mysql_indexes(conn, days_threshold)
     elif db_type == 'pg':
         return analyze_pg_indexes(conn, days_threshold)
+    elif db_type == 'hgdb':
+        # HGDB V9 为 PostgreSQL 14 内核，复用 PG 索引健康分析
+        return analyze_pg_indexes(conn, days_threshold)
     elif db_type == 'oracle':
         return analyze_oracle_indexes(conn, days_threshold)
     elif db_type == 'dm':

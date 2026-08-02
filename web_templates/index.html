@@ -4713,7 +4713,7 @@ function formatBytes(bytes) {
         const user = document.getElementById('ds-user').value.trim();
         const svcName = document.getElementById('ds-service-name')?.value || '';
         let dbName = (document.getElementById('ds-database')?.value || '').trim();
-        if (!dbName && (dbType === 'pg' || dbType === 'ivorysql' || dbType === 'uxdb')) dbName = (dbType === 'uxdb' ? 'uxdb' : 'postgres');
+        if (!dbName && (dbType === 'pg' || dbType === 'ivorysql' || dbType === 'uxdb')) dbName = (dbType === 'uxdb' ? 'uxdb' : (dbType === 'ivorysql' ? 'ivorysql' : 'postgres'));
         if (!dbName && dbType === 'kingbase') dbName = 'kingbase';
         if (!dbName && dbType === 'gbase') dbName = 'sysmaster';
         if (!dbName && dbType === 'oceanbase') dbName = 'oceanbase';
@@ -9095,6 +9095,8 @@ async function selectDbType(type, skipReload) {
   const dbInfo = (window.dbTypes || []).find(t => t.value === type) || {};
   document.getElementById('f-port').value = dbInfo.port || 3306;
   document.getElementById('f-user').value = dbInfo.user || 'root';
+  // 按类型预填默认库名（ivorysql 等内置类型在 builtin_types.json 配置 default_database）
+  if (dbInfo.default_database) document.getElementById('f-database').value = dbInfo.default_database;
   // Redis 用户名仅 ACL 场景需要，清空默认值并提示"可选"
   var fUserEl = document.getElementById('f-user');
   var fUserReqSpan = document.querySelector('#f-user-label .req');
@@ -9226,7 +9228,8 @@ async function testDb() {
     const fDbEl = document.getElementById('f-database');
     let fDbVal = fDbEl ? fDbEl.value.trim() : '';
     if (!fDbVal) {
-      if (dbType === 'pg' || dbType === 'ivorysql') fDbVal = 'postgres';
+      if (dbType === 'pg') fDbVal = 'postgres';
+      else if (dbType === 'ivorysql') fDbVal = 'ivorysql';
       else if (dbType === 'kingbase') fDbVal = 'kingbase';
       else if (dbType === 'gbase') fDbVal = 'sysmaster';
       else if (dbType === 'mongodb') fDbVal = 'admin';
@@ -9354,7 +9357,7 @@ async function testJobDb() {
       port:     parseInt(document.getElementById('job-port').value) || (portDefaults[dbType]||3306),
       user:     document.getElementById('job-user').value.trim(),
       password: document.getElementById('job-password').value,
-      database: (dbType === 'pg' || dbType === 'ivorysql') ? (document.getElementById('job-database').value.trim() || 'postgres') : (dbType === 'kingbase') ? (document.getElementById('job-database').value.trim() || 'kingbase') : (dbType === 'gbase') ? (document.getElementById('job-database').value.trim() || 'sysmaster') : '',
+      database: (dbType === 'pg' || dbType === 'ivorysql') ? (document.getElementById('job-database').value.trim() || (dbType === 'pg' ? 'postgres' : 'ivorysql')) : (dbType === 'kingbase') ? (document.getElementById('job-database').value.trim() || 'kingbase') : (dbType === 'gbase') ? (document.getElementById('job-database').value.trim() || 'sysmaster') : '',
     };
     if (dbType === 'oracle') {
       body.service_name = document.getElementById('job-service-name').value.trim() || null;
@@ -9632,7 +9635,7 @@ async function executeFixSql(taskId, sql) {
 // ══════════════════════════════════════════════════════════════
 
 // ─── 模块级默认值（供 fillConfirmPanel / startInspection 共用） ───
-const userDefaults = { mysql: 'root', pg: 'postgres', oracle: 'system', dm: 'SYSDBA', sqlserver: 'sa', tidb: 'root', ivorysql: 'postgres', yashandb: 'sys' };
+const userDefaults = { mysql: 'root', pg: 'postgres', oracle: 'system', dm: 'SYSDBA', sqlserver: 'sa', tidb: 'root', ivorysql: 'ivorysql', yashandb: 'sys' };
 
 // ─── 巡检章节可选（T5 向导章节多选） ───
 // window._chapterMap: 章节 id -> {number, title}，供 Step5 与 startInspection 使用
@@ -9795,7 +9798,8 @@ async function startInspection() {
   const password = document.getElementById('f-password').value;
   let database = document.getElementById('f-database').value.trim();
   if (!database) {
-    if (dbType === 'pg' || dbType === 'ivorysql') database = 'postgres';
+    if (dbType === 'pg') database = 'postgres';
+    else if (dbType === 'ivorysql') database = 'ivorysql';
     else if (dbType === 'kingbase') database = 'kingbase';
     else if (dbType === 'gbase') database = 'sysmaster';
     else if (dbType === 'mongodb') database = 'admin';
@@ -20591,11 +20595,11 @@ function mkdirRemote() {
   // 即使接口慢/失败也不影响既有行为；新插件类型在 window.dbTypes 加载后自动追加。
 const STATIC_DB_ICONS = {mysql:'🐬', tdsqlc_mysql:'🐬', mariadb:'🐬', oceanbase:'🐋', pg:'🐘', oracle:'🔴', oracle_jdbc:'🔴', dm:'🟡', sqlserver:'🟠', tidb:'🟢', ivorysql:'🐘', kingbase:'🐘', gbase:'🟢', clickhouse:'🧊'};
 const STATIC_PORT_MAP = {mysql:3306, tdsqlc_mysql:3306, mariadb:3306, oceanbase:2881, pg:5432, dm:5236, oracle:1521, oracle_jdbc:1521, sqlserver:1433, tidb:4000, ivorysql:5432, yashandb:1688, kingbase:54321, gbase:9088, db2:50000, redis:6379, 'redis-cluster':6379, clickhouse:8123};
-const STATIC_USER_MAP = {mysql:'root', tdsqlc_mysql:'root', mariadb:'root', oceanbase:'root@test', pg:'postgres', dm:'SYSDBA', oracle:'system', oracle_jdbc:'system', sqlserver:'sa', tidb:'root', ivorysql:'postgres', yashandb:'sys', kingbase:'kingbase', gbase:'gbasedbt', db2:'db2inst1', redis:'', 'redis-cluster':'', clickhouse:'default'};
+const STATIC_USER_MAP = {mysql:'root', tdsqlc_mysql:'root', mariadb:'root', oceanbase:'root@test', pg:'postgres', dm:'SYSDBA', oracle:'system', oracle_jdbc:'system', sqlserver:'sa', tidb:'root', ivorysql:'ivorysql', yashandb:'sys', kingbase:'kingbase', gbase:'gbasedbt', db2:'db2inst1', redis:'', 'redis-cluster':'', clickhouse:'default'};
   const STATIC_SHOW_DB_FIELD = {'pg':true,'ivorysql':true,'kingbase':true,'gbase':true,'oceanbase':true,'db2':true,'mysql':true,'tdsqlc_mysql':true,'mariadb':true,'tidb':true,'clickhouse':true};
-const STATIC_DEFAULT_DB_MAP = { pg: 'postgres', ivorysql: 'postgres', kingbase: 'kingbase', gbase: 'sysmaster', mongodb: 'admin', mysql: 'mysql', tdsqlc_mysql: 'mysql', mariadb: 'mysql', tidb: 'mysql', clickhouse: 'default' };
+const STATIC_DEFAULT_DB_MAP = { pg: 'postgres', ivorysql: 'ivorysql', kingbase: 'kingbase', gbase: 'sysmaster', mongodb: 'admin', mysql: 'mysql', tdsqlc_mysql: 'mysql', mariadb: 'mysql', tidb: 'mysql', clickhouse: 'default' };
 const STATIC_LABEL_MAP = { pg: 'PostgreSQL', ivorysql: 'PostgreSQL', kingbase: 'KingbaseES', gbase: 'GBase 8s', mysql: 'MySQL', tdsqlc_mysql: 'TDSQL-C MySQL', mariadb: 'MariaDB', tidb: 'TiDB', clickhouse: 'ClickHouse' };
-const STATIC_DB_PH_MAP = {'pg':'postgres','ivorysql':'postgres','kingbase':'kingbase','gbase':'sysmaster','oceanbase':'oceanbase','mongodb':'admin','db2':'testdb','mysql':'mysql','mariadb':'mysql','tidb':'mysql','clickhouse':'default','uxdb':'uxdb'};
+const STATIC_DB_PH_MAP = {'pg':'postgres','ivorysql':'ivorysql','kingbase':'kingbase','gbase':'sysmaster','oceanbase':'oceanbase','mongodb':'admin','db2':'testdb','mysql':'mysql','mariadb':'mysql','tidb':'mysql','clickhouse':'default','uxdb':'uxdb'};
 
   window.DB_ICONS = Object.assign({}, STATIC_DB_ICONS);
   window.PORT_MAP = Object.assign({}, STATIC_PORT_MAP);

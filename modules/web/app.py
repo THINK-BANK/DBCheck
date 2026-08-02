@@ -1510,7 +1510,7 @@ def test_kingbase_connection(host, port, user, password, database='kingbase'):
         return False, str(e)
 
 
-def test_ivorysql_connection(host, port, user, password, database='postgres'):
+def test_ivorysql_connection(host, port, user, password, database='ivorysql'):
     """测试 IvorySQL 连接（使用 psycopg2，与 PostgreSQL 协议兼容）"""
     try:
         import psycopg2
@@ -1918,7 +1918,7 @@ def _ct_pg(data, flavor, db_default='postgres'):
 
 
 def _ct_ivorysql(data, flavor):
-    return _ct_pg(data, flavor, db_default='postgres')
+    return _ct_pg(data, flavor, db_default='ivorysql')
 
 
 def _ct_kingbase(data, flavor):
@@ -3854,7 +3854,7 @@ def api_start_config_baseline():
             'port': int(data.get('port', 0) or (3306 if db_type == 'mysql' else 2881 if db_type == 'oceanbase' else 5432)),
             'user': data.get('user', ''),
             'password': data.get('password', ''),
-            'database': data.get('database') or ('postgres' if db_type in ('pg', 'ivorysql') else ''),
+            'database': data.get('database') or ('ivorysql' if db_type == 'ivorysql' else ('postgres' if db_type == 'pg' else '')),
             'label': data.get('name', data.get('host', 'unknown')),
             'db_type': db_type,
         }
@@ -4201,7 +4201,7 @@ def api_start_index_health():
             'port': int(data.get('port', 0) or (3306 if db_type == 'mysql' else 2881 if db_type == 'oceanbase' else 5432)),
             'user': data.get('user', ''),
             'password': data.get('password', ''),
-            'database': data.get('database') or ('postgres' if db_type in ('pg', 'ivorysql') else ''),
+            'database': data.get('database') or ('ivorysql' if db_type == 'ivorysql' else ('postgres' if db_type == 'pg' else '')),
             'label': data.get('name', data.get('host', 'unknown')),
             'db_type': db_type,
         }
@@ -5775,7 +5775,7 @@ def api_ds_databases(ds_id):
         elif db_type in ('postgresql', 'ivorysql', 'kingbase', 'hgdb'):
             import psycopg2
             # kingbase 默认库名为 kingbase，HGDB 默认库名为 highgo，PG/IvorySQL 为 postgres
-            _pg_default_db = 'kingbase' if db_type == 'kingbase' else ('highgo' if db_type == 'hgdb' else 'postgres')
+            _pg_default_db = 'kingbase' if db_type == 'kingbase' else ('highgo' if db_type == 'hgdb' else ('ivorysql' if db_type == 'ivorysql' else 'postgres'))
             conn = psycopg2.connect(host=host, port=port, user=user, password=pwd,
                                     dbname=_pg_default_db, connect_timeout=timeout)
             cur = conn.cursor()
@@ -6381,7 +6381,7 @@ def api_execute_sql():
 
         elif db_type in ('postgresql', 'ivorysql', 'kingbase', 'hgdb'):
             import psycopg2
-            db_name = database or ('highgo' if db_type == 'hgdb' else 'postgres')
+            db_name = database or ('highgo' if db_type == 'hgdb' else ('ivorysql' if db_type == 'ivorysql' else 'postgres'))
             conn = psycopg2.connect(
                 host=host, port=port, user=user, password=pwd,
                 dbname=db_name, connect_timeout=10
@@ -8125,7 +8125,7 @@ def _stream_inspection_response(data, message, session_id, chat_context):
         'port': int(ds.get('port', 3306)),
         'user': ds.get('user', ''),
         'password': ds.get('password', ''),
-        'database': ds.get('database') or ('highgo' if db_type == 'hgdb' else ('postgres' if db_type == 'pg' else ('DAMENG' if db_type == 'dm' else ''))),
+        'database': ds.get('database') or ('highgo' if db_type == 'hgdb' else ('ivorysql' if db_type == 'ivorysql' else ('postgres' if db_type == 'pg' else ('DAMENG' if db_type == 'dm' else '')))),
         'service_name': ds.get('service_name') or ds.get('sid'),
         'name': ds.get('name', db_name or ds.get('host', '')),
     }
@@ -8509,7 +8509,7 @@ def api_chat():
                 'port': int(ds.get('port', 3306)),
                 'user': ds.get('user', ''),
                 'password': ds.get('password', ''),
-                'database': ds.get('database') or ('highgo' if db_type == 'hgdb' else ('postgres' if db_type == 'pg' else ('DAMENG' if db_type == 'dm' else ''))),
+                'database': ds.get('database') or ('highgo' if db_type == 'hgdb' else ('ivorysql' if db_type == 'ivorysql' else ('postgres' if db_type == 'pg' else ('DAMENG' if db_type == 'dm' else '')))),
                 'service_name': ds.get('service_name') or ds.get('sid'),
                 'name': ds.get('name', db_name or ds.get('host', '')),
             }

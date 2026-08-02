@@ -1654,6 +1654,19 @@ class BaseInspectionEngine:
             import traceback; traceback.print_exc(file=sys.stdout)
             self.context['baseline_results'] = []
 
+    def _set_paragraph_shading(self, paragraph, fill_hex):
+        """为段落设置背景底纹。python-docx 无原生 API，需直接操作 OOXML（w:shd 元素）。"""
+        from docx.oxml.ns import qn
+        from docx.oxml import OxmlElement
+        pPr = paragraph._p.get_or_add_pPr()
+        shd = pPr.find(qn('w:shd'))
+        if shd is None:
+            shd = OxmlElement('w:shd')
+            pPr.append(shd)
+        shd.set(qn('w:val'), 'clear')
+        shd.set(qn('w:color'), 'auto')
+        shd.set(qn('w:fill'), fill_hex)
+
     def _render_markdown_to_doc(self, doc, md_text, chapter_num=None):
         """将 Markdown 文本渲染为 Word 段落（支持标题、粗体、斜体、列表、代码块）
 
@@ -1723,7 +1736,7 @@ class BaseInspectionEngine:
                 if code_lines:
                     p = doc.add_paragraph()
                     p.paragraph_format.left_indent = Cm(1)
-                    p.paragraph_format.shading.BackgroundPatternColor = RGBColor(245, 245, 245)
+                    self._set_paragraph_shading(p, 'F5F5F5')
                     r = p.add_run('\n'.join(code_lines).strip())
                     r.font.name = 'Consolas'
                     r.font.size = Pt(9)
