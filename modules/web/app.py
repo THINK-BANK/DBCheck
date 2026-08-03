@@ -207,6 +207,36 @@ def _request_shutdown():
     _hard_exit()
 
 
+def _signal_handler(sig, frame):
+    """处理 Ctrl+C / Ctrl+Break / SIGTERM：立即强制退出。
+
+    严禁调用任何会 import 模块或 join 线程的清理逻辑（如 unload_all_plugins），
+    否则 Ctrl+C 会“看似无效”。这里只做极简强制退出。
+    本函数定义在模块级，供主线程周期性重注册使用。
+    """
+    try:
+        print(f"\n\n[主程序] 收到退出信号 {sig}，正在强制退出...")
+    except Exception:
+        pass
+    _request_shutdown()
+
+
+def _install_python_signals():
+    """在主线程注册 Python 标准信号处理器 → os._exit(0)。
+
+    必须在主线程调用（signal.signal 仅主线程可用）。
+    gevent/flask-socketio 在运行期可能覆盖 C 层 SIGINT 处理器，
+    故由主线程等待循环周期性重注册以持续抢回退出入口。
+    """
+    try:
+        signal.signal(signal.SIGINT, _signal_handler)
+        signal.signal(signal.SIGTERM, _signal_handler)
+        if platform.system().lower() == 'windows':
+            signal.signal(signal.SIGBREAK, _signal_handler)
+    except (ValueError, OSError):
+        pass
+
+
 def _console_ctrl_handler(ctrl_type):
     """Windows 控制台 Ctrl+C / Ctrl+Break / 关闭窗口 事件处理器（在独立 OS 线程中运行）。"""
     _request_shutdown()
@@ -240,13 +270,13 @@ def _register_console_ctrl_handler():
 
 
 def _ctrl_keepalive_loop():
-    """持续保活：每 3 秒重注册 Windows 控制台 Ctrl handler，确保本 handler
+    """持续保活：每 2 秒重注册 Windows 控制台 Ctrl handler，确保本 handler
     在 LIFO 顺序中始终排最前（最先被调用）。这是解决「刚启动能停、运行一阵后
     停不了」的关键——socketio/gevent 在运行期可能再次注册控制台 handler，
     将其挤到我们前面；周期性重注册可保证我们永远抢占最前位置。"""
     while True:
         try:
-            _shutdown_time.sleep(3)
+            _shutdown_time.sleep(2)
             _register_console_ctrl_handler()
         except Exception:
             pass
@@ -9392,29 +9422,10 @@ def api_dm8_offline_report(task_id):
 
 def main():
     # ── 信号处理：确保 Ctrl+C / 关闭窗口 / SIGTERM 都能立即退出 ──
-    def _signal_handler(sig, frame):
-        """处理 Ctrl+C / Ctrl+Break / SIGTERM：立即强制退出。
 
-        严禁调用任何会 import 模块或 join 线程的清理逻辑（如 unload_all_plugins），
-        否则 Ctrl+C 会“看似无效”。这里只做极简强制退出。
-        """
-        try:
-            print(f"\n\n[主程序] 收到退出信号 {sig}，正在强制退出...")
-        except Exception:
-            pass
-        _request_shutdown()
-
-    # 1) Python 标准信号（主线程注册，作为非 gevent / threading 模式的兜底；
-    #    gevent 模式下 hub 会接管 SIGINT/SIGTERM，本注册实际失效，
-    #    故真正的退出入口在下方 _run_server 的 gevent.signal_handler）
-    try:
-        signal.signal(signal.SIGINT, _signal_handler)   # Ctrl+C（cmd/PowerShell/Git Bash）
-        signal.signal(signal.SIGTERM, _signal_handler)  # kill / docker stop
-        if platform.system().lower() == 'windows':
-            signal.signal(signal.SIGBREAK, _signal_handler)
-    except ValueError:
-        # 非主线程中无法注册信号，依赖下方 Windows 控制台处理器兜底
-        pass
+    # 1) Python 标准信号（主线程注册，周期重注册以对抗 gevent/socketio
+    #    运行期对 C 层 SIGINT 处理器的覆盖，详见主线程等待循环）
+    _install_python_signals()
 
     # 2) Windows 控制台级处理器（OS 层，cmd/PowerShell 关闭窗口/Ctrl+C 必杀，
     #    gevent 吞不掉、PyInstaller 同样有效）+ 持续保活确保永远抢在最前
@@ -9469,10 +9480,12 @@ def main():
     _server_thread = _shutdown_threading.Thread(target=_run_server, daemon=True)
     _server_thread.start()
 
-    # 主线程：阻塞等待（不依赖 signal.pause，避免被 gevent 信号接管影响）
+    # 主线程：阻塞等待 + 周期性重注册 Python 信号处理器，
+    # 对抗 gevent/socketio 运行期对 C 层 SIGINT 处理器的覆盖，确保 Ctrl+C 始终落到 os._exit(0)
     try:
         while True:
-            _shutdown_time.sleep(0.5)
+            _shutdown_time.sleep(1)
+            _install_python_signals()
     except KeyboardInterrupt:
         _request_shutdown()
     _request_shutdown()

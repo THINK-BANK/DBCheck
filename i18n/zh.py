@@ -511,7 +511,7 @@ ZI = {
     "webui.label_ssh_port": "SSH 端口",
     "webui.label_ssh_user": "SSH 用户名",
     "webui.label_username": "用户名",
-    "webui.logo_subtitle": "基于 AI 的智能数据库巡检工具",
+    "webui.logo_subtitle": "基于 AI 的智能数据库巡检平台",
     "webui.edition_badge": "专业版",
     "webui.edition_community": "社区版",
     "webui.edition_badge_pro": "专业版",
