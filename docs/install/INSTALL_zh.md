@@ -17,42 +17,7 @@ python check_dependencies.py
 python web_ui.py
 ```
 
-## 方式二：手动安装
-
-### 1. 安装 Python 依赖
-
-```bash
-pip install python-docx docxtpl psutil PyYAML cryptography flask flask-socketio pymysql psycopg2-binary oracledb dmpython pyodbc paramiko openpyxl pandas reportlab apscheduler
-```
-
-### 2. 常见问题排查
-
-**问题：ImportError: cannot import name 'Fernet' from 'cryptography'**
-
-解决：
-```bash
-pip uninstall cryptography
-pip install cryptography>=41.0.0
-```
-
-**问题：ModuleNotFoundError: No module named 'pro'**
-
-原因：Python 启动目录不在项目根目录
-
-解决：
-```bash
-cd DBCheck
-python web_ui.py
-```
-
-**问题：Pro 模块加载失败**
-
-运行检查脚本查看详细错误：
-```bash
-python check_dependencies.py
-```
-
-## 方式三：使用虚拟环境（推荐用于开发）
+## 方式二：使用虚拟环境（推荐用于开发）
 
 ```bash
 # 创建虚拟环境
