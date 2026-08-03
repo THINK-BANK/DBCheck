@@ -13,10 +13,12 @@ PROJECT_DIR = os.getcwd()
 # NOTE: 'data' is a runtime directory (SQLite DBs), not packaged.
 data_dirs = [
     'web_templates', 'i18n', 'templates',
+    'assets',           # 静态资源(web/品牌logo/db_logos)随包复制，static_folder 依赖
     'modules/rag', 'modules/pro', 'data/pro_data',
     'drivers',
     'plugins',          # oracle_jdbc 等插件由 plugin_loader 动态加载，需随包复制
     'modules/user_management',  # RBAC 蓝图模板(html)与初始化库(schema)需随包复制
+    'modules/config',   # builtin_registry/builtin_types/version 等 JSON 配置需随包复制
     'db',               # user_management_schema.sql 建表脚本需随包复制
 ]
 

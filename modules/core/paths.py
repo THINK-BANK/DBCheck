@@ -16,11 +16,29 @@ from pathlib import Path
 def _project_root() -> Path:
     """返回项目根目录。
 
-    - 打包（frozen）环境：使用可执行文件所在目录。
-    - 普通 Python 运行：使用本文件的上两级目录（core/ 的父目录）。
+    - 打包（frozen）环境：PyInstaller 6.x 的 one-folder 构建会把随包资源
+      （web_templates / db / i18n / assets / modules/config 等）统一收集到
+      ``<exe 同级>/_internal/`` 目录下；one-file 模式则解压到 ``sys._MEIPASS``。
+      以 web_templates / db 作为标记目录定位真实根，避免模板与建表脚本找不到。
+    - 普通 Python 运行：使用本文件的上三级目录（core/ 的父目录）。
     """
     if getattr(sys, "frozen", False):
-        return Path(sys.executable).resolve().parent
+        exe_dir = Path(sys.executable).resolve().parent
+        candidates = [exe_dir, exe_dir / "_internal"]
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            candidates.append(Path(meipass))
+        for c in candidates:
+            if (c / "web_templates").is_dir() or (c / "db").is_dir():
+                return c
+        # 兜底：保留原行为（exe 同级），避免启动崩溃，并打印告警便于排查
+        import sys as _sys
+        print(
+            f"[paths][WARN] 未在 {exe_dir} 或其 _internal 下找到 "
+            f"web_templates/db，回退到 exe 同级；_MEIPASS={meipass}",
+            file=_sys.stderr,
+        )
+        return exe_dir
     # core 现已迁入 modules/（modules/core/paths.py），
     # 需上溯三级才能到达项目根目录 D:/DBCheck
     return Path(__file__).resolve().parent.parent.parent
