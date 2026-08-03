@@ -342,14 +342,23 @@ def load_plugin(plugin_dir: str) -> Optional[Dict]:
     # 用于模块命名与 fallback 注册键，避免显示名不稳定导致的幽灵记录。
     plugin_id = os.path.basename(plugin_dir)
     if os.path.isfile(req_path):
-        try:
-            import subprocess
-            subprocess.run(
-                [sys.executable, '-m', 'pip', 'install', '-r', req_path, '--quiet'],
-                check=False, timeout=60
+        # 冻结运行（PyInstaller）时 sys.executable 指向 dbcheck.exe 自身，
+        # 用它跑 `pip install` 会重新拉起整个程序而非安装依赖 → 无限重启。
+        # 冻结包已内置全部依赖，故直接跳过自动安装。
+        if getattr(sys, 'frozen', False):
+            logger.warning(
+                f"插件 {plugin_id} 含 requirements.txt，但冻结运行时不自动 pip 安装"
+                f"（依赖已随包内置）"
             )
-        except Exception:
-            logger.warning(f"插件 {plugin_id} 依赖安装失败，继续加载")
+        else:
+            try:
+                import subprocess
+                subprocess.run(
+                    [sys.executable, '-m', 'pip', 'install', '-r', req_path, '--quiet'],
+                    check=False, timeout=60
+                )
+            except Exception:
+                logger.warning(f"插件 {plugin_id} 依赖安装失败，继续加载")
 
     # 动态导入
     # 支持两种插件结构：
