@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DBCheck - 系统管理</title>
+    <title id="um-page-title">DBCheck - 系统管理</title>
     <style>
 
         /* ═══ 主题变量：默认浅色，JS 会根据父页面主题动态覆盖 ═══ */
@@ -283,18 +283,18 @@
 </head>
 <body>
     <div class="admin-header">
-        <h1>🔍 DBCheck 系统管理</h1>
+        <h1>🔍 DBCheck <span id="um-header-title">系统管理</span></h1>
         <div class="user-info">
             <span id="currentUser">...</span>
-            <a href="/">返回主页</a>
-            <a href="#" onclick="logout()">退出登录</a>
+            <a href="/" id="um-back-home">返回主页</a>
+            <a href="#" onclick="logout()" id="um-logout">退出登录</a>
         </div>
     </div>
 
     <div class="tab-nav">
-        <button class="active" onclick="switchTab('users')">用户管理</button>
-        <button onclick="switchTab('roles')">角色管理</button>
-        <button onclick="switchTab('menus')">菜单权限</button>
+        <button class="active" id="um-tab-users" onclick="switchTab('users')">用户管理</button>
+        <button id="um-tab-roles" onclick="switchTab('roles')">角色管理</button>
+        <button id="um-tab-menus" onclick="switchTab('menus')">菜单权限</button>
     </div>
 
     <div class="content" id="contentArea">
@@ -322,8 +322,26 @@
                 }
             } catch (e) { console.error('i18n load failed', e); }
         }
-        function i18n(key) {
-            return I18N[key] !== undefined ? I18N[key] : undefined;
+        function i18n(key, fallback) {
+            return I18N[key] !== undefined ? I18N[key] : (fallback !== undefined ? fallback : key);
+        }
+        function applyStaticI18N() {
+            const title = i18n('webui.um_title','系统管理');
+            document.title = 'DBCheck - ' + title;
+            const pageTitle = document.getElementById('um-page-title');
+            if (pageTitle) pageTitle.textContent = 'DBCheck - ' + title;
+            const headerTitle = document.getElementById('um-header-title');
+            if (headerTitle) headerTitle.textContent = title;
+            const backHome = document.getElementById('um-back-home');
+            if (backHome) backHome.textContent = i18n('webui.um_back_home','返回主页');
+            const logoutLink = document.getElementById('um-logout');
+            if (logoutLink) logoutLink.textContent = i18n('webui.um_logout','退出登录');
+            const tabUsers = document.getElementById('um-tab-users');
+            if (tabUsers) tabUsers.textContent = i18n('webui.um_tab_users','用户管理');
+            const tabRoles = document.getElementById('um-tab-roles');
+            if (tabRoles) tabRoles.textContent = i18n('webui.um_tab_roles','角色管理');
+            const tabMenus = document.getElementById('um-tab-menus');
+            if (tabMenus) tabMenus.textContent = i18n('webui.um_tab_menus','菜单权限');
         }
 
         // ═══ embed 模式检测 + 主题同步 ═══
@@ -385,8 +403,8 @@
                 <h3>${title}</h3>
                 ${bodyHtml}
                 <div class="modal-actions">
-                    <button class="btn btn-sm" onclick="closeModal()">取消</button>
-                    <button class="btn btn-primary btn-sm" id="modalSaveBtn">保存</button>
+                    <button class="btn btn-sm" onclick="closeModal()">${i18n('webui.um_cancel','取消')}</button>
+                    <button class="btn btn-primary btn-sm" id="modalSaveBtn">${i18n('webui.um_save','保存')}</button>
                 </div>
             `;
             overlay.classList.add('active');
@@ -407,6 +425,7 @@
         // ========== 页面初始化 ==========
         async function init() {
             await initI18N();
+            applyStaticI18N();
             if (!isEmbed) {
                 try {
                     const res = await API('/api/um/auth/status');
@@ -438,15 +457,15 @@
             const users = res.code === 0 ? res.data.items : [];
             const html = `
                 <div class="toolbar">
-                    <h2>用户列表 (${res.data ? res.data.total : 0})</h2>
-                    <button class="btn btn-primary" onclick="showCreateUser()">+ 新建用户</button>
+                    <h2>${i18n('webui.um_user_list','用户列表 ({total})').replace('{total}', res.data ? res.data.total : 0)}</h2>
+                    <button class="btn btn-primary" onclick="showCreateUser()">+ ${i18n('webui.um_create_user','新建用户')}</button>
                 </div>
-                ${users.length === 0 ? '<div class="empty-state">暂无用户</div>' : `
+                ${users.length === 0 ? '<div class="empty-state">' + i18n('webui.um_no_users','暂无用户') + '</div>' : `
                 <table>
                     <thead>
                         <tr>
-                            <th>ID</th><th>用户名</th><th>昵称</th><th>邮箱</th>
-                            <th>状态</th><th>创建时间</th><th>操作</th>
+                            <th>${i18n('webui.um_user_id','ID')}</th><th>${i18n('webui.um_user_username','用户名')}</th><th>${i18n('webui.um_user_nickname','昵称')}</th><th>${i18n('webui.um_user_email','邮箱')}</th>
+                            <th>${i18n('webui.um_user_status','状态')}</th><th>${i18n('webui.um_user_created_at','创建时间')}</th><th>${i18n('webui.um_user_operation','操作')}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -456,12 +475,12 @@
                                 <td><strong>${u.username}</strong></td>
                                 <td>${u.nickname || '-'}</td>
                                 <td>${u.email || '-'}</td>
-                                <td><span class="badge ${u.status === 1 ? 'badge-success' : 'badge-danger'}">${u.status === 1 ? '启用' : '禁用'}</span></td>
+                                <td><span class="badge ${u.status === 1 ? 'badge-success' : 'badge-danger'}">${u.status === 1 ? i18n('webui.um_user_enabled','启用') : i18n('webui.um_user_disabled','禁用')}</span></td>
                                 <td>${u.created_at || '-'}</td>
                                 <td>
-                                    <button class="btn btn-sm btn-primary" onclick="showEditUser(${u.id})">编辑</button>
-                                    <button class="btn btn-sm" onclick="showAssignRoles(${u.id}, '${u.username}')">角色</button>
-                                    <button class="btn btn-sm btn-danger" onclick="deleteUser(${u.id})">删除</button>
+                                    <button class="btn btn-sm btn-primary" onclick="showEditUser(${u.id})">${i18n('webui.um_user_edit','编辑')}</button>
+                                    <button class="btn btn-sm" onclick="showAssignRoles(${u.id}, '${u.username}')">${i18n('webui.um_user_roles','角色')}</button>
+                                    <button class="btn btn-sm btn-danger" onclick="deleteUser(${u.id})">${i18n('webui.um_user_delete','删除')}</button>
                                 </td>
                             </tr>
                         `).join('')}
@@ -473,12 +492,12 @@
 
         function showCreateUser() {
             const body = `
-                <div class="form-group"><label>用户名 *</label><input id="f_username" required></div>
-                <div class="form-group"><label>密码 *</label><input id="f_password" type="password" required></div>
-                <div class="form-group"><label>昵称</label><input id="f_nickname"></div>
-                <div class="form-group"><label>邮箱</label><input id="f_email" type="email"></div>
+                <div class="form-group"><label>${i18n('webui.um_username_required','用户名 *')}</label><input id="f_username" required></div>
+                <div class="form-group"><label>${i18n('webui.um_password_required','密码 *')}</label><input id="f_password" type="password" required></div>
+                <div class="form-group"><label>${i18n('webui.um_nickname','昵称')}</label><input id="f_nickname"></div>
+                <div class="form-group"><label>${i18n('webui.um_email','邮箱')}</label><input id="f_email" type="email"></div>
             `;
-            openModal('新建用户', body, async () => {
+            openModal(i18n('webui.um_user_create_title','新建用户'), body, async () => {
                 const data = {
                     username: document.getElementById('f_username').value.trim(),
                     password: document.getElementById('f_password').value,
@@ -486,37 +505,37 @@
                     email: document.getElementById('f_email').value.trim()
                 };
                 if (!data.username || !data.password) {
-                    showToast('用户名和密码不能为空', 'error');
+                    showToast(i18n('webui.um_username_password_required','用户名和密码不能为空'), 'error');
                     return;
                 }
                 const res = await API('/api/um/user', { method: 'POST', body: JSON.stringify(data) });
                 if (res.code === 0) {
-                    showToast('用户创建成功');
+                    showToast(i18n('webui.um_create_success','用户创建成功'));
                     closeModal();
                     loadUsers();
                 } else {
-                    showToast(res.msg || '创建失败', 'error');
+                    showToast(res.msg || i18n('webui.um_create_failed','创建失败'), 'error');
                 }
             });
         }
 
         function showEditUser(uid) {
             API(`/api/um/user/${uid}`).then(userRes => {
-                if (userRes.code !== 0) return showToast('获取用户信息失败', 'error');
+                if (userRes.code !== 0) return showToast(i18n('webui.um_get_user_failed','获取用户信息失败'), 'error');
                 const u = userRes.data;
                 const body = `
-                    <div class="form-group"><label>用户名</label><input value="${u.username}" disabled></div>
-                    <div class="form-group"><label>昵称</label><input id="f_nickname" value="${u.nickname || ''}"></div>
-                    <div class="form-group"><label>邮箱</label><input id="f_email" value="${u.email || ''}" type="email"></div>
-                    <div class="form-group"><label>新密码 (留空不修改)</label><input id="f_password" type="password"></div>
-                    <div class="form-group"><label>状态</label>
+                    <div class="form-group"><label>${i18n('webui.um_user_username','用户名')}</label><input value="${u.username}" disabled></div>
+                    <div class="form-group"><label>${i18n('webui.um_nickname','昵称')}</label><input id="f_nickname" value="${u.nickname || ''}"></div>
+                    <div class="form-group"><label>${i18n('webui.um_email','邮箱')}</label><input id="f_email" value="${u.email || ''}" type="email"></div>
+                    <div class="form-group"><label>${i18n('webui.um_new_password_hint','新密码（留空不修改）')}</label><input id="f_password" type="password"></div>
+                    <div class="form-group"><label>${i18n('webui.um_status','状态')}</label>
                         <select id="f_status">
-                            <option value="1" ${u.status === 1 ? 'selected' : ''}>启用</option>
-                            <option value="0" ${u.status === 0 ? 'selected' : ''}>禁用</option>
+                            <option value="1" ${u.status === 1 ? 'selected' : ''}>${i18n('webui.um_user_enabled','启用')}</option>
+                            <option value="0" ${u.status === 0 ? 'selected' : ''}>${i18n('webui.um_user_disabled','禁用')}</option>
                         </select>
                     </div>
                 `;
-                openModal(`编辑用户: ${u.username}`, body, async () => {
+                openModal(i18n('webui.um_user_edit_title','编辑用户: {username}').replace('{username}', u.username), body, async () => {
                     const updates = {
                         nickname: document.getElementById('f_nickname').value.trim(),
                         email: document.getElementById('f_email').value.trim(),
@@ -526,11 +545,11 @@
                     if (pw) updates.password = pw;
                     const res = await API(`/api/um/user/${uid}`, { method: 'PUT', body: JSON.stringify(updates) });
                     if (res.code === 0) {
-                        showToast('用户更新成功');
+                        showToast(i18n('webui.um_update_success','用户更新成功'));
                         closeModal();
                         loadUsers();
                     } else {
-                        showToast(res.msg || '更新失败', 'error');
+                        showToast(res.msg || i18n('webui.um_update_failed','更新失败'), 'error');
                     }
                 });
             });
@@ -544,7 +563,7 @@
             const userRoleIds = (userRolesRes.data || []).map(r => r.id);
             const allRoles = allRolesRes.data || [];
             const body = `
-                <p style="margin-bottom:12px;color:#666;">为用户 <strong>${username}</strong> 分配角色</p>
+                <p style="margin-bottom:12px;color:#666;">${i18n('webui.um_assign_roles_for','为用户 {username} 分配角色').replace('{username}', '<strong>' + username + '</strong>')}</p>
                 <div style="display:flex;flex-direction:column;gap:8px;">
                     ${allRoles.map(r => `
                         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
@@ -554,27 +573,27 @@
                     `).join('')}
                 </div>
             `;
-            openModal('分配角色', body, async () => {
+            openModal(i18n('webui.um_assign_roles_title','分配角色'), body, async () => {
                 const checks = document.querySelectorAll('#modalContent input[type="checkbox"]:checked');
                 const roleIds = Array.from(checks).map(c => parseInt(c.value));
                 const res = await API(`/api/um/user/${uid}/roles`, { method: 'PUT', body: JSON.stringify({ role_ids: roleIds }) });
                 if (res.code === 0) {
-                    showToast('角色分配成功');
+                    showToast(i18n('webui.um_assign_success','角色分配成功'));
                     closeModal();
                 } else {
-                    showToast(res.msg || '分配失败', 'error');
+                    showToast(res.msg || i18n('webui.um_assign_failed','分配失败'), 'error');
                 }
             });
         }
 
         async function deleteUser(uid) {
-            if (!confirm('确定删除此用户？此操作不可撤销。')) return;
+            if (!confirm(i18n('webui.um_delete_user_confirm','确定删除此用户？此操作不可撤销。'))) return;
             const res = await API(`/api/um/user/${uid}`, { method: 'DELETE' });
             if (res.code === 0) {
-                showToast('用户已删除');
+                showToast(i18n('webui.um_user_deleted','用户已删除'));
                 loadUsers();
             } else {
-                showToast(res.msg || '删除失败', 'error');
+                showToast(res.msg || i18n('webui.um_delete_failed','删除失败'), 'error');
             }
         }
 
@@ -584,13 +603,13 @@
             const roles = res.data || [];
             const html = `
                 <div class="toolbar">
-                    <h2>角色列表 (${roles.length})</h2>
-                    <button class="btn btn-primary" onclick="showCreateRole()">+ 新建角色</button>
+                    <h2>${i18n('webui.um_role_list','角色列表 ({count})').replace('{count}', roles.length)}</h2>
+                    <button class="btn btn-primary" onclick="showCreateRole()">+ ${i18n('webui.um_create_role','新建角色')}</button>
                 </div>
-                ${roles.length === 0 ? '<div class="empty-state">暂无角色</div>' : `
+                ${roles.length === 0 ? '<div class="empty-state">' + i18n('webui.um_no_roles','暂无角色') + '</div>' : `
                 <table>
                     <thead>
-                        <tr><th>ID</th><th>角色代码</th><th>角色名称</th><th>描述</th><th>操作</th></tr>
+                        <tr><th>${i18n('webui.um_role_id','ID')}</th><th>${i18n('webui.um_role_code','角色代码')}</th><th>${i18n('webui.um_role_name','角色名称')}</th><th>${i18n('webui.um_role_description','描述')}</th><th>${i18n('webui.um_role_operation','操作')}</th></tr>
                     </thead>
                     <tbody>
                         ${roles.map(r => `
@@ -600,8 +619,8 @@
                                 <td>${r.role_name}</td>
                                 <td>${r.description || '-'}</td>
                                 <td>
-                                    <button class="btn btn-sm btn-primary" onclick="showRolePerms(${r.id}, '${r.role_code}')">权限配置</button>
-                                    <button class="btn btn-sm btn-danger" onclick="deleteRole(${r.id})">删除</button>
+                                    <button class="btn btn-sm btn-primary" onclick="showRolePerms(${r.id}, '${r.role_code}')">${i18n('webui.um_role_perms','权限配置')}</button>
+                                    <button class="btn btn-sm btn-danger" onclick="deleteRole(${r.id})">${i18n('webui.um_user_delete','删除')}</button>
                                 </td>
                             </tr>
                         `).join('')}
@@ -613,27 +632,27 @@
 
         function showCreateRole() {
             const body = `
-                <div class="form-group"><label>角色代码 *</label><input id="f_role_code" placeholder="如: auditor"></div>
-                <div class="form-group"><label>角色名称 *</label><input id="f_role_name" placeholder="如: 审计员"></div>
-                <div class="form-group"><label>描述</label><textarea id="f_description" rows="2"></textarea></div>
+                <div class="form-group"><label>${i18n('webui.um_role_code_required','角色代码 *')}</label><input id="f_role_code" placeholder="${i18n('webui.um_role_code_placeholder','如: auditor')}"></div>
+                <div class="form-group"><label>${i18n('webui.um_role_name_required','角色名称 *')}</label><input id="f_role_name" placeholder="${i18n('webui.um_role_name_placeholder','如: 审计员')}"></div>
+                <div class="form-group"><label>${i18n('webui.um_role_desc','描述')}</label><textarea id="f_description" rows="2"></textarea></div>
             `;
-            openModal('新建角色', body, async () => {
+            openModal(i18n('webui.um_role_create_title','新建角色'), body, async () => {
                 const data = {
                     role_code: document.getElementById('f_role_code').value.trim(),
                     role_name: document.getElementById('f_role_name').value.trim(),
                     description: document.getElementById('f_description').value.trim()
                 };
                 if (!data.role_code || !data.role_name) {
-                    showToast('角色代码和名称不能为空', 'error');
+                    showToast(i18n('webui.um_role_required','角色代码和名称不能为空'), 'error');
                     return;
                 }
                 const res = await API('/api/um/role', { method: 'POST', body: JSON.stringify(data) });
                 if (res.code === 0) {
-                    showToast('角色创建成功');
+                    showToast(i18n('webui.um_role_created','角色创建成功'));
                     closeModal();
                     loadRoles();
                 } else {
-                    showToast(res.msg || '创建失败', 'error');
+                    showToast(res.msg || i18n('webui.um_create_failed','创建失败'), 'error');
                 }
             });
         }
@@ -650,13 +669,13 @@
             const permMap = {};
             rolePerms.forEach(rp => { permMap[rp.menu_id] = rp.perm_id; });
             const body = `
-                <p style="margin-bottom:12px;color:#666;">为角色 <strong>${roleCode}</strong> 配置各菜单权限级别</p>
+                <p style="margin-bottom:12px;color:#666;">${i18n('webui.um_role_perms_for','为角色 {roleCode} 配置各菜单权限级别').replace('{roleCode}', '<strong>' + roleCode + '</strong>')}</p>
                 <div class="perm-checkboxes">
                     ${menus.map(m => `
                         <label>
                             <span style="flex:1;">${i18n(m.menu_name) || m.menu_name}</span>
                             <select class="perm-select" data-menu="${m.id}">
-                                <option value="0">无权限</option>
+                                <option value="0">${i18n('webui.um_perm_none','无权限')}</option>
                                 ${perms.map(p => `
                                     <option value="${p.id}" ${permMap[m.id] === p.id ? 'selected' : ''}>${p.perm_name}</option>
                                 `).join('')}
@@ -665,7 +684,7 @@
                     `).join('')}
                 </div>
             `;
-            openModal(`配置权限: ${roleCode}`, body, async () => {
+            openModal(i18n('webui.um_role_perms_title','配置权限: {roleCode}').replace('{roleCode}', roleCode), body, async () => {
                 const selects = document.querySelectorAll('.perm-select');
                 const menuPerms = [];
                 selects.forEach(s => {
@@ -675,22 +694,22 @@
                 });
                 const res = await API(`/api/um/role/${rid}/menu-perm`, { method: 'PUT', body: JSON.stringify({ menu_perms: menuPerms }) });
                 if (res.code === 0) {
-                    showToast('权限配置成功');
+                    showToast(i18n('webui.um_perm_configured','权限配置成功'));
                     closeModal();
                 } else {
-                    showToast(res.msg || '配置失败', 'error');
+                    showToast(res.msg || i18n('webui.um_perm_configure_failed','配置失败'), 'error');
                 }
             });
         }
 
         async function deleteRole(rid) {
-            if (!confirm('确定删除此角色？')) return;
+            if (!confirm(i18n('webui.um_delete_role_confirm','确定删除此角色？'))) return;
             const res = await API(`/api/um/role/${rid}`, { method: 'DELETE' });
             if (res.code === 0) {
-                showToast('角色已删除');
+                showToast(i18n('webui.um_role_deleted','角色已删除'));
                 loadRoles();
             } else {
-                showToast(res.msg || '删除失败', 'error');
+                showToast(res.msg || i18n('webui.um_delete_failed','删除失败'), 'error');
             }
         }
 
@@ -704,13 +723,13 @@
             const perms = permsRes.data || [];
             const html = `
                 <div class="toolbar">
-                    <h2>菜单与权限定义</h2>
+                    <h2>${i18n('webui.um_menu_perm_title','菜单与权限定义')}</h2>
                 </div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">
                     <div>
-                        <h3 style="margin-bottom:12px;color:#1a1a2e;">菜单列表</h3>
+                        <h3 style="margin-bottom:12px;color:#1a1a2e;">${i18n('webui.um_menu_list','菜单列表')}</h3>
                         <table>
-                            <thead><tr><th>代码</th><th>名称</th><th>排序</th></tr></thead>
+                            <thead><tr><th>${i18n('webui.um_menu_code','代码')}</th><th>${i18n('webui.um_menu_name','名称')}</th><th>${i18n('webui.um_menu_order','排序')}</th></tr></thead>
                             <tbody>
                                 ${menus.map(m => `
                                     <tr>
@@ -723,9 +742,9 @@
                         </table>
                     </div>
                     <div>
-                        <h3 style="margin-bottom:12px;color:#1a1a2e;">权限级别</h3>
+                        <h3 style="margin-bottom:12px;color:#1a1a2e;">${i18n('webui.um_perm_levels','权限级别')}</h3>
                         <table>
-                            <thead><tr><th>代码</th><th>名称</th><th>级别</th></tr></thead>
+                            <thead><tr><th>${i18n('webui.um_perm_code','代码')}</th><th>${i18n('webui.um_perm_name','名称')}</th><th>${i18n('webui.um_perm_level','级别')}</th></tr></thead>
                             <tbody>
                                 ${perms.map(p => `
                                     <tr>

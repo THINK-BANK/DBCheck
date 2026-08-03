@@ -134,8 +134,11 @@ scheduler_jobs.json
 .acceptance_tmp/
 .pytest_tmp/
 
-# 本地 Python 构建产物（如 build 后端生成的 build/）
-build/
+# 本地 Python 构建产物（PyInstaller 缓存目录，如 build/<specname>/）
+# 注意：构建脚本（*.spec / build_*.sh / build_*.bat 等）需入库，
+#       故只忽略 PyInstaller 运行时生成的缓存子目录，不忽略顶层脚本文件
+build/*/
+build/.PyInstaller*/
 
 # 目录结构重构迁移期内部产物（非源码 / 非运行时提交范畴）
 data/.migration_backup/

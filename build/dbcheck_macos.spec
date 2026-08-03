@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-# DBCheck Linux 打包配置
+# DBCheck macOS 打包配置
 
 import os
 
@@ -52,7 +52,7 @@ a = Analysis(
         'jinja2', 'jinja2.ext',
         'docx',
         'openpyxl',
-        'psutil', 'psutil._psutil_linux', 'psutil._linux',
+        'psutil', 'psutil._psutil_osx', 'psutil._psutil_posix',
         'charset_normalizer', 'charset_normalizer.md__mypyc',
         'certifi',
         'cryptography', 'cryptography.hazmat', 'cryptography.hazmat.backends',
@@ -118,7 +118,7 @@ coll = COLLECT(
     exe,
     a.binaries,
     a.datas,
-    name='DBCheck-Linux',
+    name='DBCheck-macOS',
     upx=False,
     upx_exclude=[],
     bootloader_ignore_signals=False,

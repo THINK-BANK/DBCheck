@@ -23,7 +23,6 @@ data_dirs = [
 # JSON config files
 data_files = [
     'dbc_config.json',
-    'scheduler_jobs.json',
     'version.json',
     'builtin_registry.json',
     'dbcheck-quotes.json',  # web_ui.py 读取的协议/格言文案
@@ -31,7 +30,12 @@ data_files = [
 
 # Build datas list with absolute paths
 datas = [(os.path.join(PROJECT_DIR, d), d) for d in data_dirs]
-datas += [(os.path.join(PROJECT_DIR, f), f) for f in data_files]
+for f in data_files:
+    src = os.path.join(PROJECT_DIR, f)
+    if os.path.exists(src):
+        datas.append((src, f))
+    else:
+        print(f"[WARN] data file not found, skipped: {src}")
 
 a = Analysis(
     [os.path.join(PROJECT_DIR, 'web_ui.py')],

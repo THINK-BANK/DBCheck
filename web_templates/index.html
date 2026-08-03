@@ -5378,12 +5378,12 @@ function formatBytes(bytes) {
         👤 <span id="topbar-user-name"></span> ▾
       </span>
       <div id="user-dropdown" style="display:none;position:absolute;top:100%;right:10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 0;z-index:999;min-width:140px;box-shadow:0 4px 12px rgba(0,0,0,0.3);">
-        <div style="padding:6px 14px;font-size:11px;color:var(--text-muted);border-bottom:1px solid var(--border);margin-bottom:4px;">已登录</div>
-        <div class="dropdown-item" onclick="showPage('account');toggleUserMenu()" style="padding:6px 14px;font-size:12px;cursor:pointer;">👤 用户中心</div>
+        <div style="padding:6px 14px;font-size:11px;color:var(--text-muted);border-bottom:1px solid var(--border);margin-bottom:4px;" data-i18n="webui.user_menu_logged_in">已登录</div>
+        <div class="dropdown-item" onclick="showPage('account');toggleUserMenu()" style="padding:6px 14px;font-size:12px;cursor:pointer;" data-i18n="webui.user_menu_account">👤 用户中心</div>
         {% if user_role == 'admin' %}
-        <div class="dropdown-item" onclick="showUserManagement();toggleUserMenu()" style="padding:6px 14px;font-size:12px;cursor:pointer;">⚙️ 系统管理</div>
+        <div class="dropdown-item" onclick="showUserManagement();toggleUserMenu()" style="padding:6px 14px;font-size:12px;cursor:pointer;" data-i18n="webui.user_menu_admin">⚙️ 系统管理</div>
         {% endif %}
-        <div class="dropdown-item" onclick="doLogout()" style="padding:6px 14px;font-size:12px;cursor:pointer;color:var(--danger);">退出登录</div>
+        <div class="dropdown-item" onclick="doLogout()" style="padding:6px 14px;font-size:12px;cursor:pointer;color:var(--danger);" data-i18n="webui.user_menu_logout">退出登录</div>
       </div>
     </div>
 
@@ -6532,9 +6532,9 @@ function formatBytes(bytes) {
       <!-- ══ Page: Account ══ -->
       <div class="page" id="page-account">
         <div class="card">
-          <div class="card-title"><span>👤</span> 用户中心</div>
+          <div class="card-title" data-i18n="webui.account_title"><span>👤</span> 用户中心</div>
           <div id="account-content" style="font-size:13px;">
-            <div style="color:var(--text-muted);text-align:center;padding:20px;">加载中...</div>
+            <div style="color:var(--text-muted);text-align:center;padding:20px;" data-i18n="webui.account_loading">加载中...</div>
           </div>
         </div>
       </div>
@@ -6542,9 +6542,9 @@ function formatBytes(bytes) {
       <!-- ══ Page: 系统管理 ══ -->
       <div class="page" id="page-um-admin">
         <div class="card">
-          <div class="card-title"><span>⚙️</span> 系统管理</div>
+          <div class="card-title" data-i18n="webui.um_title"><span>⚙️</span> 系统管理</div>
           <div id="um-admin-content" style="font-size:13px;">
-            <div style="color:var(--text-muted);text-align:center;padding:20px;">加载中...</div>
+            <div style="color:var(--text-muted);text-align:center;padding:20px;" data-i18n="webui.account_loading">加载中...</div>
           </div>
         </div>
       </div>
@@ -8293,21 +8293,25 @@ function applyI18N() {
   document.querySelectorAll('[data-i18n]').forEach(el => {
     const key = el.getAttribute('data-i18n');
     if (key === 'webui.step_badge') return;  // 由 gotoStep() 负责带参数格式化
+    const _v = i18n(key);
+    if (_v === undefined || _v === '') return;  // 缺键/空值：保留元素原文本，避免显示 undefined/空白
     if (el.tagName === 'INPUT' && el.hasAttribute('placeholder')) {
-      el.placeholder = i18n(key);
+      el.placeholder = _v;
     } else {
-      el.textContent = i18n(key);
+      el.textContent = _v;
     }
   });
   // 应用含 HTML 的 i18n 文本（如灰度说明，保留内部 <strong>/<br> 标签，不转义）
   document.querySelectorAll('[data-i18n-html]').forEach(el => {
     const key = el.getAttribute('data-i18n-html');
-    if (key) el.innerHTML = i18n(key);
+    const _hv = i18n(key);
+    if (_hv !== undefined && _hv !== '') el.innerHTML = _hv;
   });
   // 应用 data-i18n-title 属性的元素（翻译 title 提示）
   document.querySelectorAll('[data-i18n-title]').forEach(el => {
     const k = el.getAttribute('data-i18n-title');
-    if (k) el.title = i18n(k);
+    const _tv = i18n(k);
+    if (_tv !== undefined && _tv !== '') el.title = _tv;
   });
 }
 
@@ -13609,6 +13613,15 @@ function setTheme(theme) {
   localStorage.setItem('dbcheck-theme', theme || 'dark');
   var btn = document.getElementById('theme-toggle');
   if (btn) btn.textContent = (theme === 'light') ? '🌙' : '☀️';
+  // 主题切换后 ECharts 文字颜色需随 CSS 变量刷新
+  setTimeout(function() {
+    if (window._lastHealthDash && document.getElementById('health-screen-section')) {
+      try { renderHealthScreen(window._lastHealthDash); } catch(e) {}
+    }
+    if (typeof renderMonitorCharts === 'function' && document.getElementById('monitor-section')) {
+      try { renderMonitorCharts(); } catch(e) {}
+    }
+  }, 0);
 }
 
 function initTheme() {
@@ -13686,6 +13699,7 @@ async function loadHomeStats() {
     // 逐个获取，一个失败不影响其他
     let dash = {}, dataStats = {}, dataJobs = {}, dataRag = {}, dataHome = {}, dataDbTypes = [];
     try { const r = await fetch('/api/pro/dashboard'); dash = await r.json(); } catch(e) {}
+    window._lastHealthDash = dash;
     try { renderHealthScreen(dash); } catch(e) { console.error('renderHealthScreen failed:', e); }
     try { const r = await fetch('/api/pro/statistics'); dataStats = await r.json(); } catch(e) {}
     try { const r = await fetch('/api/scheduler/jobs'); dataJobs = await r.json(); } catch(e) {}
@@ -14965,10 +14979,10 @@ async function loadAccountPage() {
     var r = await fetch('/api/um/auth/status', { credentials: 'include' });
     var d = await r.json();
     var el = document.getElementById('account-content');
-    if (d.code !== 0 || !d.data.user) { el.innerHTML = '<div style="color:var(--danger);text-align:center;padding:20px;">加载失败</div>'; return; }
+    if (d.code !== 0 || !d.data.user) { el.innerHTML = '<div style="color:var(--danger);text-align:center;padding:20px;">' + (i18n('webui.account_load_failed') || '加载失败') + '</div>'; return; }
     var u = d.data.user;
     var roles = u.roles || [];
-    var roleText = roles.includes('admin') ? '超级管理员' : '普通用户';
+    var roleText = roles.includes('admin') ? (i18n('webui.account_role_admin') || '超级管理员') : (i18n('webui.account_role_user') || '普通用户');
     el.innerHTML =
       '<div style="display:flex;gap:24px;flex-wrap:wrap;">' +
         // 左侧：头像 + 信息
@@ -14977,33 +14991,33 @@ async function loadAccountPage() {
             '<div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#6c5ce7);display:flex;align-items:center;justify-content:center;font-size:24px;color:#fff;font-weight:700;">' + (u.nickname || u.username).charAt(0).toUpperCase() + '</div>' +
             '<div>' +
               '<div style="font-size:16px;font-weight:600;">' + escapeHtml(u.nickname || u.username) + '</div>' +
-              '<div style="font-size:12px;color:var(--text-muted);">' + roleText + ' · 角色: ' + roles.join(', ') + '</div>' +
+              '<div style="font-size:12px;color:var(--text-muted);">' + roleText + ' · ' + (i18n('webui.account_role_label') || '角色') + ': ' + roles.join(', ') + '</div>' +
             '</div>' +
           '</div>' +
           // 表单
           '<div style="display:grid;gap:10px;">' +
-            '<div><label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:3px;">用户名</label>' +
+            '<div><label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:3px;">' + (i18n('webui.account_username') || '用户名') + '</label>' +
             '<input value="' + escapeHtml(u.username) + '" disabled style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text-muted);font-size:13px;box-sizing:border-box;"></div>' +
-            '<div style="display:flex;gap:8px;"><div style="flex:1;"><label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:3px;">昵称</label>' +
+            '<div style="display:flex;gap:8px;"><div style="flex:1;"><label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:3px;">' + (i18n('webui.account_nickname') || '昵称') + '</label>' +
             '<input id="acct-name" value="' + escapeHtml(u.nickname || '') + '" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;box-sizing:border-box;"></div>' +
-            '<div style="flex:1;"><label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:3px;">邮箱</label>' +
-            '<input id="acct-email" value="' + escapeHtml(u.email || '') + '" placeholder="可选" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;box-sizing:border-box;"></div></div>' +
-            '<div><button class="btn btn-primary" onclick="saveProfile()" style="font-size:12px;">💾 保存信息</button></div>' +
+            '<div style="flex:1;"><label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:3px;">' + (i18n('webui.account_email') || '邮箱') + '</label>' +
+            '<input id="acct-email" value="' + escapeHtml(u.email || '') + '" placeholder="' + (i18n('webui.account_optional') || '可选') + '" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;box-sizing:border-box;"></div></div>' +
+            '<div><button class="btn btn-primary" onclick="saveProfile()" style="font-size:12px;">' + (i18n('webui.account_save_info') || '💾 保存信息') + '</button></div>' +
           '</div>' +
         '</div>' +
         // 右侧：安全设置
         '<div style="width:300px;">' +
           '<div style="border:1px solid var(--border);border-radius:10px;padding:16px;">' +
-            '<div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:12px;">🔒 修改密码</div>' +
-            '<input id="acct-oldpw" type="password" placeholder="旧密码" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;box-sizing:border-box;margin-bottom:8px;">' +
-            '<input id="acct-newpw" type="password" placeholder="新密码（至少6位）" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;box-sizing:border-box;margin-bottom:8px;">' +
-            '<button class="btn btn-primary" onclick="changePassword()" style="font-size:12px;width:100%;">更新密码</button>' +
+            '<div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:12px;">' + (i18n('webui.account_change_password') || '🔒 修改密码') + '</div>' +
+            '<input id="acct-oldpw" type="password" placeholder="' + (i18n('webui.account_old_password') || '旧密码') + '" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;box-sizing:border-box;margin-bottom:8px;">' +
+            '<input id="acct-newpw" type="password" placeholder="' + (i18n('webui.account_new_password') || '新密码（至少6位）') + '" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;box-sizing:border-box;margin-bottom:8px;">' +
+            '<button class="btn btn-primary" onclick="changePassword()" style="font-size:12px;width:100%;">' + (i18n('webui.account_update_password') || '更新密码') + '</button>' +
             '<div id="acct-pw-msg" style="font-size:12px;margin-top:8px;min-height:18px;"></div>' +
           '</div>' +
         '</div>' +
       '</div>';
   } catch(e) {
-    document.getElementById('account-content').innerHTML = '<div style="color:var(--danger);text-align:center;">加载失败</div>';
+    document.getElementById('account-content').innerHTML = '<div style="color:var(--danger);text-align:center;">' + (i18n('webui.account_load_failed') || '加载失败') + '</div>';
   }
 }
 
@@ -15019,18 +15033,18 @@ async function saveProfile() {
       body: JSON.stringify({nickname: name, email: email})
     });
     var d = await r.json();
-    if (d.code === 0) toastSuccess('保存成功');
-    else toastError(d.msg || '保存失败');
-  } catch(e) { toastError('网络错误'); }
+    if (d.code === 0) toastSuccess(i18n('webui.account_save_success') || '保存成功');
+    else toastError(d.msg || (i18n('webui.account_save_failed') || '保存失败'));
+  } catch(e) { toastError(i18n('webui.account_network_error') || '网络错误'); }
 }
 
 async function changePassword() {
   var oldPw = document.getElementById('acct-oldpw').value;
   var newPw = document.getElementById('acct-newpw').value;
   var msg = document.getElementById('acct-pw-msg');
-  if (!oldPw || !newPw) { msg.style.color = 'var(--danger)'; msg.textContent = '请填写旧密码和新密码'; return; }
-  if (newPw.length < 6) { msg.style.color = 'var(--danger)'; msg.textContent = '新密码至少6位'; return; }
-  if (oldPw === newPw) { msg.style.color = 'var(--danger)'; msg.textContent = '新密码不能与旧密码相同'; return; }
+  if (!oldPw || !newPw) { msg.style.color = 'var(--danger)'; msg.textContent = i18n('webui.account_password_required') || '请填写旧密码和新密码'; return; }
+  if (newPw.length < 6) { msg.style.color = 'var(--danger)'; msg.textContent = i18n('webui.account_password_min_length') || '新密码至少6位'; return; }
+  if (oldPw === newPw) { msg.style.color = 'var(--danger)'; msg.textContent = i18n('webui.account_password_same') || '新密码不能与旧密码相同'; return; }
   try {
     // 调用 RBAC 接口修改密码
     var r = await fetch('/api/um/user/password', {
@@ -15041,9 +15055,9 @@ async function changePassword() {
     });
     var d = await r.json();
     msg.style.color = d.code === 0 ? 'var(--success)' : 'var(--danger)';
-    msg.textContent = d.code === 0 ? '密码修改成功' : (d.msg || '修改失败');
+    msg.textContent = d.code === 0 ? (i18n('webui.account_password_success') || '密码修改成功') : (d.msg || (i18n('webui.account_password_failed') || '修改失败'));
     if (d.code === 0) { document.getElementById('acct-oldpw').value = ''; document.getElementById('acct-newpw').value = ''; }
-  } catch(e) { msg.style.color = 'var(--danger)'; msg.textContent = '网络错误'; }
+  } catch(e) { msg.style.color = 'var(--danger)'; msg.textContent = i18n('webui.account_network_error') || '网络错误'; }
 }
 
 checkLogin();
@@ -20862,7 +20876,7 @@ function mkdirRemote() {
     <div id="userManagementModal" class="um-modal-overlay">
       <div class="um-modal" style="width:880px;max-width:90vw;height:84vh;display:flex;flex-direction:column;">
         <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border);">
-          <strong style="font-size:15px;">系统管理</strong>
+          <strong style="font-size:15px;" data-i18n="webui.um_title">系统管理</strong>
           <button onclick="closeUserManagement()" style="border:none;background:none;font-size:20px;cursor:pointer;color:var(--text);">×</button>
         </div>
         <iframe id="userManagementIframe" style="flex:1;border:none;"></iframe>
