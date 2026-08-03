@@ -9404,8 +9404,9 @@ def main():
             pass
         _request_shutdown()
 
-    # 1) Python 标准信号（在主线程注册；gevent 在子线程运行无法覆盖本注册，
-    #    Git Bash/MSYS2 下 Ctrl+C 走 SIGINT 也经此路径）
+    # 1) Python 标准信号（主线程注册，作为非 gevent / threading 模式的兜底；
+    #    gevent 模式下 hub 会接管 SIGINT/SIGTERM，本注册实际失效，
+    #    故真正的退出入口在下方 _run_server 的 gevent.signal_handler）
     try:
         signal.signal(signal.SIGINT, _signal_handler)   # Ctrl+C（cmd/PowerShell/Git Bash）
         signal.signal(signal.SIGTERM, _signal_handler)  # kill / docker stop
@@ -9446,6 +9447,18 @@ def main():
     #    gevent/socketio 在 server 线程里的任何操作覆盖；任何退出信号（或控制台
     #    事件）触发后，_request_shutdown() 直接 os._exit(0) 强杀整个进程。
     def _run_server():
+        # gevent 模式下，在 server 线程（gevent hub 实际运行的线程）注册原生信号处理器。
+        # 必须在 hub 启动前/当中注册，以接管 gevent 默认的信号处理，使 SIGINT/SIGTERM
+        # 直接触发 os._exit(0)，彻底解决 Ctrl+C 无反应。Python 主线程的 signal.signal
+        # 在 gevent 接管后已失效，必须以 gevent.signal_handler 作为权威退出入口。
+        if _socketio_async_mode == 'gevent':
+            try:
+                gevent.signal_handler(signal.SIGINT, _request_shutdown)
+                gevent.signal_handler(signal.SIGTERM, _request_shutdown)
+                if platform.system().lower() == 'windows':
+                    gevent.signal_handler(signal.SIGBREAK, _request_shutdown)
+            except Exception:
+                pass
         try:
             socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)
         except KeyboardInterrupt:

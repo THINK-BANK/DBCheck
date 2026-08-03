@@ -2976,6 +2976,183 @@ async function executeFixSql(taskId, sql) {
   margin-top: 0;
   white-space: nowrap;
 }
+
+/* ════════════════ 首页重构：Hero + 健康驾驶舱 ════════════════ */
+.home-hero {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 40px 175px 36px 36px; /* 右侧预留吉祥物空间，避免遮挡按钮 */
+  margin-bottom: 20px;
+  border-radius: 16px;
+  background:
+    radial-gradient(120% 140% at 0% 0%, rgba(10,42,110,.18) 0%, rgba(10,42,110,0) 55%),
+    linear-gradient(100deg, var(--surface2) 0%, var(--surface) 100%);
+  border: 1px solid var(--border);
+  overflow: visible; /* 原为 hidden，会截断吉祥物头部 */
+  animation: heroFadeIn .45s ease both;
+}
+@keyframes heroFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.hero-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  width: 100%;
+  flex-wrap: wrap;
+}
+.hero-brand { display: flex; align-items: center; gap: 16px; }
+.hero-logo {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  box-shadow: 0 4px 14px rgba(0,0,0,.18);
+}
+.hero-titles { display: flex; flex-direction: column; gap: 4px; }
+.hero-title {
+  margin: 0;
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: var(--text);
+  background: linear-gradient(135deg, var(--text) 0%, var(--accent2) 120%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.hero-subtitle { margin: 0; font-size: 14px; color: var(--text-muted); font-weight: 500; }
+.hero-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+.hero-btn {
+  cursor: pointer;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  padding: 11px 22px;
+  font-size: 14px;
+  font-weight: 700;
+  transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
+}
+.hero-btn:hover { transform: translateY(-1px); }
+.hero-btn--primary {
+  background: var(--accent2);
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(10,42,110,.28);
+}
+.hero-btn--ghost {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--border);
+}
+.hero-mascot {
+  position: absolute;
+  top: 4px;          /* 原为 -28px，负值导致头部被父容器截断 */
+  right: 26px;       /* 原为 18px */
+  width: 130px;      /* 原为 240px，缩小避免遮挡按钮 */
+  height: auto;
+  pointer-events: none;
+  filter: drop-shadow(0 8px 18px rgba(0,0,0,.22));
+  animation: breathe 3.6s ease-in-out infinite;
+  z-index: 1;        /* 原为 2，确保在交互按钮之下 */
+}
+@keyframes breathe {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.06); }
+}
+
+/* 首屏 6 统计 */
+.hero-stats {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 14px;
+  margin-bottom: 22px;
+}
+.hero-stat-card {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 18px 16px;
+  text-align: center;
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+.hero-stat-card:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,.12); }
+.hero-stat-num {
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--text);
+  letter-spacing: -0.02em;
+}
+.hero-stat-label {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* 健康驾驶舱（可折叠） */
+.health-cockpit {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.cockpit-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  cursor: pointer;
+  user-select: none;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+}
+.cockpit-title { margin: 0; font-size: 16px; font-weight: 700; color: var(--text); }
+.cockpit-toggle {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 4px 12px;
+  background: var(--surface);
+  transition: color .15s ease, border-color .15s ease;
+}
+.cockpit-header:hover .cockpit-toggle { color: var(--text); border-color: var(--accent2); }
+.cockpit-body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.health-cockpit.collapsed .cockpit-body { display: none; }
+.health-cockpit.collapsed .cockpit-header { border-bottom-color: transparent; }
+
+/* 语录卡弱化（驾驶舱底部小卡） */
+.quotes-card--muted {
+  background: var(--surface2);
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  opacity: .85;
+}
+.quotes-card--muted .quotes-text { font-size: 12px; color: var(--text-muted); }
+.quotes-card--muted .quotes-icon { font-size: 16px; }
+
+/* 响应式 */
+@media (max-width: 1100px) {
+  .home-hero { padding-right: 130px; }
+  .hero-stats { grid-template-columns: repeat(3, 1fr); }
+  .hero-mascot { width: 110px; top: 2px; right: 20px; }
+}
+@media (max-width: 640px) {
+  .home-hero { padding-right: 36px; } /* 取消桌面端吉祥物预留空间 */
+  .hero-stats { grid-template-columns: repeat(2, 1fr); }
+  .hero-mascot { display: none; }
+}
 </style>
 
   <link rel="stylesheet" href="/static/codemirror/lib/codemirror.css">
@@ -5215,17 +5392,62 @@ function formatBytes(bytes) {
       <!-- ══ Page: Home ══ -->
       <div class="page active" id="page-home">
         <!-- 简化标题栏 -->
-        <!-- Slogan 动画 -->
-        <div class="slogan-wrapper" id="slogan-wrapper">
-          <div class="slogan-container">
-            <div class="slogan-glow"></div>
-            <div class="slogan-text" id="slogan-text"></div>
+        <!-- ══ Hero 品牌区 ══ -->
+        <section class="home-hero" id="home-hero">
+          <div class="hero-inner">
+            <div class="hero-brand">
+              <img class="hero-logo" src="/dbcheck_logo_icon.png" alt="DBCheck">
+              <div class="hero-titles">
+                <h1 class="hero-title">DBCheck</h1>
+                <p class="hero-subtitle" data-i18n="webui.home_hero_subtitle">基于 AI 的智能数据库巡检平台</p>
+              </div>
+            </div>
+            <div class="hero-actions">
+              <button class="hero-btn hero-btn--primary" onclick="showPage('wizard')" data-i18n="webui.home_quick_inspect">立即巡检</button>
+              <button class="hero-btn hero-btn--ghost" onclick="showPage('intelligence')" data-i18n="webui.home_quick_diagnose">智能诊断</button>
+            </div>
           </div>
-          <div class="slogan-sub" id="slogan-sub">DBCheck · Database Inspector</div>
-        </div>
+          <img class="hero-mascot" src="/mascot.png" alt="DBCheck Mascot">
+        </section>
+
+        <!-- ══ 首屏 6 统计 ══ -->
+        <section class="hero-stats" id="hero-stats">
+          <div class="hero-stat-card">
+            <div class="hero-stat-num" id="hero-stat-datasource">0</div>
+            <div class="hero-stat-label" data-i18n="webui.home_stat_datasources">已接入数据源</div>
+          </div>
+          <div class="hero-stat-card">
+            <div class="hero-stat-num" id="hero-stat-dbtype">0</div>
+            <div class="hero-stat-label" data-i18n="webui.home_stat_db_types">支持数据库类型</div>
+          </div>
+          <div class="hero-stat-card">
+            <div class="hero-stat-num" id="hero-stat-inspection">0</div>
+            <div class="hero-stat-label" data-i18n="webui.home_stat_inspections">累计巡检次数</div>
+          </div>
+          <div class="hero-stat-card">
+            <div class="hero-stat-num" id="hero-stat-baseline">0</div>
+            <div class="hero-stat-label" data-i18n="webui.home_stat_baseline">基线数</div>
+          </div>
+          <div class="hero-stat-card">
+            <div class="hero-stat-num" id="hero-stat-rule">0</div>
+            <div class="hero-stat-label" data-i18n="webui.home_stat_rules">规则数</div>
+          </div>
+          <div class="hero-stat-card">
+            <div class="hero-stat-num" id="hero-stat-job">0</div>
+            <div class="hero-stat-label" data-i18n="webui.home_stat_tasks">定时巡检任务</div>
+          </div>
+        </section>
+
+        <!-- ══ 健康驾驶舱（可折叠，默认展开）══ -->
+        <div class="health-cockpit" id="health-cockpit">
+          <div class="cockpit-header" role="button" tabindex="0" onclick="toggleHealthCockpit()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleHealthCockpit();}">
+            <h2 class="cockpit-title" data-i18n="webui.home_dashboard_title">健康驾驶舱</h2>
+            <span class="cockpit-toggle" id="cockpit-toggle" data-i18n="webui.home_dashboard_collapse">收起</span>
+          </div>
+          <div class="cockpit-body" id="cockpit-body">
 
         <!-- 实时监控 (v2.10) -->
-        <div class="home-section monitor-section" id="monitor-section" style="display:none;">
+        <div class="home-section monitor-section" id="monitor-section">
           <div class="section-header">
             <h2 class="section-title" data-i18n="webui.home_monitor_title">📡 实时监控</h2>
             <span class="section-desc" data-i18n="webui.home_monitor_desc">采集器每 30s 推送 · QPS / TPS · 连接数 · 延迟 · 可用性</span>
@@ -5378,10 +5600,10 @@ function formatBytes(bytes) {
 
         <!-- 数据统计图表 -->
         <div class="home-section" style="margin-top:24px;">
-          <div class="section-header">
+          <div class="section-header" style="display: none;">
             <h2 class="section-title" data-i18n="webui.home_chart_title">数据统计</h2>
           </div>
-          <div class="overview-grid" id="home-charts-grid">
+          <div class="overview-grid" id="home-charts-grid"  style="display: none;">
             <!-- 模板统计 -->
             <div class="overview-card">
               <div class="card-header">
@@ -5496,7 +5718,7 @@ function formatBytes(bytes) {
         </div>
 
         <!-- 随机语录卡片 -->
-        <div class="quotes-card" id="quotes-card" style="margin-top:16px;">
+        <div class="quotes-card quotes-card--muted" id="quotes-card">
           <div class="quotes-inner">
             <div class="quotes-icon">💡</div>
             <div class="quotes-body">
@@ -5506,6 +5728,9 @@ function formatBytes(bytes) {
                 <span class="quotes-refresh" onclick="refreshQuote()" data-i18n-title="webui.home_quote_refresh" title="换一条">🔄</span>
               </div>
             </div>
+          </div>
+        </div>
+
           </div>
         </div>
 
@@ -13459,13 +13684,14 @@ async function loadHomeStats() {
     };
 
     // 逐个获取，一个失败不影响其他
-    let dash = {}, dataStats = {}, dataJobs = {}, dataRag = {}, dataHome = {};
+    let dash = {}, dataStats = {}, dataJobs = {}, dataRag = {}, dataHome = {}, dataDbTypes = [];
     try { const r = await fetch('/api/pro/dashboard'); dash = await r.json(); } catch(e) {}
     try { renderHealthScreen(dash); } catch(e) { console.error('renderHealthScreen failed:', e); }
     try { const r = await fetch('/api/pro/statistics'); dataStats = await r.json(); } catch(e) {}
     try { const r = await fetch('/api/scheduler/jobs'); dataJobs = await r.json(); } catch(e) {}
     try { const r = await fetch('/api/rag/documents'); dataRag = await r.json(); } catch(e) {}
     try { const r = await fetch('/api/home_stats'); dataHome = await r.json(); } catch(e) {}
+    try { const r = await fetch('/api/db_types'); const _arr = await r.json(); dataDbTypes = Array.isArray(_arr) ? _arr : []; } catch(e) {}
 
     // 1. 健康评分摘要（紧凑卡片——详细仪表盘见下方「健康态势大屏」）
     const dashEl = document.getElementById('home-health-dashboard');
@@ -13497,7 +13723,7 @@ async function loadHomeStats() {
               <span class="health-level-badge ${level}" style="margin-top:4px;margin-bottom:10px;">${levelLabels[level] || level}</span>
               ${riskChips.length ? '<div class="health-risk-row" style="margin-bottom:8px">' + riskChips.join('') + '</div>' : ''}
               <div style="font-size:11px;color:var(--text-muted);">
-                已巡检 ${instDone}/${instTotal} 个实例 · 详情见下方大屏 ↓
+                已巡检 ${instDone}/${instTotal} 个实例
               </div>
             </div>`;
         } else {
@@ -13630,12 +13856,12 @@ async function loadHomeStats() {
           </div>`;
         }).join('');
       } else {
-        jobList.innerHTML = '<div style="text-align:center;padding:12px;color:var(--text-muted);font-size:12px;">暂无定时任务</div>';
+        jobList.innerHTML = '<div style="text-align:center;padding:12px;color:var(--text-muted);font-size:12px;">' + i18n('webui.scheduler_empty') + '</div>';
       }
     } else {
       if (jobTotalEl) jobTotalEl.textContent = '0';
       if (jobActiveEl) jobActiveEl.textContent = '0';
-      if (jobList) jobList.innerHTML = '<div style="text-align:center;padding:12px;color:var(--text-muted);font-size:12px;">暂无定时任务</div>';
+      if (jobList) jobList.innerHTML = '<div style="text-align:center;padding:12px;color:var(--text-muted);font-size:12px;">' + i18n('webui.scheduler_empty') + '</div>';
     }
 
     // 4. 处理知识库
@@ -13668,6 +13894,28 @@ async function loadHomeStats() {
 
       // 5. 首页统计图表（使用 ECharts 渲染）
       renderHomeCharts(stats, dbTypeMap);
+
+      // 5.1 首屏 6 统计条（写入独立 hero-stat-*，不触碰原 home-baseline-num 等）
+      const _stats = dataHome.stats || {};
+      const _dbTypeCount = dataDbTypes.length || 15; // /api/db_types 失败回退 15
+      const _ds = Number(_stats.datasource_total != null ? _stats.datasource_total : (dataHome.datasource_total || 0)) || 0;
+      const _insp = Number(_stats.inspection_total != null ? _stats.inspection_total : (dataHome.inspection_total || 0)) || 0;
+      const _base = Number(_stats.baseline_total != null ? _stats.baseline_total : (sumOf(_stats.baseline_by_db) || dataHome.baseline_total || 0)) || 0;
+      const _job = Number(_stats.scheduled_jobs != null ? _stats.scheduled_jobs : (dataHome.scheduled_jobs || 0)) || 0;
+      let _rule = 0;
+      if (dataStats && dataStats.statistics && dataStats.statistics.rule_engine_by_db) {
+        _rule = sumOf(dataStats.statistics.rule_engine_by_db);
+      } else if (_stats.rule_engine_by_db) {
+        _rule = sumOf(_stats.rule_engine_by_db);
+      } else if (_stats.rule_engine_total) {
+        _rule = Number(_stats.rule_engine_total) || 0;
+      }
+      animateCountUp(document.getElementById('hero-stat-datasource'), _ds);
+      animateCountUp(document.getElementById('hero-stat-dbtype'), _dbTypeCount);
+      animateCountUp(document.getElementById('hero-stat-inspection'), _insp);
+      animateCountUp(document.getElementById('hero-stat-baseline'), _base);
+      animateCountUp(document.getElementById('hero-stat-rule'), _rule);
+      animateCountUp(document.getElementById('hero-stat-job'), _job);
     }
 
     // 显示概览区域
@@ -13680,6 +13928,39 @@ async function loadHomeStats() {
 
   } catch(e) {
     console.error('Failed to load home stats:', e);
+  }
+}
+
+// ─── 首页 Hero：数字滚动 & 健康驾驶舱折叠 ──────────────────
+function sumOf(obj) {
+  if (!obj || typeof obj !== 'object') return 0;
+  return Object.values(obj).reduce((a, b) => a + (Number(b) || 0), 0);
+}
+
+function animateCountUp(el, target) {
+  if (!el) return;
+  target = Number(target) || 0;
+  const duration = 800;
+  const start = performance.now();
+  function frame(now) {
+    const t = Math.min(1, (now - start) / duration);
+    const eased = 1 - Math.pow(1 - t, 3); // easeOutCubic
+    const val = Math.round(target * eased);
+    el.textContent = val.toLocaleString('en-US');
+    if (t < 1) requestAnimationFrame(frame);
+    else el.textContent = target.toLocaleString('en-US');
+  }
+  requestAnimationFrame(frame);
+}
+
+function toggleHealthCockpit() {
+  const cockpit = document.getElementById('health-cockpit');
+  if (!cockpit) return;
+  const collapsed = cockpit.classList.toggle('collapsed');
+  const toggle = document.getElementById('cockpit-toggle');
+  if (toggle) {
+    // 展开态显示「收起」，折叠态显示「展开」
+    toggle.textContent = i18n(collapsed ? 'webui.home_dashboard_expand' : 'webui.home_dashboard_collapse') || (collapsed ? '展开' : '收起');
   }
 }
 
@@ -18871,6 +19152,7 @@ document.addEventListener('keydown', function(e) {
     ];
     const elText = document.getElementById('slogan-text');
     const elSub  = document.getElementById('slogan-sub');
+    if (!elText || !elSub) return; // 首页 Hero 化后 slogan 打字动画元素已移除，直接跳过
     let idx = 0;
     let typingTimer = null;
 
