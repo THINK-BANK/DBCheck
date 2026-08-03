@@ -10,9 +10,14 @@
 #   ./scripts/build-multiarch.sh --push
 #   (or CI: .github/workflows/docker-multiarch.yml on tag push)
 #
-# WHY multi-arch matters: the old amd64-only image, when run on an ARM64 host
-# via qemu emulation, makes numpy 2.x abort with "NumPy X86_V2 unsupported".
-# A native arm64 image lets numpy / OpenJDK run without x86 emulation — crash gone.
+# WHY numpy is pinned to <2 (see deploy/requirements-docker.txt): NumPy 2.x PyPI
+# wheels require the AVX2 (x86-64-v2) instruction set. On hosts/VMs whose CPU does
+# NOT expose AVX2 (common under virtualization / older x86_64 silicon),
+# `import numpy` aborts with "NumPy was built with baseline optimizations:
+# (X86_V2) but your machine doesn't support" — which crashes web_ui.py at import
+# time (main_ivorysql -> openpyxl -> numpy). Pinning numpy<2 (1.26.x) uses the
+# baseline x86_64 wheel (SSE2 only) and imports everywhere. This is independent of
+# the multi-arch story below (ARM64 信创 fleets still want a native arm64 image).
 # NOTE: Oracle client libs in drivers.zip are x86_64; Oracle support is
 #       unavailable on arm64 (non-fatal — the image still builds & serves 5003).
 #

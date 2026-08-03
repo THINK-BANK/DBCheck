@@ -30,7 +30,7 @@ paramiko>=2.10.0
 openpyxl>=3.0.0
 
 # ── RAG & Document Processing ─────────────────────────────────────────────
-numpy>=1.21.0           # rag/vector_store.py 向量检索（import numpy）
+numpy>=1.26,<2           # rag/vector_store.py 向量检索（import numpy）；<2 避免 numpy 2.x 轮子要求 AVX2(X86_V2)，缺 AVX2 的 CPU/虚拟机上 import 即崩
 beautifulsoup4>=4.12.0  # rag/document_processor.py（from bs4 import BeautifulSoup）
 
 # ── PDF Export ──────────────────────────────────────────────────────────────

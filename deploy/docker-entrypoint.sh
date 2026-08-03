@@ -52,37 +52,32 @@ fi
 echo "==> Initializing RBAC user management..."
 python -m user_management.seed 2>&1 || echo "WARNING: RBAC seed init failed"
 
-# Auto-install plugins from plugins/available/
-echo "==> Auto-installing plugins..."
-timeout 30 python -c "
+# Auto-enable bundled plugins: plugins/available -> plugins/enabled
+# NOTE: uses the local loader API (discover_plugins / enable_plugin), NOT the
+# online PluginMarket registry. The old code called PluginMarket.list_available()
+# which does not exist -> "PluginMarket has no attribute 'list_available'".
+echo "==> Enabling bundled plugins (available -> enabled)..."
+timeout 120 python -c "
 import sys
-import os
-
-# Add /app to Python path
 sys.path.insert(0, '/app')
-
 try:
-    from plugin_market import PluginMarket
-    
-    pm = PluginMarket()
-    available_plugins = pm.list_available()
-    
-    print(f'Found {len(available_plugins)} plugin(s) available:')
-    for plugin in available_plugins:
-        plugin_id = plugin['id']
-        if pm.is_installed(plugin_id):
-            print(f'  ✓ {plugin_id} (already installed)')
-        else:
-            print(f'  → Installing {plugin_id}...')
-            try:
-                pm.install(plugin_id)
-                print(f'  ✓ {plugin_id} installed successfully')
-            except Exception as e:
-                print(f'  ✗ {plugin_id} installation failed: {e}')
-    
+    from modules.pluginkit.loader import discover_plugins, enable_plugin
+    plugins = discover_plugins()
+    pending = sorted({p['name'] for p in plugins if not p.get('enabled')})
+    if not pending:
+        print('All bundled plugins already enabled.')
+    for name in pending:
+        try:
+            res = enable_plugin(name)
+            if isinstance(res, tuple):
+                ok, msg = res
+            else:
+                ok, msg = bool(res), 'done'
+            status = '✓' if ok else '✗'
+            print(f'  {status} {name}: {msg}')
+        except Exception as e:
+            print(f'  ✗ {name} enable failed: {e}')
     print('Plugin auto-installation completed.')
-except ImportError as e:
-    print(f'WARNING: Plugin system not available: {e}')
 except Exception as e:
     print(f'WARNING: Plugin auto-installation failed: {e}')
 " 2>&1 || echo "WARNING: Plugin auto-installation timeout or failed"
