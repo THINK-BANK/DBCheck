@@ -202,8 +202,9 @@ def _hard_exit():
     os._exit(0)
 
 
-def _request_shutdown():
-    """请求关闭：立即强制退出（最短路，不依赖任何清理逻辑）。"""
+def _request_shutdown(sig=None, frame=None):
+    """请求关闭：立即强制退出（最短路，不依赖任何清理逻辑）。
+    接受可选 (sig, frame) 以兼容 signal/gevent 信号回调的调用约定。"""
     _hard_exit()
 
 
@@ -319,7 +320,10 @@ try:
     set_collector(_collector)
     from apscheduler.schedulers.background import BackgroundScheduler
     from apscheduler.triggers.interval import IntervalTrigger
-    _monitor_sched = BackgroundScheduler()
+    # signal=False: 不让 APScheduler 注册自己的 SIGINT/SIGTERM 处理器（否则会覆盖本程序的
+    #   强制退出入口，且它只优雅停调度、不退出进程，导致 Ctrl+C 无反应）。
+    # daemon=True: 允许进程在主线程强杀时不被其后台线程阻塞。
+    _monitor_sched = BackgroundScheduler(signal=False, daemon=True)
     _monitor_sched.add_job(_collector.tick, IntervalTrigger(seconds=30))
     _monitor_sched.start()
     _collector.running = True
@@ -9422,15 +9426,12 @@ def api_dm8_offline_report(task_id):
 
 def main():
     # ── 信号处理：确保 Ctrl+C / 关闭窗口 / SIGTERM 都能立即退出 ──
-
-    # 1) Python 标准信号（主线程注册，周期重注册以对抗 gevent/socketio
-    #    运行期对 C 层 SIGINT 处理器的覆盖，详见主线程等待循环）
-    _install_python_signals()
-
-    # 2) Windows 控制台级处理器（OS 层，cmd/PowerShell 关闭窗口/Ctrl+C 必杀，
-    #    gevent 吞不掉、PyInstaller 同样有效）+ 持续保活确保永远抢在最前
-    _register_console_ctrl_handler()
-    _start_ctrl_keepalive()
+    # 设计要点（修复 gevent 模式 Ctrl+C 失效）：
+    #   - gevent 的信号 watcher 必须挂在「运行 hub 的线程（主线程）」。把 server 放到
+    #     子线程会让 hub 在子线程，导致 gevent.signal_handler 注册被 ValueError 吞掉、
+    #     主线程的 signal.signal 重注册因无 hub 也无效——这正是之前「运行一阵后停不了」的根因。
+    #   - 因此 server 直接在【主线程】运行，gevent hub 在主线程，所有信号机制才有效。
+    #   - Windows 控制台处理器（OS 层）绕开一切 Python/gevent 接管，作为最可靠必杀。
 
     _setup_driver_paths()
     # ── 初始化插件系统 ──
@@ -9447,47 +9448,41 @@ def main():
             print(f"[插件] 已加载 {loaded_count} 个插件（规则插件经 PluginRegistry 注册）")
     except Exception as e:
         print(f"[插件] 初始化跳过: {e}")
+
+    _verify_agreement_integrity()
+
     port = 5003
     print(_t('webui.startup_msg').format(port=port))
     print("[提示] 按 Ctrl+C 停止服务\n")
 
-    _verify_agreement_integrity()
+    # 1) Windows 控制台级处理器（OS 层，cmd/PowerShell 关闭窗口/Ctrl+C 必杀，
+    #    gevent 吞不掉、PyInstaller 同样有效）+ 持续保活确保永远抢在最前
+    _register_console_ctrl_handler()
+    _start_ctrl_keepalive()
 
-    # 3) 将 server 放在 daemon 子线程运行，主线程仅做「等待退出」循环。
-    #    这样主线程始终保持「纯 Python 主线程」身份，注册的信号 handler 不会被
-    #    gevent/socketio 在 server 线程里的任何操作覆盖；任何退出信号（或控制台
-    #    事件）触发后，_request_shutdown() 直接 os._exit(0) 强杀整个进程。
-    def _run_server():
-        # gevent 模式下，在 server 线程（gevent hub 实际运行的线程）注册原生信号处理器。
-        # 必须在 hub 启动前/当中注册，以接管 gevent 默认的信号处理，使 SIGINT/SIGTERM
-        # 直接触发 os._exit(0)，彻底解决 Ctrl+C 无反应。Python 主线程的 signal.signal
-        # 在 gevent 接管后已失效，必须以 gevent.signal_handler 作为权威退出入口。
-        if _socketio_async_mode == 'gevent':
-            try:
-                gevent.signal_handler(signal.SIGINT, _request_shutdown)
-                gevent.signal_handler(signal.SIGTERM, _request_shutdown)
-                if platform.system().lower() == 'windows':
-                    gevent.signal_handler(signal.SIGBREAK, _request_shutdown)
-            except Exception:
-                pass
+    # 2) 标准 Python 信号（非 gevent 模式下主线程注册即生效）
+    _install_python_signals()
+
+    # 3) gevent 模式：必须在【主线程】用 gevent.signal_handler 注册，因为它的信号 watcher
+    #    挂在当前线程（主线程）的 hub 上。server 即将在主线程运行，hub 会在此线程启动，
+    #    此处注册即可成为 SIGINT/SIGTERM 的权威退出入口（直接 os._exit(0)）。
+    #    注意：gevent.signal_handler 调用时会传 (sig, frame)，故 _request_shutdown 已兼容该签名。
+    if _socketio_async_mode == 'gevent':
         try:
-            socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)
-        except KeyboardInterrupt:
-            _request_shutdown()
-        except Exception as _e:
-            print(f"[主程序] server 异常: {_e}")
+            gevent.signal_handler(signal.SIGINT, _request_shutdown)
+            gevent.signal_handler(signal.SIGTERM, _request_shutdown)
+            if platform.system().lower() == 'windows':
+                gevent.signal_handler(signal.SIGBREAK, _request_shutdown)
+        except Exception:
+            pass
 
-    _server_thread = _shutdown_threading.Thread(target=_run_server, daemon=True)
-    _server_thread.start()
-
-    # 主线程：阻塞等待 + 周期性重注册 Python 信号处理器，
-    # 对抗 gevent/socketio 运行期对 C 层 SIGINT 处理器的覆盖，确保 Ctrl+C 始终落到 os._exit(0)
+    # 4) 主线程运行 server（gevent hub 在此线程），Ctrl+C 由 1/2/3 接管 → os._exit(0)
     try:
-        while True:
-            _shutdown_time.sleep(1)
-            _install_python_signals()
+        socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)
     except KeyboardInterrupt:
         _request_shutdown()
+    except Exception as _e:
+        print(f"[主程序] server 异常: {_e}")
     _request_shutdown()
 
 
