@@ -113,12 +113,7 @@
       ],
       "author": "DBCheck Team",
       "official": true,
-      "download": {
-        "type": "local_path",
-        "windows": "file:///D:/DBCheck/plugins/available/sqlserver_jdbc",
-        "unix": "file:///home/jack/DBCheck/plugins/available/sqlserver_jdbc",
-        "fallback": "file://./plugins/available/sqlserver_jdbc"
-      },
+      "download": "file://D:/DBCheck/plugins/available/sqlserver_jdbc",
       "sha256": "",
       "min_version": "2.7.0",
       "featured": false

@@ -970,7 +970,9 @@ def api_market_registry():
             # http(s) → 真正的线上发布（online）
             # file:// / 空 / 其他 → 在 registry 中注册的内置插件（registered），不再标"本地"
             # 只有扫描本地目录且不在 registry 中的插件才标 local（见 local_only_plugins）
-            dl = p.get('download', '')
+            # 必须走 _resolve_download_url：download 可能是跨平台字典写法，
+            # 直接 .startswith() 会抛 AttributeError 导致整个接口 500。
+            dl = m._resolve_download_url(p)
             if dl and (dl.startswith('http://') or dl.startswith('https://')):
                 # https?:// → 真正的线上发布
                 p['source'] = 'online'
