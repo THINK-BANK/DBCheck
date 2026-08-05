@@ -5,7 +5,7 @@ rules:
     name: 系统内存使用率过高
     name_zh: 系统内存使用率过高
     category: system
-    db_types: [sqlserver]
+    db_types: [sqlserver, sqlserver_jdbc]
     severity: high
     priority: high
     owner: 系统管理员
@@ -23,7 +23,7 @@ rules:
     name: 系统内存使用率预警
     name_zh: 系统内存使用率预警
     category: system
-    db_types: [sqlserver]
+    db_types: [sqlserver, sqlserver_jdbc]
     severity: medium
     priority: medium
     owner: 系统管理员
@@ -41,7 +41,7 @@ rules:
     name: 磁盘空间紧张
     name_zh: 磁盘空间紧张
     category: system
-    db_types: [sqlserver]
+    db_types: [sqlserver, sqlserver_jdbc]
     severity: high
     priority: high
     owner: 系统管理员
@@ -60,7 +60,7 @@ rules:
     name: 连接数使用率过高
     name_zh: 连接数使用率过高
     category: connection
-    db_types: [sqlserver]
+    db_types: [sqlserver, sqlserver_jdbc]
     severity: high
     priority: high
     owner: DBA
@@ -81,7 +81,7 @@ rules:
     name: 长时间运行的 SQL
     name_zh: 长时间运行的 SQL
     category: performance
-    db_types: [sqlserver]
+    db_types: [sqlserver, sqlserver_jdbc]
     severity: high
     priority: high
     owner: DBA
@@ -101,7 +101,7 @@ rules:
     name: 索引碎片率过高
     name_zh: 索引碎片率过高
     category: maintenance
-    db_types: [sqlserver]
+    db_types: [sqlserver, sqlserver_jdbc]
     severity: medium
     priority: medium
     owner: DBA
@@ -121,7 +121,7 @@ rules:
     name: 事务日志文件频繁增长
     name_zh: 事务日志文件频繁增长
     category: storage
-    db_types: [sqlserver]
+    db_types: [sqlserver, sqlserver_jdbc]
     severity: medium
     priority: medium
     owner: DBA
@@ -141,7 +141,7 @@ rules:
     name: 数据库自动关闭已开启
     name_zh: 数据库自动关闭已开启
     category: configuration
-    db_types: [sqlserver]
+    db_types: [sqlserver, sqlserver_jdbc]
     severity: high
     priority: high
     owner: DBA
@@ -159,7 +159,7 @@ rules:
     name: 完整性检查未定期执行
     name_zh: 完整性检查未定期执行
     category: maintenance
-    db_types: [sqlserver]
+    db_types: [sqlserver, sqlserver_jdbc]
     severity: high
     priority: high
     owner: DBA
@@ -179,7 +179,7 @@ rules:
     name: 备份策略缺失
     name_zh: 备份策略缺失
     category: backup
-    db_types: [sqlserver]
+    db_types: [sqlserver, sqlserver_jdbc]
     severity: high
     priority: high
     owner: DBA
@@ -197,7 +197,7 @@ rules:
     name: 用户空密码
     name_zh: 用户空密码
     category: security
-    db_types: [sqlserver]
+    db_types: [sqlserver, sqlserver_jdbc]
     severity: high
     priority: high
     owner: DBA

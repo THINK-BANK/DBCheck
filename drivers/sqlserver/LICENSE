@@ -1,0 +1,53 @@
+MICROSOFT SOFTWARE LICENSE TERMS
+
+MICROSOFT JDBC DRIVER FOR SQL SERVER
+
+These license terms are an agreement between you and Microsoft Corporation (or one of its affiliates). They apply to the software named above and any Microsoft services or software updates (except to the extent such services or updates are accompanied by separate or additional terms, in which case those different terms apply prospectively and do not modify your or Microsoft's rights relating to pre-update software or services). IF YOU COMPLY WITH THESE LICENSE TERMS, YOU HAVE THE RIGHTS BELOW. BY USING THE SOFTWARE, YOU ACCEPT THESE TERMS.
+
+1. INSTALLATION AND USE RIGHTS.
+
+   a) General. You may install and use any number of copies of the software to develop and test your applications.
+
+   b) Third Party Software. The software may include third party applications that Microsoft, not the third party, licenses to you under this agreement. Any included notices for third party applications are for your information only.
+
+   c) Distributable Code. The software is distributable code. You are permitted to distribute the software in your programs, in object code form, provided you comply with the terms below:
+
+       i.   You may copy and distribute the object code form of the software to your programs;
+       ii.  Your programs must provide a separate notice that the software is used in your program; and
+       iii.  You may not distribute the source code for the software.
+
+   d) Reservation of Rights. Microsoft reserves all rights not expressly granted.
+
+2. DATA COLLECTION. The software may collect information about you and your use of the software and send that to Microsoft. Microsoft's privacy practices are described in the Microsoft Privacy Statement (https://go.microsoft.com/fwlink/?LinkId=521839).
+
+3. SCOPE OF LICENSE. The software is licensed, not sold. This agreement only gives you some rights to use the software. Microsoft reserves all other rights. Unless applicable law gives you more rights despite this limitation, you may use the software only as expressly permitted in this agreement. In doing so, you must comply with any technical limitations in the software that only allow you to use it in certain ways.
+
+4. EXPORT RESTRICTIONS. You must comply with all domestic and international export laws and regulations that apply to the software, which include restrictions on destinations, end users, and end use.
+
+5. SUPPORT SERVICES. Because this software is "as is," we may not provide support services for it.
+
+6. ENTIRE AGREEMENT. This agreement, and the terms for supplements and updates, are the entire agreement for the software and support services.
+
+7. APPLICABLE LAW. If you acquired the software in the United States, Washington law applies to interpretation of and claims for breach of this agreement, and the laws of the state where you live apply to all other claims. If you acquired the software in any other country, its laws apply.
+
+8. CONSUMER RIGHTS; REGIONAL VARIATIONS. These terms describe certain legal rights. You may have other rights, including consumer rights, under the laws of your state or country. Separate and apart from your relationship with Microsoft, you may also have rights with respect to the party from which you acquired the software. This agreement does not change those other rights if the laws of your state or country do not permit it to do so.
+
+9. DISCLAIMER OF WARRANTY. THE SOFTWARE IS LICENSED "AS-IS." YOU BEAR THE RISK OF USING IT. MICROSOFT GIVES NO EXPRESS WARRANTIES, GUARANTEES OR CONDITIONS. YOU MAY HAVE ADDITIONAL CONSUMER RIGHTS UNDER YOUR LOCAL LAWS WHICH THIS AGREEMENT CANNOT CHANGE. TO THE EXTENT PERMITTED UNDER YOUR LOCAL LAWS, MICROSOFT EXCLUDES THE IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT.
+
+10. LIMITATION ON AND EXCLUSION OF REMEDIES AND DAMAGES. YOU CAN RECOVER FROM MICROSOFT AND ITS SUPPLIERS ONLY DIRECT DAMAGES UP TO U.S. $5.00. YOU CANNOT RECOVER ANY OTHER DAMAGES, INCLUDING CONSEQUENTIAL, LOST PROFITS, SPECIAL, INDIRECT OR INCIDENTAL DAMAGES.
+
+   This limitation applies to (a) anything related to the software, services, content (including code) on third party Internet sites, or third party applications; and (b) claims for breach of contract, breach of warranty, guarantee or condition, strict liability, negligence, or other tort to the extent permitted by applicable law.
+
+   It also applies even if Microsoft knew or should have known about the possibility of the damages.
+
+   The above limitation or exclusion may not apply to you if your country does not allow the exclusion or limitation of incidental, consequential, or other damages.
+
+---
+
+NOTE: The above license terms apply to the Microsoft JDBC Driver for SQL Server
+(mssql-jdbc-13.4.0.jre11.jar) downloaded from:
+https://learn.microsoft.com/sql/connect/jdbc/download-microsoft-jdbc-driver-for-sql-server
+
+This LICENSE file is provided for compliance with the Distributable Code notice
+requirement (§1.c.ii) and to document the legal terms under which the binary
+is shipped in this repository.

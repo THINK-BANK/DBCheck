@@ -871,6 +871,52 @@ def run_inspection_task(task_id, db_info, inspector_name, template_id=None, chap
             label_default='SQLServer',
             db_name_default='master',
         ),
+        # ── SQL Server (JDBC 双轨) —— P1/T-014 ──
+        #   与 'sqlserver' 共用 main_sqlserver_dual.getData，按 connection_mode 路由：
+        #     - 'odbc'  → main_sqlserver.SQLServerInspector（默认，向后兼容）
+        #     - 'jdbc'  → plugins/available/sqlserver_jdbc.MssqlJdbcInspector
+        #     - 'auto'  → 优先 JDBC（探测 jar + JPype1），失败回退 ODBC
+        #   UI 前端可在「新增 SQL Server 实例」表单中通过 connection_mode 下拉框选择；
+        #   后端通过 ssh_info['connection_mode'] 字段透传，缺省 'odbc'。
+        'sqlserver_jdbc': dict(
+            module_name='main_sqlserver_dual',
+            connect_test=test_sqlserver_jdbc_connection,
+            connect_test_args=lambda info: [
+                info['ip'], int(info['port']), info['user'], info['password'],
+                info.get('database', 'master'),
+                {
+                    'connection_mode': info.get('connection_mode', 'odbc'),
+                    'jdbc_url': info.get('jdbc_url', '') or '',
+                    'instance_name': info.get('instance_name', '') or '',
+                    'encrypt': bool(info.get('encrypt', True)),
+                    'trust_server_certificate': bool(info.get('trust_server_certificate', True)),
+                },
+            ],
+            getdata_args=lambda info: ([info['ip'], int(info['port']), info['user'], info['password']],
+                                       {
+                                           'ssh_info': {
+                                               'database': info.get('database', 'master'),
+                                               'connection_mode': info.get('connection_mode', 'odbc'),
+                                               'jdbc_url': info.get('jdbc_url', '') or '',
+                                               'instance_name': info.get('instance_name', '') or '',
+                                               'encrypt': bool(info.get('encrypt', True)),
+                                               'trust_server_certificate': bool(info.get('trust_server_certificate', True)),
+                                           },
+                                           'template_id': template_id,
+                                           'connection_mode': info.get('connection_mode', 'odbc'),
+                                           'label': info.get('name'),
+                                       }),
+            conn_attr='conn',
+            smart_analyze='smart_analyze_sqlserver',
+            filename_key='webui.sqlserver_jdbc_report_filename',
+            history_db_type='sqlserver_jdbc',
+            instance_prefix='sqlserver_jdbc',
+            error_task_name='SQL Server (JDBC)',
+            log_start_key='webui.log_sqlserver_jdbc_start',
+            err_module_key='webui.err_sqlserver_jdbc_module',
+            label_default='SQLServer-JDBC',
+            db_name_default='master',
+        ),
         'ivorysql': dict(
             module_name='main_ivorysql',
             connect_test=test_ivorysql_connection,
@@ -1055,6 +1101,14 @@ def run_inspection_task(task_id, db_info, inspector_name, template_id=None, chap
         # Redis / Redis Cluster 专用参数透传到 ssh_info（供插件 getData 使用）
         if db_type in ('redis', 'redis-cluster'):
             for _mk in ('database', 'seed_nodes'):
+                if _mk in db_info:
+                    ssh_info[_mk] = db_info[_mk]
+        # SQL Server (JDBC) 专用参数透传到 ssh_info（P1/T-014）
+        #   - connection_mode: 'odbc' / 'jdbc' / 'auto'，控制 main_sqlserver_dual 路由
+        #   - jdbc_url / instance_name / encrypt / trust_server_certificate: JDBC 连接参数
+        if db_type == 'sqlserver_jdbc':
+            for _mk in ('database', 'connection_mode', 'jdbc_url', 'instance_name',
+                        'encrypt', 'trust_server_certificate'):
                 if _mk in db_info:
                     ssh_info[_mk] = db_info[_mk]
 
@@ -1781,6 +1835,56 @@ def test_sqlserver_connection(host, port, user, password, database='master'):
             return False, ver
     except Exception as e:
         return False, str(e)
+
+
+def test_sqlserver_jdbc_connection(host, port, user, password, database='master', **kwargs):
+    """测试 SQL Server JDBC 连接（双轨：odbc / jdbc / auto）。
+
+    Args:
+        host / port / user / password / database: 标准连接参数
+        connection_mode: 'odbc' | 'jdbc' | 'auto'（默认 'odbc'，向后兼容）
+        jdbc_url / instance_name / encrypt / trust_server_certificate: JDBC 专用
+
+    Returns:
+        (ok, msg)：ok=True 时 msg 是版本可读串（如 'Microsoft SQL Server 2019'）
+    """
+    connection_mode = (kwargs.get('connection_mode') or 'odbc').lower()
+    try:
+        # 走双轨入口（main_sqlserver_dual 自动按 mode 路由 JDBC/ODBC）
+        from modules.entrypoints.main_sqlserver_dual import _jdbc_available
+        from modules.entrypoints.main_sqlserver_dual import getData as dual_getData
+        from modules.entrypoints.main_sqlserver import SQLServerInspector as _OdbcInspector
+
+        # 'auto' 时强制探测，'jdbc' 时必须 jar 可用
+        if connection_mode in ('jdbc', 'auto') and _jdbc_available():
+            # 用 dual getData 触发 connect + 立即断开
+            from modules.entrypoints.main_sqlserver_dual import SQLServerDualInspector
+            try:
+                insp = SQLServerDualInspector(
+                    host=host, port=int(port), user=user, password=password,
+                    database=database, connection_mode=connection_mode,
+                    ssh_info={
+                        'database': database,
+                        'jdbc_url': kwargs.get('jdbc_url', '') or '',
+                        'instance_name': kwargs.get('instance_name', '') or '',
+                        'encrypt': bool(kwargs.get('encrypt', True)),
+                        'trust_server_certificate': bool(kwargs.get('trust_server_certificate', True)),
+                    },
+                )
+                ok, msg = insp.connect()
+                try:
+                    insp.disconnect()
+                except Exception:
+                    pass
+                return ok, msg
+            except Exception as e:
+                if connection_mode == 'jdbc':
+                    return False, f'JDBC 连接失败: {e}'
+                # auto 模式：回退 ODBC
+        # odbc 模式 或 auto 回退
+        return test_sqlserver_connection(host, port, user, password, database)
+    except Exception as e:
+        return False, f'test_sqlserver_jdbc_connection 异常: {e}'
 
 
 def test_plugin_connection(db_type, host, port, user, password, **kwargs):

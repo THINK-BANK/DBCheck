@@ -669,6 +669,55 @@ async function executeFixSql(taskId, sql) {
 }
 .tc-header { display: flex; align-items: flex-start; }
 
+/* ─── DB Type 卡片紧凑化（覆盖上方默认样式，保持布局不推翻） ─── */
+.type-card {
+  padding: 10px 12px;
+  gap: 5px;
+}
+.type-card .tc-logo {
+  font-size: 20px;
+  line-height: 1;
+}
+.type-card .tc-logo img {
+  height: 24px !important;
+  width: auto;
+}
+.type-card .tc-name {
+  font-size: 12.5px;
+  line-height: 1.3;
+}
+.type-card .tc-desc {
+  font-size: 11px; color: var(--text-muted); line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+  max-width: 100%;
+}
+/* ─── 数据库类型分类过滤 chips ─── */
+.db-type-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.filter-chip {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1;
+  padding: 6px 14px;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all var(--trans);
+}
+.filter-chip:hover { border-color: var(--accent); color: var(--text); }
+.filter-chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
 /* ─── Form ─── */
 .form-grid {
   display: grid; grid-template-columns: 1fr 1fr; gap: 16px 20px;
@@ -4759,13 +4808,13 @@ function formatBytes(bytes) {
             '</div>' +
           '</div></div>';
         document.documentElement.insertAdjacentHTML('beforeend', html);
-        // 动态填充数据库类型下拉框（支持插件）
+        // 动态填充数据库类型下拉框（支持插件，按生态系分组；保留 data-port/data-user 供端口/用户联动）
         const dsDbTypeSel = document.getElementById('ds-db-type');
         if (dsDbTypeSel && window.dbTypes) {
-          dsDbTypeSel.innerHTML = '<option value="">请选择数据库类型</option>';
-          window.dbTypes.forEach(t => {
-            const compatSuffix = t.compat_tag ? ` (${t.compat_tag} 兼容)` : '';
-            dsDbTypeSel.innerHTML += `<option value="${t.value}" data-port="${t.port||3306}" data-user="${t.user||''}">${t.emoji||''} ${t.label}${compatSuffix}</option>`;
+          fillGroupedSelect(dsDbTypeSel, window.dbTypes, {
+            placeholder: '请选择数据库类型',
+            withCompat: true,
+            optAttrs: function(t) { return ` data-port="${t.port||3306}" data-user="${t.user||''}"`; }
           });
         }
         onDsDbTypeChange();
@@ -5758,6 +5807,7 @@ function formatBytes(bytes) {
             <span>🗄️</span> <span data-i18n="webui.step1_title">选择数据库类型</span>
             <span class="badge" data-i18n="webui.step_badge">第 1 步 / 共 5 步</span>
           </div>
+          <div class="db-type-filter-chips" id="db-type-filter-chips"></div>
           <div class="type-grid" id="type-card-container">
           </div>
           <div class="btn-row">
@@ -7979,6 +8029,7 @@ curl -H "X-API-Key: YOUR_API_KEY" http://localhost:5003/api/v1/inspect/{task_id}
           <div class="card-title">
             <svg viewBox="0 0 24 24" width="18" height="18" style="stroke:var(--accent2);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M7.6 7.6 11 16M16.4 7.6 13 16M8 6h8"/></svg>
             <span data-i18n="webui.nav_intelligence">智能诊断中心</span>
+            <span class="badge" data-i18n="webui.edition_badge">专业版</span>
           </div>
           <div style="color:var(--text-muted);font-size:12.5px;margin-bottom:18px" data-i18n="intelligence.subtitle">多专业能力协同，主动发现、定位与处置数据库风险。</div>
 
@@ -8036,6 +8087,7 @@ curl -H "X-API-Key: YOUR_API_KEY" http://localhost:5003/api/v1/inspect/{task_id}
           <div class="card-title">
             <svg viewBox="0 0 24 24" width="18" height="18" style="stroke:var(--accent2);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round"><path d="M3 3v6h6"/><path d="M3.5 9a9 9 0 1 1-1 5"/><path d="M12 8v4l3 2"/></svg>
             <span data-i18n="webui.nav_diag_history">诊断历史</span>
+            <span class="badge" data-i18n="webui.edition_badge">专业版</span>
           </div>
           <div style="color:var(--text-muted);font-size:12.5px;margin-bottom:16px" data-i18n="diag_history.subtitle">回看历次协同诊断结果，选中条目可查看完整报告并一键回填工单。</div>
           <div class="form-group" style="margin-bottom:0;max-width:420px">
@@ -8070,25 +8122,9 @@ curl -H "X-API-Key: YOUR_API_KEY" http://localhost:5003/api/v1/inspect/{task_id}
         </div>
       </div><!-- /page-diag-history -->
 
-      <!-- ══ Page: Flow Orchestration (巡检编排) ══ -->
-      <div class="page" id="page-flow" style="display:none;">
-        <div class="card" style="text-align:center;padding:64px 32px;max-width:720px;margin:auto;">
-          <div style="font-size:64px;margin-bottom:20px">🚀</div>
-          <div class="card-title" style="justify-content:center;font-size:22px;margin-bottom:12px" data-i18n="webui.flow_title">巡检编排</div>
-          <div style="color:var(--text-muted);font-size:14px;margin-bottom:32px;max-width:520px;margin-left:auto;margin-right:auto;line-height:1.7" data-i18n="webui.flow_desc">可视化编排数据库巡检流程，支持节点画布、条件分支与自动化调度。</div>
-
-          <div style="background:var(--surface2);border:1px dashed var(--border);border-radius:12px;padding:28px 24px;margin-bottom:28px;">
-            <div style="display:inline-flex;align-items:center;gap:8px;background:var(--warn);color:#fff;font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px;margin-bottom:14px" data-i18n="webui.flow_pro_badge">专业版功能</div>
-            <div style="font-size:15px;color:var(--text);margin-bottom:10px" data-i18n="webui.flow_pro_title">巡检编排为 DBCheck 专业版功能</div>
-            <div style="font-size:13px;color:var(--text-muted);line-height:1.7" data-i18n="webui.flow_pro_desc">社区版暂不支持可视化画布、节点编排与自动化调度。如需使用，请升级至 DBCheck 专业版。</div>
-          </div>
-
-          <div style="display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;">
-            <button class="btn btn-primary" disabled style="display:none" data-i18n="webui.flow_pro_action_disabled">立即使用（需专业版）</button>
-            <a href="https://dbcheck.top" target="_blank" rel="noopener" class="btn" style="text-decoration:none" data-i18n="webui.flow_pro_learn">了解专业版</a>
-          </div>
-        </div>
-      </div><!-- /page-flow -->
+            <div class="page" id="page-flow" style="display:none;padding:0;">
+        <iframe src="/flow" title="智能巡检编排中心" style="width:100%;height:100%;min-height:0;border:0;flex:1;display:block;"></iframe>
+      </div>
 
       <!-- AWR 报告分析页面 -->
       <div class="page" id="page-awr" style="display:none;">
@@ -12107,10 +12143,10 @@ function showAddJobForm() {
   document.getElementById('job-datasource').value = '';
   document.getElementById('job-test-status').style.display = 'none';
   document.getElementById('job-test-status').innerHTML = '';
-  // 填充数据库类型下拉
+  // 填充数据库类型下拉（优先动态类型并分组；API 未加载成功时回退内置列表，同样分组渲染）
   const dbTypeSel = document.getElementById('job-db-type');
-  if (!dbTypeSel.options.length) {
-    const dbTypes = [
+  if (dbTypeSel && !dbTypeSel.options.length) {
+    const fallbackTypes = (window.dbTypes && window.dbTypes.length) ? window.dbTypes : [
       {value:'mysql', label:'MySQL'},
       {value:'pg', label:'PostgreSQL'},
       {value:'ivorysql', label:'IvorySQL'},
@@ -12122,11 +12158,7 @@ function showAddJobForm() {
       {value:'mongodb', label:'MongoDB'},
       {value:'oceanbase', label:'OceanBase (MySQL 兼容)'},
     ];
-    dbTypes.forEach(t => {
-      const opt = document.createElement('option');
-      opt.value = t.value; opt.textContent = t.label;
-      dbTypeSel.appendChild(opt);
-    });
+    fillGroupedSelect(dbTypeSel, fallbackTypes, { placeholder: '' });
   }
   document.getElementById('job-db-type').value = 'mysql';
   document.getElementById('job-host').value = '';
@@ -19062,7 +19094,7 @@ async function deleteBackupHistory(recordId) {
         <img class="about-logo" src="/dbcheck_logo_icon.png" alt="DBCheck">
         <div class="about-hero-text">
           <h2>DBCheck</h2>
-          <div class="about-sub">Database Intelligent Inspector <span id="about-version">{{ version }}</span></div>
+          <div class="about-sub">Database Intelligent Inspector <span id="about-version">{{ version }}{% if edition == 'professional' %} · <span data-i18n="webui.edition_badge">专业版</span>{% endif %}</span></div>
         </div>
       </div>
     </div>
@@ -19073,7 +19105,7 @@ async function deleteBackupHistory(recordId) {
       </p>
       <div class="about-meta">
         <span class="about-meta-item">作者：fiyo (Jack Ge)</span>
-        <span class="about-meta-item">协议：Apache License 2.0</span>
+        <span class="about-meta-item">协议：专有软件许可（Proprietary Software License）</span>
         <span class="about-meta-item">项目：<a href="https://github.com/fiyo/DBCheck" target="_blank">github.com/fiyo/DBCheck</a></span>
         <span class="about-meta-item">邮箱：<a href="mailto:sdfiyon@gmail.com">sdfiyon@gmail.com</a></span>
         <span class="about-meta-item">官网：<a href="https://dbcheck.top" target="_blank">dbcheck.top</a></span>
@@ -19134,9 +19166,9 @@ document.addEventListener('keydown', function(e) {
 (function(){
   try {
     var _a=[
-      "5byA5rqQ6L2v5Lu2IMK3IEFwYWNoZSBMaWNlbnNlIDIuMA==",
-      "5pys6L2v5Lu25Li65byA5rqQ6L2v5Lu277yM6YeH55SoIEFwYWNoZSBMaWNlbnNlIDIuMCDorrjlj6/or4HjgILmgqjlj6/oh6rnlLHkvb/nlKjjgIHkv67mlLnjgIHliIblj5HvvIzkvYbpobvkv53nlZnljp/lp4vniYjmnYPlo7DmmI7lj4rorrjlj6/or4Hlia/mnKzjgILor6bop4EgPGEgaHJlZj0iaHR0cHM6Ly93d3cuYXBhY2hlLm9yZy9saWNlbnNlcy9MSUNFTlNFLTIuMCIgdGFyZ2V0PSJfYmxhbmsiPkFwYWNoZSBMaWNlbnNlIDIuMDwvYT7jgILmr4/lubQgPHN0cm9uZz415pyIMTnml6Xoh7M15pyIMjHml6U8L3N0cm9uZz7vvIznlYzpnaLlsIblvLrliLbku6XngbDluqbmqKHlvI/mmL7npLrkuJTml6Dms5XliIfmjaLkuLvpopjjgILor7flsIrph43ov5nkuIDorr7orqHjgII=",
-      "VGhpcyBzb2Z0d2FyZSBpcyBvcGVuIHNvdXJjZSBzb2Z0d2FyZSBsaWNlbnNlZCB1bmRlciB0aGUgQXBhY2hlIExpY2Vuc2UgMi4wLiBZb3UgbWF5IHVzZSwgbW9kaWZ5LCBhbmQgZGlzdHJpYnV0ZSBpdCBmcmVlbHksIHByb3ZpZGVkIHRoYXQgeW91IHJldGFpbiB0aGUgb3JpZ2luYWwgY29weXJpZ2h0IG5vdGljZSBhbmQgYSBjb3B5IG9mIHRoZSBsaWNlbnNlLiBTZWUgPGEgaHJlZj0iaHR0cHM6Ly93d3cuYXBhY2hlLm9yZy9saWNlbnNlcy9MSUNFTlNFLTIuMCIgdGFyZ2V0PSJfYmxhbmsiPkFwYWNoZSBMaWNlbnNlIDIuMDwvYT4gZm9yIGRldGFpbHMuIEV2ZXJ5IHllYXIgZnJvbSA8c3Ryb25nPk1heSAxOSB0byBNYXkgMjE8L3N0cm9uZz4sIHRoZSBpbnRlcmZhY2UgaXMgZm9yY2VkIGludG8gZ3JheXNjYWxlIG1vZGUgYW5kIHRoZW1lIHN3aXRjaGluZyBpcyBkaXNhYmxlZDsgcGxlYXNlIHJlc3BlY3QgdGhpcyBkZXNpZ24u"
+      "5LiT5pyJ6L2v5Lu2IMK3IOWVhuS4muaOiOadg++8iFByb3ByaWV0YXJ5IFNvZnR3YXJlIMK3IENvbW1lcmNpYWwgTGljZW5zZe+8iQ==",
+      "5pys6L2v5Lu25Li6PHN0cm9uZz7kuJPmnInllYbkuJrova/ku7Y8L3N0cm9uZz7vvIzniYjmnYPlvZIgZml5b++8iEphY2sgR2XvvInmiYDmnInvvIzkv53nlZnkuIDliIfmnYPliKnjgII8YnIvPuacque7j+iRl+S9nOadg+S6uuS5pumdouaOiOadg++8jOS7u+S9leS6uuS4jeW+l+WkjeWItuOAgeS/ruaUueOAgeWPjee8luivkeOAgeWPjeaxh+e8luOAgeWIhuWPkeOAgeWHuuenn+OAgei9rOiuuOWPr+aIlueUqOS6juS7u+S9leWVhuS4muWGjeWIhuWPkeOAgjxici8+5q+P5bm0IDxzdHJvbmc+NeaciDE55pel6IezNeaciDIx5pelPC9zdHJvbmc+77yM55WM6Z2i5bCG5by65Yi25LulPHN0cm9uZz7ngbDluqbmqKHlvI88L3N0cm9uZz7mmL7npLrkuJTml6Dms5XliIfmjaLkuLvpopjvvIzor7flsIrph43ov5nkuIDorr7orqHjgII=",
+      "VGhpcyBzb2Z0d2FyZSBpcyBhIDxzdHJvbmc+cHJvcHJpZXRhcnkgY29tbWVyY2lhbCBwcm9kdWN0PC9zdHJvbmc+IG93bmVkIGJ5IGZpeW8gKEphY2sgR2UpLiBBbGwgcmlnaHRzIHJlc2VydmVkLjxici8+Tm8gY29weWluZywgbW9kaWZpY2F0aW9uLCBkZWNvbXBpbGluZywgZGlzYXNzZW1ibHksIGRpc3RyaWJ1dGlvbiwgc3VibGljZW5zaW5nLCBvciBjb21tZXJjaWFsIHJlZGlzdHJpYnV0aW9uIGlzIHBlcm1pdHRlZCB3aXRob3V0IHByaW9yIHdyaXR0ZW4gYXV0aG9yaXphdGlvbi48YnIvPkV2ZXJ5IHllYXIgZnJvbSA8c3Ryb25nPk1heSAxOSB0byBNYXkgMjE8L3N0cm9uZz4sIHRoZSBpbnRlcmZhY2UgaXMgZm9yY2VkIGludG8gPHN0cm9uZz5ncmF5c2NhbGUgbW9kZTwvc3Ryb25nPiBhbmQgdGhlbWUgc3dpdGNoaW5nIGlzIGRpc2FibGVkOyBwbGVhc2UgcmVzcGVjdCB0aGlzIGRlc2lnbi4="
     ];
     var _d=function(s){var b=atob(s);var l=b.length;var a=new Uint8Array(l);for(var i=0;i<l;i++)a[i]=b.charCodeAt(i);return new TextDecoder('utf-8').decode(a);};
     var t=document.getElementById('agreement-title');
@@ -20266,7 +20298,7 @@ function mkdirRemote() {
 <!-- 底部状态栏 -->
 <div class="status-bar" id="status-bar">
   <div class="sb-item sb-brand">
-    <span class="version-badge" id="version-badge">{{ version }}</span>
+    <span class="version-badge" id="version-badge">{{ version }}{% if edition == 'professional' %} · <span data-i18n="webui.edition_badge">专业版</span>{% endif %}</span>
     <span style="font-size:10px;color:var(--text-muted,#8a8f98);white-space:nowrap;">DBCheck · <a href="https://github.com/fiyo/DBCheck" target="_blank" style="color:inherit;">fiyo</a></span>
   </div>
   <div class="sb-item" id="sb-inspection">
@@ -20941,19 +20973,112 @@ const STATIC_DB_PH_MAP = {'pg':'postgres','ivorysql':'ivorysql','kingbase':'king
     }
   }
 
+  // ─── 数据库类型分组 / 排序 / 下拉分组（纯前端，兼容 /api/db_types 字段 value|label|compat_tag|emoji） ───
+  // 生态系分组：顺序即展示顺序；db_type → 组名 显式映射优先，compat_tag 兜底
+  const DB_GROUP_ORDER = ['MySQL 系', 'PostgreSQL 系', 'Oracle 系', 'SQL Server 系', '其他关系型', 'NoSQL', 'KV/缓存', 'OLAP/分析'];
+  const DB_GROUP_MAP = {
+    mysql: 'MySQL 系', mariadb: 'MySQL 系', oceanbase: 'MySQL 系', tidb: 'MySQL 系', tdsqlc_mysql: 'MySQL 系',
+    pg: 'PostgreSQL 系', ivorysql: 'PostgreSQL 系', kingbase: 'PostgreSQL 系', hgdb: 'PostgreSQL 系', uxdb: 'PostgreSQL 系',
+    oracle: 'Oracle 系', oracle_jdbc: 'Oracle 系', dm: 'Oracle 系',
+    sqlserver: 'SQL Server 系', sqlserver_jdbc: 'SQL Server 系',
+    db2: '其他关系型', yashandb: '其他关系型', gbase: '其他关系型',
+    mongodb: 'NoSQL',
+    redis: 'KV/缓存', 'redis-cluster': 'KV/缓存',
+    clickhouse: 'OLAP/分析'
+  };
+  function dbGroupOf(t) {
+    if (!t) return '其他';
+    const key = t.value || t.db_type || '';
+    if (DB_GROUP_MAP[key]) return DB_GROUP_MAP[key];
+    const ct = t.compat_tag;
+    if (ct === 'Relational') return '其他关系型';
+    if (ct === 'NoSQL') return 'NoSQL';
+    if (ct === 'KV') return 'KV/缓存';
+    if (ct === 'OLAP') return 'OLAP/分析';
+    return '其他';
+  }
+  // 按「组顺序 + 组内 label 中文排序」；未知组放最后
+  function sortDbTypes(list) {
+    return [...(list || [])].sort((a, b) => {
+      const ga = DB_GROUP_ORDER.indexOf(dbGroupOf(a));
+      const gb = DB_GROUP_ORDER.indexOf(dbGroupOf(b));
+      const ia = ga === -1 ? 99 : ga, ib = gb === -1 ? 99 : gb;
+      if (ia !== ib) return ia - ib;
+      return String(a.label || a.value || '').localeCompare(String(b.label || b.value || ''), 'zh');
+    });
+  }
+  // 分组填充下拉：placeholder 为首项（可空），optgroup 按 DB_GROUP_ORDER 渲染，组内排序
+  function fillGroupedSelect(sel, list, opts) {
+    if (!sel) return;
+    opts = opts || {};
+    const ph = opts.placeholder != null ? opts.placeholder : '请选择数据库类型';
+    const all = opts.allLabel != null ? opts.allLabel : null; // 若有，渲染为首项（如"全部"）
+    const optAttrs = typeof opts.optAttrs === 'function' ? opts.optAttrs : null; // 附加 option 属性（如 data-port/data-user）
+    const withCompat = !!opts.withCompat; // 保留 (XXX 兼容) 后缀
+    let html = '';
+    if (all != null) html += `<option value="">${all}</option>`;
+    else if (ph !== '') html += `<option value="">${ph}</option>`;
+    const sorted = sortDbTypes(list);
+    const byGroup = {};
+    sorted.forEach(t => { (byGroup[dbGroupOf(t)] = byGroup[dbGroupOf(t)] || []).push(t); });
+    DB_GROUP_ORDER.concat('其他').forEach(g => {
+      const items = byGroup[g];
+      if (!items || !items.length) return;
+      html += `<optgroup label="${g}">`;
+      items.forEach(t => {
+        const v = t.value || t.db_type || '';
+        const label = t.label || v;
+        const compatSuffix = withCompat && t.compat_tag ? ` (${t.compat_tag} 兼容)` : '';
+        const extra = optAttrs ? optAttrs(t) : '';
+        html += `<option value="${v}"${extra}>${t.emoji ? t.emoji + ' ' : ''}${label}${compatSuffix}</option>`;
+      });
+      html += '</optgroup>';
+    });
+    sel.innerHTML = html;
+  }
+  // 渲染分类过滤 chips（全部 + 当前有类型的组，按 DB_GROUP_ORDER 顺序）
+  function renderDbTypeFilterChips() {
+    const wrap = document.getElementById('db-type-filter-chips');
+    if (!wrap) return;
+    const groups = [];
+    (window.dbTypes || []).forEach(t => {
+      const g = dbGroupOf(t);
+      if (g !== '其他' && groups.indexOf(g) === -1) groups.push(g);
+    });
+    groups.sort((a, b) => DB_GROUP_ORDER.indexOf(a) - DB_GROUP_ORDER.indexOf(b));
+    let html = `<button type="button" class="filter-chip active" data-group="" onclick="filterDbTypeCards('')">全部</button>`;
+    groups.forEach(g => {
+      html += `<button type="button" class="filter-chip" data-group="${g}" onclick="filterDbTypeCards('${g}')">${g}</button>`;
+    });
+    wrap.innerHTML = html;
+  }
+  // 依据激活的分类 chip 显隐卡片（空串 = 全部显示）
+  function filterDbTypeCards(group) {
+    const wrap = document.getElementById('db-type-filter-chips');
+    if (wrap) wrap.querySelectorAll('.filter-chip').forEach(chip => {
+      chip.classList.toggle('active', chip.getAttribute('data-group') === group);
+    });
+    const container = document.getElementById('type-card-container');
+    if (!container) return;
+    container.querySelectorAll('.type-card').forEach(card => {
+      card.style.display = (!group || card.dataset.group === group) ? '' : 'none';
+    });
+  }
+
   // 动态生成数据库类型卡片
   function generateDbTypeCards() {
     const container = document.getElementById('type-card-container');
     if (!container) return;
     container.innerHTML = '';
-    (window.dbTypes || []).forEach(dbType => {
+    sortDbTypes(window.dbTypes).forEach(dbType => {
       const card = document.createElement('div');
       card.className = 'type-card';
       card.id = `tc-${dbType.value}`;
+      card.dataset.group = dbGroupOf(dbType);
       card.onclick = () => selectDbType(dbType.value);
 
       const iconHtml = dbType.icon
-        ? `<img src="${dbType.icon}" alt="${dbType.label}" style="height:28px;width:auto;">`
+        ? `<img src="${dbType.icon}" alt="${dbType.label}" style="height:24px;width:auto;">`
         : '🗄️';
       const pluginBadge = dbType.is_plugin ? ' <span class="beta-tag">Plugin</span>' : '';
       const compatBadge = dbType.compat_tag ? ` <span class="compat-tag">${dbType.compat_tag}</span>` : '';
@@ -20968,58 +21093,28 @@ const STATIC_DB_PH_MAP = {'pg':'postgres','ivorysql':'ivorysql','kingbase':'king
       `;
       container.appendChild(card);
     });
+    renderDbTypeFilterChips();
   }
 
   // 填充所有数据库类型下拉框
   function populateDbTypeDropdowns() {
     const dbTypes = window.dbTypes || [];
-    const compatLabel = (t) => t.compat_tag ? `${t.label} (${t.compat_tag} 兼容)` : t.label;
 
     // 1. 新增数据源弹窗中的数据库类型下拉框
-    const dsDbType = document.getElementById('f-ds-db-type');
-    if (dsDbType) {
-      dsDbType.innerHTML = '<option value="">请选择数据库类型</option>';
-      dbTypes.forEach(t => {
-        dsDbType.innerHTML += `<option value="${t.value}">${compatLabel(t)}</option>`;
-      });
-    }
+    fillGroupedSelect(document.getElementById('f-ds-db-type'), dbTypes, { placeholder: '请选择数据库类型', withCompat: true });
 
     // 2. 规则管理页面的数据库类型过滤
-    const rulesDbType = document.getElementById('rules-db-type');
-    if (rulesDbType) {
-      rulesDbType.innerHTML = '<option value="">全部</option>';
-      dbTypes.forEach(t => {
-        rulesDbType.innerHTML += `<option value="${t.value}">${compatLabel(t)}</option>`;
-      });
-    }
+    fillGroupedSelect(document.getElementById('rules-db-type'), dbTypes, { allLabel: '全部', withCompat: true });
 
     // 3. 基线配置管理页面的数据库类型过滤
-    const baselineFilterDbType = document.getElementById('baseline-filter-db-type');
-    if (baselineFilterDbType) {
-      baselineFilterDbType.innerHTML = '<option value="">所有数据库类型</option>';
-      dbTypes.forEach(t => {
-        baselineFilterDbType.innerHTML += `<option value="${t.value}">${compatLabel(t)}</option>`;
-      });
-    }
-    
+    fillGroupedSelect(document.getElementById('baseline-filter-db-type'), dbTypes, { allLabel: '所有数据库类型', withCompat: true });
+
     // 4. 基线配置管理页面中新增基线时的数据库类型选择
-    const baselineDbType = document.getElementById('baseline-db-type');
-    if (baselineDbType) {
-      baselineDbType.innerHTML = '<option value="">请选择</option>';
-      dbTypes.forEach(t => {
-        baselineDbType.innerHTML += `<option value="${t.value}">${t.label}</option>`;
-      });
-    }
-    
-    // 5. 定时巡检任务页面的数据库类型选择
-    const jobDbType = document.getElementById('job-db-type');
-    if (jobDbType) {
-      jobDbType.innerHTML = '';
-      dbTypes.forEach(t => {
-        jobDbType.innerHTML += `<option value="${t.value}">${t.label}</option>`;
-      });
-    }
-    
+    fillGroupedSelect(document.getElementById('baseline-db-type'), dbTypes, { placeholder: '请选择' });
+
+    // 5. 定时巡检任务页面的数据库类型选择（无占位，保持"必选"语义）
+    fillGroupedSelect(document.getElementById('job-db-type'), dbTypes, { placeholder: '' });
+
     // 6. 动态生成reports页面的数据库类型过滤按钮
     generateReportFilterButtons();
   }

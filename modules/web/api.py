@@ -860,6 +860,9 @@ def api_uninstall_plugin(plugin_id):
         target_dir = os.path.join(base_dir, 'enabled', plugin_id)
         if os.path.isdir(target_dir):
             shutil.rmtree(target_dir, ignore_errors=True)
+            # 插件状态已变化：使 db_type 缓存失效，保证 /api/db_types 立即反映最新列表
+            from modules.db_types.dbtype_registry import invalidate_cache
+            invalidate_cache()
             return jsonify({'ok': True, 'message': f'插件 {plugin_id} 已禁用（原始文件已保留）'})
         else:
             return jsonify({'ok': True, 'message': f'插件 {plugin_id} 未启用，无需卸载'})
@@ -874,6 +877,9 @@ def api_reload_plugins():
         from modules.pluginkit.core import PluginRegistry, load_plugins
         PluginRegistry.clear()
         n = load_plugins()
+        # 插件状态可能变化：使 db_type 缓存失效，保证 /api/db_types 返回最新列表
+        from modules.db_types.dbtype_registry import invalidate_cache
+        invalidate_cache()
         return jsonify({'ok': True, 'loaded': n})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -1087,6 +1093,10 @@ def api_market_install():
         from modules.pluginkit.market import get_market
         m = get_market()
         result = m.install(plugin_id)
+        if result.get('ok'):
+            # 安装成功：使 db_type 缓存失效
+            from modules.db_types.dbtype_registry import invalidate_cache
+            invalidate_cache()
         return jsonify(result)
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -1103,6 +1113,10 @@ def api_market_uninstall():
         from modules.pluginkit.market import get_market
         m = get_market()
         result = m.uninstall(plugin_id)
+        if result.get('ok'):
+            # 卸载成功：使 db_type 缓存失效
+            from modules.db_types.dbtype_registry import invalidate_cache
+            invalidate_cache()
         return jsonify(result)
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500

@@ -238,15 +238,15 @@ class PluginMarket:
         """列出市场插件，支持筛选"""
         data = self.fetch_registry()
         plugins = data.get('plugins', [])
-        
+
         # 为每个插件设置 source 字段（根据 download 字段判断）
         for p in plugins:
-            dl = p.get('download', '')
+            dl = self._resolve_download_url(p)
             if dl and (dl.startswith('http://') or dl.startswith('https://')):
                 p['source'] = 'online'
             else:
                 p['source'] = 'local'
-        
+
         if category:
             plugins = [p for p in plugins if p.get('category') == category]
         if keyword:
@@ -256,6 +256,30 @@ class PluginMarket:
                        kw in p.get('description', '').lower() or
                        kw in ' '.join(p.get('keywords', [])).lower()]
         return plugins
+
+    def _resolve_download_url(self, plugin: dict) -> str:
+        """解析插件的 download 字段，支持两种格式：
+
+        1. 字符串：`"file:///path/to/plugin"` 或 `"https://..."` 或 `"./plugins/..."`
+        2. 字典（跨平台）：`{"type": "local_path", "windows": "...", "unix": "...", "fallback": "..."}`
+           字典模式按当前 OS 选 windows / unix，缺一端则用 fallback。
+
+        Returns:
+            解析后的字符串 URL/路径；若均不存在返回空串。
+        """
+        if not plugin:
+            return ''
+        dl = plugin.get('download', '')
+        if isinstance(dl, str):
+            return dl
+        if isinstance(dl, dict):
+            is_windows = os.name == 'nt' or (os.sep == '\\')
+            if is_windows and dl.get('windows'):
+                return dl['windows']
+            if not is_windows and dl.get('unix'):
+                return dl['unix']
+            return dl.get('fallback', '') or ''
+        return ''
 
     def get_plugin(self, plugin_id: str) -> Optional[Dict]:
         """获取单个插件详情"""
@@ -321,6 +345,8 @@ class PluginMarket:
         3. 否则 → 从市场下载安装
         返回 {'ok': bool, 'message': str}
         """
+        from modules.db_types.dbtype_registry import invalidate_cache
+
         plugin = self.get_plugin(plugin_id)
         if not plugin:
             # 兜底：本地 available/ 或 enabled/ 中存在但未发布到 registry 的插件
@@ -365,6 +391,7 @@ class PluginMarket:
                     except Exception as e:
                         logger.warning(f"调用插件 {plugin_id} 的 on_install() 失败: {e}")
                     
+                    invalidate_cache()
                     return {'ok': True, 'message': f'插件 {plugin_id} 安装成功'}
                 else:
                     shutil.rmtree(enabled_dir, ignore_errors=True)
@@ -380,7 +407,7 @@ class PluginMarket:
         target_dir = available_dir
 
         # 3. 否则需要下载安装（本地 available/ 复制分支已在上方面处理）
-        download_url = plugin.get('download', '')
+        download_url = self._resolve_download_url(plugin)
         if not download_url:
             return {'ok': False, 'message': f'插件 {plugin_id} 没有下载地址'}
 
@@ -388,7 +415,10 @@ class PluginMarket:
         if download_url.startswith('file://') or os.path.isfile(download_url):
             if download_url.startswith('file://'):
                 download_url = download_url[7:]  # 去掉 file://
-            return self._install_from_local(plugin_id, download_url, target_dir)
+            result = self._install_from_local(plugin_id, download_url, target_dir)
+            if result.get('ok'):
+                invalidate_cache()
+            return result
 
         # 生成镜像下载地址列表
         download_urls = self._get_mirror_download_url(download_url)
@@ -417,6 +447,7 @@ class PluginMarket:
             #       此时如果本地 plugins/ 目录已有该插件的源码目录，可以直接复制安装
             local_fallback = self._try_local_fallback(plugin_id, target_dir)
             if local_fallback['ok']:
+                invalidate_cache()
                 return local_fallback
             return {'ok': False, 'message': f'所有镜像均下载失败: {last_error}'}
 
@@ -478,15 +509,18 @@ class PluginMarket:
                         except Exception as e:
                             logger.warning(f"调用插件 {plugin_id} 的 on_install() 失败: {e}")
                         
+                        invalidate_cache()
                         return {'ok': True, 'message': f'插件 {plugin.get("name", plugin_id)} 安装成功'}
                     else:
                         shutil.rmtree(enabled_dir, ignore_errors=True)
                         err_msg = f'插件 {plugin.get("name", plugin_id)} 安装成功（已安装但未启用）'
                         if load_err2:
                             err_msg += f': {load_err2}'
+                        invalidate_cache()
                         return {'ok': True, 'message': err_msg}
                 except Exception as e:
                     logger.warning(f"插件启用失败: {e}")
+                    invalidate_cache()
                     return {'ok': True, 'message': f'插件 {plugin.get("name", plugin_id)} 安装成功（启用失败：{e}）'}
             else:
                 # 回滚
@@ -616,6 +650,7 @@ class PluginMarket:
         - 删除 plugins/enabled/<plugin_id>/ 目录（禁用插件）
         - 不删除 plugins/available/<plugin_id>/ 目录（保留原始文件）
         """
+        from modules.db_types.dbtype_registry import invalidate_cache
         from modules.pluginkit.core import PluginRegistry
         
         # 1. 清理数据（优先使用 plugin.json 中的 cleanup 配置）
@@ -697,6 +732,7 @@ class PluginMarket:
         if os.path.isdir(target_dir):
             shutil.rmtree(target_dir, ignore_errors=True)
             logger.info(f"插件已禁用，文件已保留: {target_dir}")
+            invalidate_cache()
             return {'ok': True, 'message': f'插件 {plugin_id} 已禁用（原始文件已保留）'}
         else:
             return {'ok': True, 'message': f'插件 {plugin_id} 未启用，无需卸载'}
@@ -769,7 +805,7 @@ class PluginMarket:
         # 2. 检查内置 registry 中是否有 file:// 的本地路径
         plugin = self.get_plugin(plugin_id)
         if plugin:
-            dl = plugin.get('download', '')
+            dl = self._resolve_download_url(plugin)
             if dl.startswith('file://'):
                 local_path = dl[7:]
                 if os.path.isdir(local_path) or (os.path.isfile(local_path) and local_path.endswith('.zip')):
