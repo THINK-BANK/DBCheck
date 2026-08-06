@@ -1945,8 +1945,12 @@ class BaseInspectionEngine:
                 for idx, br in enumerate(baseline_results, 1):
                     row = tbl.rows[idx].cells
                     row[0].text = br.get('param_name', '')
-                    row[1].text = str(br.get('current_value', ''))
-                    row[2].text = str(br.get('expected_value', '')) if br.get('expected_value') else f"{br.get('expected_value_min', '')} - {br.get('expected_value_max', '')}"
+                    row[1].text = self._clean_xml_str(br.get('current_value', ''), max_len=100)
+                    row[2].text = self._clean_xml_str(
+                        br.get('expected_value', '') if br.get('expected_value')
+                        else f"{br.get('expected_value_min', '')} - {br.get('expected_value_max', '')}",
+                        max_len=200,
+                    )
                     row[3].text = br.get('operator', '')
                     status = br.get('status', 'ERROR')
                     row[4].text = status
