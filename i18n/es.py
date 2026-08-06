@@ -2780,6 +2780,7 @@ ES.update({
     "webui.si_hist_score": "Puntuación",
     "webui.si_hist_time": "Hora",
     "webui.sqlserver_report_filename": "InformeInspecciónSQLServer_{ip}_{name}_{ts}",
+    "webui.sqlserver_jdbc_report_filename": "InformeInspecciónSQLServer(JDBC)_{ip}_{name}_{ts}",
     "webui.ssh_config": "Configuración de conexión SSH",
     "webui.ssh_desc": "Configurar SSH incluirá información de recursos del sistema como CPU, memoria y disco en el informe de inspección. También puede omitir este paso y recopilar solo los indicadores de la base de datos.",
     "webui.ssh_ebpf_hint": "El agente de recopilación utiliza por defecto el método Shell (/proc) sin dependencias, que puede obtener indicadores básicos del host como CPU, memoria y disco sin instalar Python en el servidor de destino. Los indicadores eBPF a nivel de kernel (latencia p99 de disco / IOPS / atribución Top por proceso) requieren Python3 + bcc + root en el servidor de destino. Si Python no está instalado en el servidor de destino, estos indicadores del kernel se mostrarán como «no disponible», pero no afectarán a los indicadores básicos del host.",

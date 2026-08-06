@@ -4721,7 +4721,7 @@ function formatBytes(bytes) {
                 '<select id="ds-db-type" style="width:100%;margin-top:4px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px" onchange="onDsDbTypeChange()">' +
                   '<option value="">请选择数据库类型</option>' +
                 '</select></div>' +
-              '<div><label style="font-size:12px;color:var(--text-muted)">' + i18n('webui.pro_ds_label_req') + '</label>' +
+              '<div><label style="font-size:12px;color:var(--text-muted)">' + i18n('webui.pro_ds_label_req') + ' <span style="color:var(--danger)">*</span></label>' +
                 '<input id="ds-label" style="width:100%;margin-top:4px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px" placeholder="' + i18n('webui.pro_ds_placeholder_name') + '"></div>' +
               '<div><label style="font-size:12px;color:var(--text-muted)">' + i18n('webui.pro_ds_host_req') + '</label>' +
                 '<input id="ds-host" style="width:100%;margin-top:4px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px" placeholder="' + i18n('webui.pro_ds_placeholder_host') + '"></div>' +
@@ -4746,6 +4746,12 @@ function formatBytes(bytes) {
                 '<span style="font-size:13px;color:var(--text-muted)">' + i18n('webui.checkbox_sysdba') + '</span></label></div>' +
               '<div id="ds-jdbc-url-wrap" style="display:none"><label id="ds-jdbc-url-label" style="font-size:12px;color:var(--text-muted)">JDBC URL <span style="color:var(--text-muted);font-weight:normal">（可选，留空则使用上方主机/端口/服务名）</span></label>' +
                 '<input id="ds-jdbc-url" style="width:100%;margin-top:4px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px" placeholder="jdbc:oracle:thin:@//host:1521/ORCLCDB 或 @host:1521:ORCL"></div>' +
+              '<div id="ds-connection-mode-wrap" style="display:none"><label style="font-size:12px;color:var(--text-muted)">连接模式 (connection_mode) <span style="color:var(--text-muted);font-weight:normal">（SQL Server 双轨驱动路由）</span></label>' +
+                '<select id="ds-connection-mode" style="width:100%;margin-top:4px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">' +
+                  '<option value="odbc">odbc（pyodbc，默认）</option>' +
+                  '<option value="jdbc">jdbc（JPype1 + mssql-jdbc.jar）</option>' +
+                  '<option value="auto">auto（优先 JDBC，失败回退 ODBC）</option>' +
+                '</select></div>' +
               '<div id="ds-mongo-wrap" style="display:none">' +
                 '<div style="font-size:12px;color:var(--text-muted);margin:8px 0 4px">MongoDB 连接参数 <span style="color:#43a047">NoSQL</span></div>' +
                 '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
@@ -4894,6 +4900,14 @@ function formatBytes(bytes) {
             _jdbcInput.placeholder = '(DESCRIPTION=(HOST=host)(PORT=1521)(CONNECT_DATA=(SERVICE_NAME=ORCLCDB))) 或 //host:1521/ORCLCDB';
           }
         }
+        // SQL Server (JDBC) 双轨驱动：仅 sqlserver_jdbc 显示连接模式选择（纯 sqlserver 为 pyodbc 单轨）
+        var _connModeWrap = document.getElementById('ds-connection-mode-wrap');
+        if (_connModeWrap) _connModeWrap.style.display = (dbType === 'sqlserver_jdbc') ? 'block' : 'none';
+        // 选择 SQL Server (JDBC) 类型时连接模式默认 jdbc（编辑已有实例时由后续回填逻辑覆盖为原值）
+        if (dbType === 'sqlserver_jdbc') {
+          var _cm = document.getElementById('ds-connection-mode');
+          if (_cm) _cm.value = 'jdbc';
+        }
         var gbaseWrap = document.getElementById('ds-gbase-server-wrap');
         if (gbaseWrap) gbaseWrap.style.display = dbType === 'gbase' ? '' : 'none';
         var mongoWrap = document.getElementById('ds-mongo-wrap');
@@ -4949,6 +4963,7 @@ function formatBytes(bytes) {
         const sysdba = document.getElementById('ds-sysdba')?.checked || false;
         const gbaseServer = document.getElementById('ds-gbase-server')?.value.trim() || '';
         const jdbcUrl = (document.getElementById('ds-jdbc-url')?.value || '').trim();
+        const connectionMode = document.getElementById('ds-connection-mode')?.value || 'odbc';
         const mongoConnectMode = document.getElementById('ds-connect-mode')?.value || 'standard';
         const mongoAuthSource = document.getElementById('ds-auth-source')?.value.trim() || 'admin';
         const mongoAuthMechanism = document.getElementById('ds-auth-mechanism')?.value.trim() || '';
@@ -4972,7 +4987,7 @@ function formatBytes(bytes) {
           const res = await fetch('/api/pro/datasources/test-connection', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ db_type: dbType, host, port: parseInt(port), user, password, service_name: svcName, database: dbName, tenant: tenant, sysdba, jdbc_url: jdbcUrl, gbase_server_name: gbaseServer, ssh_host: sshHost, ssh_port: parseInt(sshPort), ssh_user: sshUser, ssh_password: sshPass, connect_mode: mongoConnectMode, auth_source: mongoAuthSource, auth_mechanism: mongoAuthMechanism, replica_set: mongoReplicaSet, tls: mongoTls, tls_ca_file: mongoTlsCaFile, tls_cert_key_file: mongoTlsCertKeyFile, tls_allow_invalid_certs: mongoTlsAllowInvalid, seed_nodes: redisSeedNodes })
+            body: JSON.stringify({ db_type: dbType, host, port: parseInt(port), user, password, service_name: svcName, database: dbName, tenant: tenant, sysdba, jdbc_url: jdbcUrl, connection_mode: connectionMode, gbase_server_name: gbaseServer, ssh_host: sshHost, ssh_port: parseInt(sshPort), ssh_user: sshUser, ssh_password: sshPass, connect_mode: mongoConnectMode, auth_source: mongoAuthSource, auth_mechanism: mongoAuthMechanism, replica_set: mongoReplicaSet, tls: mongoTls, tls_ca_file: mongoTlsCaFile, tls_cert_key_file: mongoTlsCertKeyFile, tls_allow_invalid_certs: mongoTlsAllowInvalid, seed_nodes: redisSeedNodes })
           });
           const data = await res.json();
           msgEl.style.color = data.ok ? 'var(--success)' : 'var(--danger)';
@@ -5008,6 +5023,10 @@ function formatBytes(bytes) {
           payload.sysdba = document.getElementById('ds-sysdba').checked;
           const jdbcUrl = document.getElementById('ds-jdbc-url')?.value.trim();
           if (jdbcUrl) payload.jdbc_url = jdbcUrl;
+        }
+        if (payload.db_type === 'sqlserver_jdbc') {
+          const cm = document.getElementById('ds-connection-mode')?.value || 'odbc';
+          payload.connection_mode = cm;
         }
         if (payload.db_type === 'gbase') {
           payload.gbase_server_name = document.getElementById('ds-gbase-server').value.trim();
@@ -5119,6 +5138,9 @@ function formatBytes(bytes) {
                 document.getElementById('ds-service-name').value = ds.service_name || '';
                 document.getElementById('ds-sysdba').checked = ds.sysdba === true;
                 if (ds.jdbc_url) document.getElementById('ds-jdbc-url').value = ds.jdbc_url;
+              }
+              if (ds.db_type === 'sqlserver_jdbc') {
+                if (ds.connection_mode) document.getElementById('ds-connection-mode').value = ds.connection_mode;
               }
               if (ds.db_type === 'mongodb') {
                 document.getElementById('ds-database').value = ds.database || 'admin';

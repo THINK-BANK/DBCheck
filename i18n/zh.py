@@ -1806,6 +1806,7 @@ ZI = {
     "report.system_resource_disk": "磁盘",
     "webui.dm_report_filename": "DM巡检报告_{ip}_{name}_{ts}",
     "webui.sqlserver_report_filename": "SQLServer巡检报告_{ip}_{name}_{ts}",
+    "webui.sqlserver_jdbc_report_filename": "SQL Server (JDBC)巡检报告_{ip}_{name}_{ts}",
     "webui.tidb_report_filename": "TiDB巡检报告_{ip}_{name}_{ts}",
     "webui.uxdb_report_filename": "UXDB巡检报告_{ip}_{name}_{ts}",
     "webui.log_uxdb_start": "[{ts}] [UXDB] 开始巡检...",

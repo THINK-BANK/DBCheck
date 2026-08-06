@@ -162,7 +162,8 @@ class JdbcCursorWrapper:
           3. java.time.OffsetDateTime / LocalDateTime / LocalDate / Instant → datetime
           4. java.math.BigDecimal / BigInteger → float / int
           5. java.lang.Boolean / Number → bool / int / float
-          6. 其余 → str(obj)
+          6. byte[] / bytes / bytearray（varbinary 等二进制列）→ '0x' + hex
+          7. 其余 → str(obj)
         """
         if obj is None:
             return None
@@ -209,6 +210,24 @@ class JdbcCursorWrapper:
             if hasattr(obj, 'toEpochMilli') and callable(obj.toEpochMilli):
                 ts_ms = obj.toEpochMilli() / 1000.0
                 return datetime.datetime.fromtimestamp(ts_ms)
+        except Exception:
+            pass
+        # 二进制（varbinary / byte[] 列，如 sql_handle / plan_handle）：JPype 的
+        # Java byte[] 或 Python 原生 bytes / bytearray，统一转 0x 十六进制字符串
+        # （SQL Server Management Studio 惯例）。mssql-jdbc 对 varbinary 列返回
+        # byte[]，直接 str() 会按 JVM 字符集解码成乱码，因此必须在兜底前处理。
+        try:
+            if isinstance(obj, (bytes, bytearray)):
+                return '0x' + bytes(obj).hex()
+            # JPype JByteArray（类名 [B = 原始 byte 数组，hasattr getClass 判定）
+            if hasattr(obj, 'getClass') and callable(obj.getClass) \
+                    and obj.getClass().getName() == '[B':
+                # bytes(obj) 走 buffer protocol（jpype 1.7.1 实测可用）
+                try:
+                    return '0x' + bytes(obj).hex()
+                except Exception:
+                    # 兼容无 buffer protocol 的旧版 jpype：逐字节取低 8 位
+                    return '0x' + bytes(b & 0xFF for b in obj).hex()
         except Exception:
             pass
         return str(obj)
@@ -509,7 +528,7 @@ class MssqlJdbcInspector(BaseInspectionEngine):
     def _collect_top_sql(self):
         sql = (
             "SELECT TOP 50 "
-            "s.sql_handle, s.plan_handle, s.execution_count, "
+            "s.execution_count, "
             "s.total_worker_time, s.total_elapsed_time, s.total_logical_reads, "
             "s.total_logical_writes, s.total_physical_reads, "
             "s.creation_time, s.last_execution_time, "

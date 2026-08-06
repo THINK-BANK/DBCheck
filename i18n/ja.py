@@ -2780,6 +2780,7 @@ JA.update({
     "webui.si_hist_score": "スコア",
     "webui.si_hist_time": "時刻",
     "webui.sqlserver_report_filename": "SQLServer 検査レポート_{ip}_{name}_{ts}",
+    "webui.sqlserver_jdbc_report_filename": "SQLServer(JDBC) 検査レポート_{ip}_{name}_{ts}",
     "webui.ssh_config": "SSH接続構成",
     "webui.ssh_desc": "SSH を構成した後、検査レポートには CPU、メモリ、ディスクなどのシステム リソース情報が含まれます。この手順をスキップして、データベース メトリックのみを収集できます。",
     "webui.ssh_ebpf_hint": "コレクタはデフォルトでシェル (/proc) モードに依存します。ターゲット マシンには、CPU、メモリ、ディスクなどの基本的なホスト インジケーターを取得するために Python をインストールする必要はありません。 「カーネル レベルの eBPF インジケーター」 (ディスク p99 レイテンシ/IOPS/プロセスごとの上位属性) のみ、ターゲット マシンに Python3 + bcc + root が必要です。ターゲット マシンに Python がインストールされていない場合、これらのカーネル インジケーターは「使用不可」と表示されますが、基本的なホスト インジケーターは影響を受けません。",

@@ -16,6 +16,17 @@ def get_edition():
     """Return edition name"""
     return 'community'
 
+def register_web_extensions(app):
+    """Register professional-only web blueprints.
+
+    Professional branch: registers the Pro flow blueprint.
+    The community (main) branch provides a no-op implementation so that
+    modules/web/app.py can call this unconditionally while staying byte-identical
+    across both branches.
+    """
+    # 社区版无 Pro Web 扩展，no-op
+    return
+
 from .instance_manager import (
     InstanceManager,
     DatabaseInstance,
@@ -43,6 +54,7 @@ __all__ = [
     # Pro status (no license required)
     "is_pro",
     "get_edition",
+    "register_web_extensions",
     # Instance
     "InstanceManager",
     "DatabaseInstance",

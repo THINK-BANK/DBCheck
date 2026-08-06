@@ -240,7 +240,7 @@ class SQLServerDualInspector:
 
 # ── 数据源获取函数（供 web_ui.py 替换原 main_sqlserver.getData）────
 def getData(ip, port, user, password, ssh_info=None, template_id=None,
-            connection_mode: str = 'odbc'):
+            connection_mode: str = 'odbc', label=None):
     """获取 SQL Server 数据源（双轨）。
 
     Args:
@@ -251,6 +251,11 @@ def getData(ip, port, user, password, ssh_info=None, template_id=None,
         ssh_info: 额外参数（与 main_sqlserver 兼容；含 connection_mode 时自动路由）
         template_id: 模板 ID
         connection_mode: 'odbc' / 'jdbc' / 'auto'（优先于 ssh_info.connection_mode）
+        label: 实例显示名。仅作兼容占位——web 层（modules/web/app.py 的
+               getdata_args）对所有 SQL Server 类型统一透传该关键字参数。
+               本函数不用它参与连接或路由（路由键始终是 connection_mode），
+               仅挂到返回的 CompatWrapper 上供下游可选读取。行为与
+               main_sqlserver.getData 的 label 占位忽略保持一致。
 
     Returns:
         CompatWrapper 对象（与 main_sqlserver.getData 兼容）；失败返回 None。
@@ -283,12 +288,13 @@ def getData(ip, port, user, password, ssh_info=None, template_id=None,
             self.conn = getattr(inner_inspector, 'conn', None)
             # 兼容老代码：保留 conn_db2 字段（历史命名，无实际意义）
             self.conn_db2 = self.conn
+            # 透传实例显示名（闭包捕获外层 getData 的 label 形参）。
+            # 仅供下游 web 层可选读取，不参与任何连接/路由逻辑。
+            self.label = label
 
         def checkdb(self, sqlfile=''):
-            result = self.inspector.collect_data()
-            if isinstance(result, dict):
-                return result
-            return None
+            self.inspector.collect_data()
+            return self.inspector.context
 
         def generate_report(self, output_file, inspector_name="Jack"):
             return self.inspector.generate_report(output_file, inspector_name)

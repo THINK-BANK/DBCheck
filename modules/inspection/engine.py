@@ -2192,7 +2192,7 @@ class BaseInspectionEngine:
             tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
             for i, (label, value) in enumerate(zip(labels, cover_data)):
                 tbl.rows[i].cells[0].text = label
-                tbl.rows[i].cells[1].text = str(value)
+                tbl.rows[i].cells[1].text = self._clean_xml_str(value, max_len=200)
                 for cell in tbl.rows[i].cells:
                     cell.paragraphs[0].runs[0].font.name = '微软雅黑'
                     cell.paragraphs[0].runs[0]._element.rPr.rFonts.set(qn('w:eastAsia'), '微软雅黑')
@@ -2248,8 +2248,8 @@ class BaseInspectionEngine:
                                         cr.font.color.rgb = RGBColor(0, 51, 102)
                                         card = doc.add_table(rows=len(headers), cols=2, style='Table Grid')
                                         for kj, h in enumerate(headers):
-                                            card.rows[kj].cells[0].text = str(h)
-                                            card.rows[kj].cells[1].text = str(row_data.get(h, ''))[:500] if row_data.get(h) else ''
+                                            card.rows[kj].cells[0].text = self._clean_xml_str(h, max_len=100)
+                                            card.rows[kj].cells[1].text = self._clean_xml_str(row_data.get(h, ''), max_len=500)
                                             # Key 列背景+粗体
                                             _set_cell_bg(card.rows[kj].cells[0], 'D9E2F3')
                                             for run in card.rows[kj].cells[0].paragraphs[0].runs:

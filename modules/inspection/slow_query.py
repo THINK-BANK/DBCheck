@@ -1610,6 +1610,7 @@ def get_slow_query_analyzer(db_type: str) -> BaseSlowQueryAnalyzer:
         'hgdb':      PGSlowQueryAnalyzer,  # HGDB V9 为 PostgreSQL 14 内核，复用 PG 慢查询分析器
         'oracle':    OracleSlowQueryAnalyzer,
         'sqlserver': SQLServerSlowQueryAnalyzer,
+        'sqlserver_jdbc': SQLServerSlowQueryAnalyzer,  # SQL Server JDBC 复用 SQL Server 慢查询分析器（DMVs/查询统计同源）
         'dm':        DMSlowQueryAnalyzer,
         'mongodb':   MongoDBSlowQueryAnalyzer,
         'db2':       DB2SlowQueryAnalyzer,

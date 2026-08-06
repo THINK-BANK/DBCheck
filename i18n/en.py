@@ -1779,6 +1779,7 @@ EN = {
     "report.system_resource_disk": "Disk",
     "webui.dm_report_filename": "DMInspection_{ip}_{name}_{ts}",
     "webui.sqlserver_report_filename": "SQLServerInspection_{ip}_{name}_{ts}",
+    "webui.sqlserver_jdbc_report_filename": "SQL Server JDBC Inspection Report_{ip}_{name}_{ts}",
     "webui.tidb_report_filename": "TiDBInspection_{ip}_{name}_{ts}",
     "webui.ivorysql_report_filename": "IvorySQLInspection_{ip}_{name}_{ts}",
     "webui.yashandb_report_filename": "YashanDBInspection_{ip}_{name}_{ts}",

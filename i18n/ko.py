@@ -2779,6 +2779,7 @@ KO.update({
     "webui.si_hist_score": "점수",
     "webui.si_hist_time": "시간",
     "webui.sqlserver_report_filename": "SQLServer점검보고서_{ip}_{name}_{ts}",
+    "webui.sqlserver_jdbc_report_filename": "SQLServer(JDBC)점검보고서_{ip}_{name}_{ts}",
     "webui.ssh_config": "SSH 연결 설정",
     "webui.ssh_desc": "SSH를 구성하면 점검 보고서에 CPU, 메모리, 디스크 등 시스템 리소스 정보가 포함됩니다. 이 단계를 건너뛰고 데이터베이스 지표만 수집할 수도 있습니다.",
     "webui.ssh_ebpf_hint": "수집 에이전트는 기본적으로 의존성 없는 Shell(/proc) 방식을 사용하며, 대상 서버에 Python을 설치하지 않아도 CPU, 메모리, 디스크 등 기본 호스트 지표를 가져올 수 있습니다. 커널 수준의 eBPF 지표(디스크 p99 지연 / IOPS / 프로세스별 Top 원인)는 대상 서버에 Python3 + bcc + root가 필요합니다. 대상 서버에 Python이 설치되지 않은 경우 이 커널 지표는 '사용 불가'로 표시되지만 기본 호스트 지표에는 영향을 주지 않습니다.",

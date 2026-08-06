@@ -1837,18 +1837,25 @@ def test_sqlserver_connection(host, port, user, password, database='master'):
         return False, str(e)
 
 
-def test_sqlserver_jdbc_connection(host, port, user, password, database='master', **kwargs):
+def test_sqlserver_jdbc_connection(host, port, user, password, database='master',
+                                   jdbc_opts=None, **kwargs):
     """测试 SQL Server JDBC 连接（双轨：odbc / jdbc / auto）。
 
     Args:
         host / port / user / password / database: 标准连接参数
+        jdbc_opts: 可选 dict，JDBC 选项包。task_configs['sqlserver_jdbc'] 的
+            connect_test_args 以**第 6 个位置参数**传入该 dict（**kwargs 只能吸收
+            关键字参数，无法吸收位置参数，故需显式形参）。
         connection_mode: 'odbc' | 'jdbc' | 'auto'（默认 'odbc'，向后兼容）
         jdbc_url / instance_name / encrypt / trust_server_certificate: JDBC 专用
 
     Returns:
         (ok, msg)：ok=True 时 msg 是版本可读串（如 'Microsoft SQL Server 2019'）
     """
-    connection_mode = (kwargs.get('connection_mode') or 'odbc').lower()
+    # 合并两种传参风格：关键字参数（老调用/测试）与位置 dict（task_configs 调用）。
+    # jdbc_opts 优先级更高，因为它是任务配置显式构造的完整选项包。
+    opts = {**kwargs, **(jdbc_opts or {})}
+    connection_mode = (opts.get('connection_mode') or 'odbc').lower()
     try:
         # 走双轨入口（main_sqlserver_dual 自动按 mode 路由 JDBC/ODBC）
         from modules.entrypoints.main_sqlserver_dual import _jdbc_available
@@ -1865,10 +1872,10 @@ def test_sqlserver_jdbc_connection(host, port, user, password, database='master'
                     database=database, connection_mode=connection_mode,
                     ssh_info={
                         'database': database,
-                        'jdbc_url': kwargs.get('jdbc_url', '') or '',
-                        'instance_name': kwargs.get('instance_name', '') or '',
-                        'encrypt': bool(kwargs.get('encrypt', True)),
-                        'trust_server_certificate': bool(kwargs.get('trust_server_certificate', True)),
+                        'jdbc_url': opts.get('jdbc_url', '') or '',
+                        'instance_name': opts.get('instance_name', '') or '',
+                        'encrypt': bool(opts.get('encrypt', True)),
+                        'trust_server_certificate': bool(opts.get('trust_server_certificate', True)),
                     },
                 )
                 ok, msg = insp.connect()
@@ -2195,6 +2202,31 @@ def _ct_sqlserver(data, flavor):
     return _conn_ok('pro')
 
 
+def _ct_sqlserver_jdbc(data, flavor):
+    """SQL Server (JDBC) 连接测试：按 connection_mode 透传到双轨测试方法。"""
+    _mode = data.get('connection_mode', 'odbc')
+    _jdbc_opts = {
+        'connection_mode': _mode,
+        'jdbc_url': data.get('jdbc_url') or '',
+        'instance_name': data.get('instance_name') or '',
+        'encrypt': bool(data.get('encrypt', True)),
+        'trust_server_certificate': bool(data.get('trust_server_certificate', True)),
+    }
+    _host = data['host']
+    _port = int(data['port'])
+    _db = data.get('database', 'master')
+    if flavor == 'regular':
+        ok, msg = test_sqlserver_jdbc_connection(
+            _host, _port, data['user'], data['password'], _db, _jdbc_opts)
+        return {'ok': ok, 'msg': msg}
+    ok, msg = test_sqlserver_jdbc_connection(
+        _host, _port, data['user'], data['password'], _db, _jdbc_opts)
+    if ok:
+        return {'ok': True, 'message': msg}
+    return {'ok': False, 'error': msg} if msg else \
+        {'ok': False, 'error': 'SQL Server (JDBC) 连接测试失败'}
+
+
 def _ct_tidb(data, flavor):
     if flavor == 'regular':
         ok, msg = test_tidb_connection(data['host'], data['port'], data['user'],
@@ -2353,6 +2385,7 @@ register_connection_tester('redis', _ct_redis)
 register_connection_tester('redis-cluster', _ct_redis)
 register_connection_tester('mongodb', _ct_mongodb)
 register_connection_tester('db2', _ct_db2)
+register_connection_tester('sqlserver_jdbc', _ct_sqlserver_jdbc)
 
 
 def test_ssh_connection(host, port=22, username='root', password=None, key_file=None):
@@ -3469,6 +3502,15 @@ def api_start_inspection():
             # Redis / Redis Cluster 专用参数透传
             if db_type in ('redis', 'redis-cluster'):
                 db_info['seed_nodes'] = instance.get('seed_nodes', '')
+            # SQL Server (JDBC) 双轨驱动参数透传
+            if db_type == 'sqlserver_jdbc':
+                for _mk in ('connection_mode', 'jdbc_url', 'instance_name',
+                            'encrypt', 'trust_server_certificate'):
+                    if instance.get(_mk) is not None:
+                        db_info[_mk] = instance[_mk]
+                # 旧实例可能没有 connection_mode 字段：sqlserver_jdbc 类型缺省走 jdbc
+                if db_info.get('connection_mode') is None:
+                    db_info['connection_mode'] = 'jdbc'
         else:
             # 原有逻辑：使用手动输入的连接信息
             _meta = get_db_meta(db_type)
@@ -3505,6 +3547,15 @@ def api_start_inspection():
                 db_info['seed_nodes'] = data.get('seed_nodes', '')
                 db_info['tls_cert_key_file'] = data.get('tls_cert_key_file', '')
                 db_info['tls_allow_invalid_certs'] = bool(data.get('tls_allow_invalid_certs', False))
+            # SQL Server (JDBC) 双轨驱动参数透传
+            if db_type == 'sqlserver_jdbc':
+                for _mk in ('connection_mode', 'jdbc_url', 'instance_name',
+                            'encrypt', 'trust_server_certificate'):
+                    if data.get(_mk) is not None:
+                        db_info[_mk] = data[_mk]
+                # 未显式传入 connection_mode 时：sqlserver_jdbc 类型缺省走 jdbc
+                if db_info.get('connection_mode') is None:
+                    db_info['connection_mode'] = 'jdbc'
 
         if data.get('ssh_host'):
             db_info.update({
@@ -5617,10 +5668,11 @@ def api_pro_datasource_add():
         import uuid
 
         data = request.get_json()
+        _db_type = data.get('db_type', 'mysql')
         inst = DatabaseInstance(
             id=str(uuid.uuid4())[:12],
             name=data.get('name', ''),
-            db_type=data.get('db_type', 'mysql'),
+            db_type=_db_type,
             host=data.get('host', ''),
             port=int(data.get('port', 3306)),
             user=data.get('user', ''),
@@ -5638,6 +5690,8 @@ def api_pro_datasource_add():
             gbase_server_name=data.get('gbase_server_name', ''),
             tenant=data.get('tenant', ''),
             seed_nodes=data.get('seed_nodes', ''),
+            # SQL Server (JDBC) 类型缺省走 jdbc；其它类型保持 odbc（向后兼容）
+            connection_mode=data.get('connection_mode') or ('jdbc' if _db_type == 'sqlserver_jdbc' else 'odbc'),
             tags=data.get('tags', []),
             group=data.get('group', 'default'),
             description=data.get('description', ''),
@@ -8278,6 +8332,11 @@ def _stream_inspection_response(data, message, session_id, chat_context):
         'service_name': ds.get('service_name') or ds.get('sid'),
         'name': ds.get('name', db_name or ds.get('host', '')),
     }
+    # SQL Server (JDBC) 双轨驱动参数透传
+    if db_type == 'sqlserver_jdbc':
+        # 旧实例缺失该字段时缺省走 jdbc（显式配置的 odbc/auto 仍保留）
+        db_info['connection_mode'] = ds.get('connection_mode') or 'jdbc'
+        db_info['jdbc_url'] = ds.get('jdbc_url') or ''
 
     inspector_name = data.get('inspector_name', 'Jack')
     tasks[task_id] = {
@@ -8662,6 +8721,11 @@ def api_chat():
                 'service_name': ds.get('service_name') or ds.get('sid'),
                 'name': ds.get('name', db_name or ds.get('host', '')),
             }
+            # SQL Server (JDBC) 双轨驱动参数透传
+            if db_type == 'sqlserver_jdbc':
+                # 旧实例缺失该字段时缺省走 jdbc（显式配置的 odbc/auto 仍保留）
+                db_info['connection_mode'] = ds.get('connection_mode') or 'jdbc'
+                db_info['jdbc_url'] = ds.get('jdbc_url') or ''
 
             inspector_name = data.get('inspector_name', 'Jack')
 

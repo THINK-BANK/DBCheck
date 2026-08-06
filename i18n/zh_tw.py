@@ -2849,6 +2849,7 @@ ZH_TW = { 'baseline.add': '添加基綫配置',
   'webui.si_hist_score': '評分',
   'webui.si_hist_time': '時間',
   'webui.sqlserver_report_filename': 'SQLServer巡檢報告_{ip}_{name}_{ts}',
+  'webui.sqlserver_jdbc_report_filename': 'SQL Server (JDBC)巡檢報告_{ip}_{name}_{ts}',
   'webui.ssh_config': 'SSH 連接配置',
   'webui.ssh_desc': '配置 SSH 後，巡檢報告將包含 CPU、內存、磁盤等係統資源信息。可跳過此步驟僅采集數據庫指標。',
   'webui.ssh_ebpf_hint': '采集器默認走零依賴 Shell（/proc）方式，目標機無需安裝 Python 即可獲取 CPU、內存、磁盤等基礎宿主指標。僅「內核級 eBPF 指標」（磁盤 p99 時延 / '

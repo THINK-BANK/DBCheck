@@ -1355,6 +1355,7 @@ class AIAdvisor:
         _online_model = 'gpt-4o-mini'
         _config_api_key = ''
         _config_rag = {}
+        _cfg = {}  # ai 配置段；文件缺失/解析失败时保持空 dict，避免后续引用 NameError
         try:
             import os as _os
             _cfg_path = _os.path.join(str(PROJECT_ROOT), 'dbc_config.json')
@@ -1378,8 +1379,14 @@ class AIAdvisor:
 
         if raw_backend == 'openai':
             if not _online_enabled:
-                print("⚠️  在线模型未启用（online_enabled=false），已禁用 AI 诊断。请在 AI 设置中开启「启用在线模型」")
-                raw_backend = 'disabled'
+                # 已配置本地模型（Ollama）时不再提示「启用在线模型」——本地模型的实际启用由
+                # run_ai_diagnosis 的 backend 解析保证，此处仅禁用本次传入的 openai 后端
+                _local_model_cfg = _cfg.get('backend', 'ollama') if isinstance(_cfg, dict) else 'ollama'
+                if _local_model_cfg == 'ollama':
+                    raw_backend = 'disabled'
+                else:
+                    print("⚠️  在线模型未启用（online_enabled=false），已禁用 AI 诊断。请在 AI 设置中开启「启用在线模型」")
+                    raw_backend = 'disabled'
             # else: allow openai backend
         elif raw_backend not in ('ollama', 'disabled'):
             print(f"⚠️  不支持的 backend '{raw_backend}'，已禁用 AI 诊断")
@@ -2696,7 +2703,11 @@ def run_ai_diagnosis(db_type, label, context, issues=None, lang='zh', timeout=60
             if _os.path.exists(_p):
                 with open(_p, 'r', encoding='utf-8') as _f:
                     _ai = _json.load(_f).get('ai', {})
-                _backend = _ai.get('online_backend', 'openai') or 'openai'
+                # 与 modules/web/app.py 的 AWR 步骤解析保持一致：
+                # 在线模型开启 → 用 online_backend；未开启 → 回落到本地 backend（默认 ollama）
+                _online_on = _ai.get('online_enabled', False)
+                _backend = (_ai.get('online_backend', 'openai') or 'openai') if _online_on \
+                    else (_ai.get('backend', 'ollama') or 'ollama')
         except Exception:
             pass
         advisor = AIAdvisor(backend=_backend)

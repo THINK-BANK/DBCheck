@@ -2781,6 +2781,7 @@ DE.update({
     "webui.si_hist_score": "Wert",
     "webui.si_hist_time": "Zeit",
     "webui.sqlserver_report_filename": "SQLServerInspektionsbericht_{ip}_{name}_{ts}",
+    "webui.sqlserver_jdbc_report_filename": "SQLServer (JDBC) Inspektionsbericht_{ip}_{name}_{ts}",
     "webui.ssh_config": "SSH-Verbindungskonfiguration",
     "webui.ssh_desc": "Die SSH-Konfiguration schließt Systemressourceninformationen wie CPU, Speicher und Festplatte in den Inspektionsbericht ein. Sie können diesen Schritt auch überspringen und nur die Datenbankindikatoren sammeln.",
     "webui.ssh_ebpf_hint": "Der Sammlungsagent verwendet standardmäßig die abhängigkeitsfreie Shell-/proc-Methode, die grundlegende Host-Indikatoren wie CPU, Speicher und Festplatte abrufen kann, ohne Python auf dem Zielserver installieren zu müssen. Kernel-Ebene-eBPF-Indikatoren (Festplatten-p99-Latenz / IOPS / Top-Ursachenzuordnung pro Prozess) erfordern Python3 + bcc + root auf dem Zielserver. Wenn Python auf dem Zielserver nicht installiert ist, werden diese Kernel-Indikatoren als „nicht verfügbar“ angezeigt, was die grundlegenden Host-Indikatoren nicht beeinträchtigt.",

@@ -108,6 +108,8 @@ class DatabaseInstance:
     tls_allow_invalid_certs: int = 0  # 是否允许无效证书（0/1）
     # Redis / Redis Cluster 专用
     seed_nodes: str = ""    # 集群种子节点（逗号分隔 host:port，或 JSON 数组）
+    # SQL Server (JDBC) 专用
+    connection_mode: str = "odbc"  # 'odbc' / 'jdbc' / 'auto'，控制 SQL Server JDBC 双轨路由，默认 odbc 向后兼容
 
     def __post_init__(self):
         if self.tags is None:
@@ -194,6 +196,9 @@ class InstanceManager:
                     # sysdba / ssh_enabled / enabled 从 INTEGER 还原为 bool
                     for bool_field in ('sysdba', 'ssh_enabled', 'enabled'):
                         d[bool_field] = bool(d.get(bool_field, False))
+                    # 存量行 connection_mode 可能为 NULL/''，归一化为 'odbc'（向后兼容）
+                    if not d.get('connection_mode'):
+                        d['connection_mode'] = 'odbc'
                     inst = DatabaseInstance.from_dict(d)
                     self._instances[inst.id] = inst
                 conn.close()
@@ -293,6 +298,12 @@ class InstanceManager:
                     c.execute(f'ALTER TABLE instances ADD COLUMN "{col}" {coltype} DEFAULT \'\'')
                 except Exception:
                     pass
+            # 迁移：为旧表添加 connection_mode 列（SQL Server 双轨路由）
+            # 默认 'odbc'，保证存量实例迁移后行为完全不变（向后兼容铁律）
+            try:
+                c.execute('ALTER TABLE instances ADD COLUMN "connection_mode" TEXT DEFAULT \'odbc\'')
+            except Exception:
+                pass
             # 确保表存在
             c.execute("""
                 CREATE TABLE IF NOT EXISTS instances (
@@ -308,7 +319,8 @@ class InstanceManager:
                     ssh_key_file TEXT DEFAULT '', ssh_enabled INTEGER DEFAULT 0,
                     tags TEXT DEFAULT '[]', "group" TEXT DEFAULT 'default',
                     enabled INTEGER DEFAULT 1, description TEXT DEFAULT '',
-                    created_at TEXT DEFAULT '', updated_at TEXT DEFAULT ''
+                    created_at TEXT DEFAULT '', updated_at TEXT DEFAULT '',
+                    connection_mode TEXT DEFAULT 'odbc'
                 )
             """)
             c.execute("DELETE FROM instances")
@@ -319,8 +331,8 @@ class InstanceManager:
                     (id, name, db_type, host, port, "user", password, "database", service_name, gbase_server_name, tenant, sysdba,
                      connect_mode, auth_source, auth_mechanism, replica_set, tls, tls_ca_file, tls_cert_key_file, tls_allow_invalid_certs,
                      ssh_host, ssh_port, ssh_user, ssh_password, ssh_key_file, ssh_enabled,
-                     tags, "group", enabled, description, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     tags, "group", enabled, description, created_at, updated_at, connection_mode)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     d.get("id", ""), d.get("name", ""), d.get("db_type", ""),
                     d.get("host", ""), d.get("port", 0), d.get("user", ""),
@@ -340,7 +352,9 @@ class InstanceManager:
                     d.get("ssh_key_file", ""), 1 if d.get("ssh_enabled") else 0,
                     json.dumps(d.get("tags", []), ensure_ascii=False),
                     d.get("group", "default"), 1 if d.get("enabled", True) else 0,
-                    d.get("description", ""), d.get("created_at", ""), d.get("updated_at", "")
+                    d.get("description", ""), d.get("created_at", ""), d.get("updated_at", ""),
+                    # 空值归一化为 'odbc'，避免存量空字符串导致路由拿到无效模式
+                    d.get("connection_mode") or "odbc"
                 ))
             conn.commit()
         except Exception as e:
