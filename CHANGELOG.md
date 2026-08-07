@@ -1,5 +1,8 @@
 # Changelog
 
+## v26.8.7.1 (2026-08-07)
+- **版本号更新**：各源文件版本标记 → v26.8.7.1（version.py / version.json / skill `dbcheck` `scripts/version.py` / README + README_zh 徽章 / Dockerfile `VERSION.txt` / `scripts/build.sh` + `scripts/build-multiarch.sh` / CHANGELOG 顶段）。
+
 ## v26.8.3.1 (2026-08-03)
 - **版本号更新**：各源文件版本标记 v26.8.2.2 → v26.8.3.1（version.py / version.json / skill `dbcheck` `scripts/version.py` / README + README_zh 徽章 / Dockerfile `VERSION.txt` / `scripts/build.sh` + `scripts/build-multiarch.sh` / CHANGELOG 顶段）。
 
