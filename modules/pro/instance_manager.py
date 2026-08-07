@@ -12,6 +12,7 @@ DBCheck Pro Instance Manager
 import json
 import os
 import platform
+import shutil
 import sqlite3
 from datetime import datetime
 from typing import Dict, List, Optional, Any
@@ -35,11 +36,35 @@ def _get_fernet():
     if not _FERNET_AVAILABLE:
         return None
     import sys
-    # .db_key 必须锚定在项目根目录，禁止用 __file__ 两级上溯推算：
+    # .db_key 一律以 modules.core.paths.DB_KEY_PATH 为准，禁止用 __file__ 上溯推算：
     # pro/ 迁入 modules/pro/ 后，__file__ 上溯两级会错指 D:/DBCheck/modules，
     # 导致读取到错误位置的密钥、历史加密密码全部解密失败。
-    # 与 modules.core.paths.DB_KEY_PATH 保持一致（源码/打包两种模式均已正确处理）。
+    # 该常量现锚定 data/ 运行时持久目录（源码态 <项目根>/data/.db_key，
+    # 打包态 <exe>/_internal/data/.db_key），与 instances.db 同目录，
+    # 重装 / 重新打包覆盖 _internal 时不会连带丢失密钥。
+    # 旧版本把密钥放在项目根，因此首次启动需从旧位置自动迁移（见下）。
     key_file = str(paths.DB_KEY_PATH)
+
+    # ── 旧位置迁移（幂等）────────────────────────────────────────
+    # 仅当新位置缺失、旧位置存在时才迁移；采用 copy2 保留旧文件（保守策略），
+    # 避免与仍读取旧路径的历史组件/用户备份脚本冲突。密钥内容不变，
+    # 因此 instances.db 中已加密的密码迁移后仍可正常解密。
+    legacy_key_file = str(paths.DB_KEY_PATH_LEGACY)
+    if not os.path.exists(key_file) and os.path.exists(legacy_key_file):
+        try:
+            os.makedirs(os.path.dirname(key_file), exist_ok=True)
+            shutil.copy2(legacy_key_file, key_file)
+            print(
+                f"[InstanceManager] 已将密码加密密钥迁移到持久目录: "
+                f"{legacy_key_file} → {key_file}（内容不变，旧文件保留）"
+            )
+        except Exception as e:  # 降级：迁移失败则回退到"生成新密钥"分支前先告警
+            print(
+                f"[InstanceManager][WARN] 密钥迁移失败（{legacy_key_file} → "
+                f"{key_file}）: {e}",
+                file=sys.stderr,
+            )
+
     if not os.path.exists(key_file):
         # 密钥缺失时自动生成。若此时已存在实例库，说明密钥与数据"走散"了
         # （典型场景：打包产物携带了 data/pro_data/instances.db 却没有携带
@@ -57,6 +82,9 @@ def _get_fernet():
         except Exception:
             pass
         key = Fernet.generate_key()
+        # data/ 为运行时目录，打包首启时可能尚未创建，写入前必须先建目录，
+        # 否则 open() 会抛 FileNotFoundError 导致整个 Pro 模块不可用。
+        os.makedirs(os.path.dirname(key_file), exist_ok=True)
         with open(key_file, 'wb') as f:
             f.write(key)
     else:

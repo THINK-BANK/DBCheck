@@ -56,7 +56,12 @@ SCHEDULER_LOG = LOG_DIR / "scheduler.log"
 RESTART_LOG = LOG_DIR / "web_service_restart.log"
 PYTEST_LOG = LOG_DIR / "pytest_p0.log"
 SCHEDULER_JOBS = DATA_DIR / "scheduler_jobs.json"
-DB_KEY_PATH = PROJECT_ROOT / ".db_key"
+# 密码加密密钥：锚定 data/ 运行时持久目录（与 instances.db / inspection.db 同域）。
+# 历史上曾放在项目根（frozen 下即 <exe>/_internal/.db_key），重装或重新打包会
+# 覆盖 _internal，导致密钥丢失、历史加密的数据源密码全部无法解密。
+# 旧位置见 DB_KEY_PATH_LEGACY，首次启动由 instance_manager._get_fernet() 自动迁移。
+DB_KEY_PATH = DATA_DIR / ".db_key"
+DB_KEY_PATH_LEGACY = PROJECT_ROOT / ".db_key"
 INSPECTION_DB = DATA_DIR / "inspection.db"
 LOGO_PATH = ASSETS_DIR / "brand" / "dbcheck_logo.png"
 AWR_UPLOADS_DIR = DATA_DIR / "awr_uploads"
