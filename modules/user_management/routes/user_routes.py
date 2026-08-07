@@ -210,10 +210,12 @@ def change_password():
     if old_password == new_password:
         return jsonify({'code': 400, 'msg': '新密码不能与旧密码相同'}), 400
     # 验证旧密码
-    from modules.user_management.utils.password import verify_password, hash_password
+    from modules.user_management.utils.password import verify_password
     user = user_service.get_user(user_id)
     if not user or not verify_password(old_password, user['password']):
         return jsonify({'code': 400, 'msg': '旧密码错误'}), 400
-    # 更新密码
-    user_service.update_user(user_id, password=hash_password(new_password))
+    # 更新密码：传入明文，由 user_service.update_user 内部统一做一次 bcrypt 哈希。
+    # 注意：不要在此处预先 hash_password，否则会与 service 层再次哈希叠加成双重哈希，
+    # 导致新旧密码均无法登录（bcrypt 校验的是单次哈希）。
+    user_service.update_user(user_id, password=new_password)
     return jsonify({'code': 0, 'msg': '密码修改成功'})
