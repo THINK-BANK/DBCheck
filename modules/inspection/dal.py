@@ -243,6 +243,16 @@ def init_database(db_path: str = None):
     finally:
         conn.close()
 
+    # 补齐「已初始化的老库」缺失的 db_type 基线（例如后续新增的 KingbaseES）。
+    # _ensure_tables 里的全量初始化只在基线表为空时触发，老库不会命中；
+    # 这里用幂等方式增量补齐，不会重置任何已存在的（含用户自定义）基线。
+    # 独立连接、独立事务，失败仅告警不阻断启动。
+    try:
+        ensure_missing_db_type_baselines(db_path=db_path)
+    except Exception as e:  # 降级：补齐失败不影响数据库初始化结果
+        print(f"[巡检] 缺失基线补齐失败（已忽略）: {e}")
+
+
 def create_template(db_type: str, template_name: str, description: str = None,
                    template_name_en: str = None, version: str = 'v1', is_default: int = 0, is_preset: int = 0, db_path: str = None) -> int:
     """
@@ -1688,13 +1698,19 @@ def delete_baseline(baseline_id: int, db_path: str = None) -> bool:
         conn.close()
 
 
-def init_default_baselines(db_path: str = None):
+def _builtin_default_baselines() -> Dict[str, List[Dict[str, Any]]]:
+    """返回内置默认基线种子（按 db_type 分组）。
+
+    从 ``init_default_baselines`` 中抽取，供以下两个入口共用，
+    避免同一份种子数据在多处重复维护：
+
+    - ``init_default_baselines``：首次建库时的全量初始化；
+    - ``ensure_missing_db_type_baselines``：已有库的缺失 db_type 增量补齐。
+
+    :return: ``{db_type: [基线条目, ...]}`` 字典；条目字段与
+             ``inspection_baseline`` 表列名一一对应
     """
-    初始化默认基线配置（为所有支持的数据库类型）。
-    覆盖安全、性能、高可用、运维四个维度。
-    :param db_path: 数据库文件路径
-    """
-    default_baselines = {
+    return {
         # ═══════════════════════════════════════════
         # Oracle
         # ═══════════════════════════════════════════
@@ -1801,6 +1817,31 @@ def init_default_baselines(db_path: str = None):
         # PostgreSQL
         # ═══════════════════════════════════════════
         'postgresql': [
+            # ── 安全 ──
+            {'param_name': 'password_encryption', 'query_sql': "SHOW password_encryption", 'operator': '=', 'expected_value': 'scram-sha-256', 'risk_level': 'HIGH', 'description_zh': '密码加密应使用 scram-sha-256', 'description_en': 'Password encryption should use scram-sha-256'},
+            {'param_name': 'ssl', 'query_sql': "SHOW ssl", 'operator': '=', 'expected_value': 'on', 'risk_level': 'HIGH', 'description_zh': 'SSL 连接应开启', 'description_en': 'SSL should be enabled'},
+            {'param_name': 'log_connections', 'query_sql': "SHOW log_connections", 'operator': '=', 'expected_value': 'on', 'risk_level': 'MEDIUM', 'description_zh': '应记录连接日志', 'description_en': 'Connection logging should be enabled'},
+            {'param_name': 'log_disconnections', 'query_sql': "SHOW log_disconnections", 'operator': '=', 'expected_value': 'on', 'risk_level': 'MEDIUM', 'description_zh': '应记录断开连接日志', 'description_en': 'Disconnection logging should be enabled'},
+            # ── 性能 ──
+            {'param_name': 'max_connections', 'query_sql': "SHOW max_connections", 'operator': '>=', 'expected_value': '200', 'risk_level': 'MEDIUM', 'description_zh': '最大连接数应 >= 200', 'description_en': 'Max connections should be >= 200'},
+            {'param_name': 'shared_buffers', 'query_sql': "SHOW shared_buffers", 'operator': '>=', 'expected_value': '128MB', 'risk_level': 'MEDIUM', 'description_zh': '共享缓冲区应 >= 128MB（建议 25% 内存）', 'description_en': 'Shared buffers should be >= 128MB (recommend 25% of RAM)'},
+            {'param_name': 'work_mem', 'query_sql': "SHOW work_mem", 'operator': '>=', 'expected_value': '4MB', 'risk_level': 'LOW', 'description_zh': '工作内存应 >= 4MB', 'description_en': 'Work memory should be >= 4MB'},
+            {'param_name': 'maintenance_work_mem', 'query_sql': "SHOW maintenance_work_mem", 'operator': '>=', 'expected_value': '64MB', 'risk_level': 'LOW', 'description_zh': '维护工作内存应 >= 64MB', 'description_en': 'Maintenance work memory should be >= 64MB'},
+            {'param_name': 'effective_cache_size', 'query_sql': "SHOW effective_cache_size", 'operator': '>=', 'expected_value': '4096MB', 'risk_level': 'LOW', 'description_zh': '有效缓存大小应 >= 4GB', 'description_en': 'Effective cache size should be >= 4GB'},
+            # ── 高可用 ──
+            {'param_name': 'wal_level', 'query_sql': "SHOW wal_level", 'operator': '>=', 'expected_value': 'replica', 'risk_level': 'HIGH', 'description_zh': 'WAL 级别应 >= replica（用于复制/归档）', 'description_en': 'WAL level should be >= replica for replication/archiving'},
+            {'param_name': 'archive_mode', 'query_sql': "SHOW archive_mode", 'operator': '=', 'expected_value': 'on', 'risk_level': 'MEDIUM', 'description_zh': '归档模式应开启（用于 PITR）', 'description_en': 'Archive mode should be on for PITR'},
+            # ── 运维 ──
+            {'param_name': 'autovacuum', 'query_sql': "SHOW autovacuum", 'operator': '=', 'expected_value': 'on', 'risk_level': 'MEDIUM', 'description_zh': '自动清理（autovacuum）应开启', 'description_en': 'Autovacuum should be enabled'},
+            {'param_name': 'vacuum_cost_limit', 'query_sql': "SHOW vacuum_cost_limit", 'operator': '>=', 'expected_value': '200', 'risk_level': 'LOW', 'description_zh': 'VACUUM 成本限制应 >= 200', 'description_en': 'VACUUM cost limit should be >= 200'},
+        ],
+        # ═══════════════════════════════════════════
+        # KingbaseES 人大金仓（PostgreSQL 兼容，复用 PG 基线）
+        #   注册名 'kingbase' 与 modules/pro/rules/builtin/kingbase.yaml
+        #   的 db_types: [kingbase] 保持一致，切勿改名。
+        #   KingbaseES 支持相同的 SHOW / pg_settings 语法，参数可原样复用。
+        # ═══════════════════════════════════════════
+        'kingbase': [
             # ── 安全 ──
             {'param_name': 'password_encryption', 'query_sql': "SHOW password_encryption", 'operator': '=', 'expected_value': 'scram-sha-256', 'risk_level': 'HIGH', 'description_zh': '密码加密应使用 scram-sha-256', 'description_en': 'Password encryption should use scram-sha-256'},
             {'param_name': 'ssl', 'query_sql': "SHOW ssl", 'operator': '=', 'expected_value': 'on', 'risk_level': 'HIGH', 'description_zh': 'SSL 连接应开启', 'description_en': 'SSL should be enabled'},
@@ -2019,6 +2060,15 @@ def init_default_baselines(db_path: str = None):
         ],
     }
 
+
+def init_default_baselines(db_path: str = None):
+    """
+    初始化默认基线配置（为所有支持的数据库类型）。
+    覆盖安全、性能、高可用、运维四个维度。
+    :param db_path: 数据库文件路径
+    """
+    default_baselines = _builtin_default_baselines()
+
     conn = get_db_connection(db_path)
     cursor = conn.cursor()
     
@@ -2051,6 +2101,75 @@ def init_default_baselines(db_path: str = None):
         conn.rollback()
         print(f"[FAIL] 默认基线配置初始化失败: {e}")
         raise
+    finally:
+        conn.close()
+
+
+def ensure_missing_db_type_baselines(db_path: str = None) -> int:
+    """为「已初始化但缺失某些 db_type」的旧库幂等补齐内置基线。
+
+    背景：``init_default_baselines`` 只在 ``inspection_baseline`` 整表为空时
+    才会被调用（见 ``_ensure_tables``）。因此新增内置数据库类型（例如
+    KingbaseES）之后：
+
+    - 全新库：首次启动即包含新类型基线；
+    - 已有数据的老库：整表非空 → 永远不会补上新类型，
+      前端表现为「该数据库类型没有基线数据」。
+
+    本函数补齐这一缺口，对每个内置 db_type 采用「表中完全不存在才插入」的
+    幂等策略：
+
+    - 该 db_type 已有任意基线（含用户自定义）→ 整段跳过，绝不 DELETE、
+      不覆盖、不追加，用户改动完全保留；
+    - 该 db_type 完全缺失 → 插入内置种子。
+
+    与 ``init_default_baselines`` 的关键差异：**不含任何强制重置逻辑**
+    （后者对 gbase 做 DELETE 重置），因此可以安全地在每次启动时调用。
+
+    :param db_path: 数据库文件路径，``None`` 表示使用默认库
+    :return: 本次实际补齐的基线条数；``0`` 表示无缺失或补齐失败（已降级）
+    """
+    default_baselines = _builtin_default_baselines()
+
+    conn = get_db_connection(db_path)
+    cursor = conn.cursor()
+    inserted_count = 0
+    filled_types: List[str] = []
+
+    try:
+        for db_type, baselines in default_baselines.items():
+            # 幂等判断：该 db_type 已有任何基线则整段跳过（保护用户自定义配置）
+            cursor.execute(
+                "SELECT COUNT(*) FROM inspection_baseline WHERE db_type = ?",
+                (db_type,),
+            )
+            if cursor.fetchone()[0] > 0:
+                continue
+
+            for bl in baselines:
+                cursor.execute("""
+                    INSERT INTO inspection_baseline (
+                        db_type, param_name, query_sql, operator,
+                        expected_value, risk_level, description_zh, description_en
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, (db_type, bl['param_name'], bl['query_sql'], bl['operator'],
+                      bl['expected_value'], bl['risk_level'],
+                      bl['description_zh'], bl['description_en']))
+                inserted_count += 1
+            filled_types.append(db_type)
+
+        conn.commit()
+        if inserted_count > 0:
+            print(
+                f"[巡检] 已补齐缺失的默认基线: {', '.join(filled_types)}"
+                f"（共 {inserted_count} 条）"
+            )
+        return inserted_count
+
+    except Exception as e:  # 降级：补齐失败不阻断启动
+        conn.rollback()
+        print(f"[巡检] 缺失基线补齐跳过: {e}")
+        return 0
     finally:
         conn.close()
 
