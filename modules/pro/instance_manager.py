@@ -479,8 +479,11 @@ class InstanceManager:
                     json.dumps(d.get("tags", []), ensure_ascii=False),
                     d.get("group", "default"), 1 if d.get("enabled", True) else 0,
                     d.get("description", ""), d.get("created_at", ""), d.get("updated_at", ""),
-                    # 空值归一化为 'odbc'，避免存量空字符串导致路由拿到无效模式
-                    d.get("connection_mode") or "odbc"
+                    # 空值归一化，避免存量空字符串导致路由拿到无效模式。
+                    # sqlserver_jdbc 类型语义即 JDBC，缺省必须归一为 'jdbc'，
+                    # 否则会被固化成 'odbc'，测试连接时错误走到 pyodbc 报错。
+                    (d.get("connection_mode")
+                     or ("jdbc" if d.get("db_type") == "sqlserver_jdbc" else "odbc"))
                 ))
             conn.commit()
         except Exception as e:

@@ -881,7 +881,9 @@ def run_inspection_task(task_id, db_info, inspector_name, template_id=None, chap
         #     - 'jdbc'  → plugins/available/sqlserver_jdbc.MssqlJdbcInspector
         #     - 'auto'  → 优先 JDBC（探测 jar + JPype1），失败回退 ODBC
         #   UI 前端可在「新增 SQL Server 实例」表单中通过 connection_mode 下拉框选择；
-        #   后端通过 ssh_info['connection_mode'] 字段透传，缺省 'odbc'。
+        #   后端通过 ssh_info['connection_mode'] 字段透传。
+        #   注意：本类型缺省 / 空串一律按 'jdbc' 处理（类型语义即 JDBC，兼容旧实例）；
+        #   显式 'jdbc' 时环境不可用会直接报错，不会静默回退 ODBC。
         'sqlserver_jdbc': dict(
             module_name='main_sqlserver_dual',
             connect_test=test_sqlserver_jdbc_connection,
@@ -889,7 +891,7 @@ def run_inspection_task(task_id, db_info, inspector_name, template_id=None, chap
                 info['ip'], int(info['port']), info['user'], info['password'],
                 info.get('database', 'master'),
                 {
-                    'connection_mode': info.get('connection_mode', 'odbc'),
+                    'connection_mode': info.get('connection_mode') or 'jdbc',
                     'jdbc_url': info.get('jdbc_url', '') or '',
                     'instance_name': info.get('instance_name', '') or '',
                     'encrypt': bool(info.get('encrypt', True)),
@@ -900,14 +902,14 @@ def run_inspection_task(task_id, db_info, inspector_name, template_id=None, chap
                                        {
                                            'ssh_info': {
                                                'database': info.get('database', 'master'),
-                                               'connection_mode': info.get('connection_mode', 'odbc'),
+                                               'connection_mode': info.get('connection_mode') or 'jdbc',
                                                'jdbc_url': info.get('jdbc_url', '') or '',
                                                'instance_name': info.get('instance_name', '') or '',
                                                'encrypt': bool(info.get('encrypt', True)),
                                                'trust_server_certificate': bool(info.get('trust_server_certificate', True)),
                                            },
                                            'template_id': template_id,
-                                           'connection_mode': info.get('connection_mode', 'odbc'),
+                                           'connection_mode': info.get('connection_mode') or 'jdbc',
                                            'label': info.get('name'),
                                        }),
             conn_attr='conn',
@@ -1850,7 +1852,10 @@ def test_sqlserver_jdbc_connection(host, port, user, password, database='master'
         jdbc_opts: 可选 dict，JDBC 选项包。task_configs['sqlserver_jdbc'] 的
             connect_test_args 以**第 6 个位置参数**传入该 dict（**kwargs 只能吸收
             关键字参数，无法吸收位置参数，故需显式形参）。
-        connection_mode: 'odbc' | 'jdbc' | 'auto'（默认 'odbc'，向后兼容）
+        connection_mode: 'odbc' | 'jdbc' | 'auto'（缺省/空串 → 'jdbc'）
+            - 'jdbc'：强制 JDBC。环境不可用时**直接返回错误，绝不回退 ODBC**。
+            - 'auto'：JDBC 优先，环境不可用或连接失败时回退 ODBC。
+            - 'odbc'：直接走 pyodbc。
         jdbc_url / instance_name / encrypt / trust_server_certificate: JDBC 专用
 
     Returns:
@@ -1859,15 +1864,23 @@ def test_sqlserver_jdbc_connection(host, port, user, password, database='master'
     # 合并两种传参风格：关键字参数（老调用/测试）与位置 dict（task_configs 调用）。
     # jdbc_opts 优先级更高，因为它是任务配置显式构造的完整选项包。
     opts = {**kwargs, **(jdbc_opts or {})}
-    connection_mode = (opts.get('connection_mode') or 'odbc').lower()
+    # 本函数只服务 sqlserver_jdbc 类型：缺省 / 空串一律按 'jdbc' 处理（向后兼容旧实例）。
+    # 需要 ODBC 的场景由 'sqlserver' 类型或显式 connection_mode='odbc' 覆盖。
+    connection_mode = (opts.get('connection_mode') or 'jdbc').strip().lower()
     try:
         # 走双轨入口（main_sqlserver_dual 自动按 mode 路由 JDBC/ODBC）
-        from modules.entrypoints.main_sqlserver_dual import _jdbc_available
-        from modules.entrypoints.main_sqlserver_dual import getData as dual_getData
-        from modules.entrypoints.main_sqlserver import SQLServerInspector as _OdbcInspector
+        from modules.entrypoints.main_sqlserver_dual import jdbc_unavailable_reason
 
-        # 'auto' 时强制探测，'jdbc' 时必须 jar 可用
-        if connection_mode in ('jdbc', 'auto') and _jdbc_available():
+        # 显式 'jdbc'：环境不满足必须直接报错，**绝不静默回退 ODBC**，
+        # 否则用户会看到与所选模式无关的 unixODBC 'SQL Server' 报错（误导性极强）。
+        if connection_mode == 'jdbc':
+            _reason = jdbc_unavailable_reason()
+            if _reason:
+                return False, f'JDBC 驱动/JVM 环境不可用: {_reason}'
+
+        # 'auto' 时探测，不可用则回退 ODBC；'jdbc' 走到此处说明环境已就绪
+        if connection_mode == 'jdbc' or (
+                connection_mode == 'auto' and jdbc_unavailable_reason() is None):
             # 用 dual getData 触发 connect + 立即断开
             from modules.entrypoints.main_sqlserver_dual import SQLServerDualInspector
             try:
@@ -2207,8 +2220,11 @@ def _ct_sqlserver(data, flavor):
 
 
 def _ct_sqlserver_jdbc(data, flavor):
-    """SQL Server (JDBC) 连接测试：按 connection_mode 透传到双轨测试方法。"""
-    _mode = data.get('connection_mode', 'odbc')
+    """SQL Server (JDBC) 连接测试：按 connection_mode 透传到双轨测试方法。
+
+    缺省 / 空串 → 'jdbc'（本类型语义即 JDBC；旧实例无该字段时向后兼容）。
+    """
+    _mode = (data.get('connection_mode') or 'jdbc')
     _jdbc_opts = {
         'connection_mode': _mode,
         'jdbc_url': data.get('jdbc_url') or '',

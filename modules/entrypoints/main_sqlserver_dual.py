@@ -30,9 +30,18 @@ import sys
 import glob
 from typing import Any, Dict, List, Optional, Tuple
 
-# 确保主项目根在 sys.path（独立运行该文件也能工作）
-_HERE = os.path.dirname(os.path.abspath(__file__))
-_PROJECT_ROOT = os.path.abspath(os.path.join(_HERE, "..", ".."))
+# 项目根统一取自 modules/core/paths.py（禁止 __file__ 上溯推导项目根）。
+# 仅在“独立运行本文件”导致 modules 包尚不可导入时，才用本文件位置做一次
+# **最小 sys.path 引导**；引导后仍以 paths.PROJECT_ROOT 为唯一权威值，
+# 从而保证 frozen（PyInstaller one-folder/_internal、one-file/_MEIPASS）下路径正确。
+try:
+    from modules.core.paths import PROJECT_ROOT as _PATHS_PROJECT_ROOT
+except ImportError:  # pragma: no cover - 仅独立运行脚本时触发
+    sys.path.insert(
+        0, os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")))
+    from modules.core.paths import PROJECT_ROOT as _PATHS_PROJECT_ROOT
+
+_PROJECT_ROOT = str(_PATHS_PROJECT_ROOT)
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
@@ -85,33 +94,46 @@ def _get_jdbc_inspector_class():
     return _MssqlJdbcInspector
 
 
-def _jdbc_available() -> bool:
-    """探测 JDBC 是否可用（jar 存在 + JPype1 可导入）。
+def jdbc_unavailable_reason() -> Optional[str]:
+    """探测 JDBC 环境，返回**不可用的具体原因**；可用时返回 None。
+
+    与 :func:`_jdbc_available` 共用同一套判定条件，但保留失败细节，
+    供 connection_mode='jdbc' 显式模式下向用户报出可诊断的错误信息
+    （而不是静默回退 ODBC 后抛出无关的 unixODBC 报错）。
 
     Returns:
-        bool
+        Optional[str]: 不可用原因描述；环境完备时为 None。
     """
     # 1. JPype1 可导入
     try:
         import jpype  # noqa: F401
-    except Exception:
-        return False
+    except Exception as e:
+        return f"JPype1 未安装或导入失败（pip install JPype1）: {e}"
 
     # 2. mssql-jdbc-*.jar 存在
     drivers_dir = os.path.join(_PROJECT_ROOT, "drivers", "sqlserver")
     if not os.path.isdir(drivers_dir):
-        return False
+        return f"驱动目录不存在: {drivers_dir}"
     jars = glob.glob(os.path.join(drivers_dir, "**", "mssql-jdbc-*.jar"), recursive=True)
     if not jars:
-        return False
+        return f"未找到 mssql-jdbc-*.jar，请放置到: {drivers_dir}"
 
-    # 3. 插件 main_plugin.py 可加载
+    # 3. 插件 main_plugin.py 可加载（含 JVM 启动依赖的 Java 运行时）
     try:
         _get_jdbc_inspector_class()
-    except Exception:
-        return False
+    except Exception as e:
+        return f"SQL Server JDBC 插件加载失败（请确认已安装 Java 运行时）: {e}"
 
-    return True
+    return None
+
+
+def _jdbc_available() -> bool:
+    """探测 JDBC 是否可用（jar 存在 + JPype1 可导入 + 插件可加载）。
+
+    Returns:
+        bool
+    """
+    return jdbc_unavailable_reason() is None
 
 
 class SQLServerDualInspector:
