@@ -41,6 +41,21 @@ def _get_fernet():
     # 与 modules.core.paths.DB_KEY_PATH 保持一致（源码/打包两种模式均已正确处理）。
     key_file = str(paths.DB_KEY_PATH)
     if not os.path.exists(key_file):
+        # 密钥缺失时自动生成。若此时已存在实例库，说明密钥与数据"走散"了
+        # （典型场景：打包产物携带了 data/pro_data/instances.db 却没有携带
+        # .db_key，首次启动便生成全新密钥），历史密码将全部无法解密。
+        # 这种情况必须显式告警，否则会静默丢失所有已保存的数据源密码。
+        try:
+            _store = paths.PRO_DATA_DIR / 'instances.db'
+            if _store.exists() and _store.stat().st_size > 0:
+                print(
+                    f"[InstanceManager][WARN] 未找到密钥文件 {key_file}，"
+                    f"但检测到已存在实例库 {_store}；将生成新密钥，"
+                    f"历史数据源密码将无法解密，需要重新录入。",
+                    file=sys.stderr,
+                )
+        except Exception:
+            pass
         key = Fernet.generate_key()
         with open(key_file, 'wb') as f:
             f.write(key)
@@ -57,16 +72,99 @@ def _encrypt_pwd(password: str) -> str:
         return password
     return base64.b64encode(f.encrypt(password.encode())).decode()
 
+
+# ── 密文形态识别 ────────────────────────────────────────────────
+# Fernet token 是 urlsafe-base64 文本，二进制布局为
+#   version(1B, 固定 0x80) + timestamp(8B) + iv(16B) + ciphertext + hmac(32B)
+# 因此 token 文本恒以 'gAAAA' 开头。
+# DBCheck 的存储格式是 base64(Fernet token)（见 _encrypt_pwd），
+# 外层再 base64 一次后恒以 'Z0FBQUF' 开头。
+#
+# 注意：不能用 "长度 > 50 且含 '=' 且含 '/'" 这类启发式判断——
+# base64 结果是否含 '/' 完全取决于密文字节，含 '=' 也取决于长度是否对齐，
+# 实测 IvorySQL 数据源密文（长度 136，含 '='、不含 '/'）会被误判为明文。
+_FERNET_TOKEN_PREFIX = 'gAAAA'
+_FERNET_B64_PREFIX = 'Z0FBQUF'
+# Fernet token 最小原始长度：1 + 8 + 16 + 32 = 57 字节
+_FERNET_MIN_RAW_LEN = 57
+
+
+def _is_fernet_token(token: str) -> bool:
+    """判断字符串是否为结构合法的 Fernet token（urlsafe base64 文本）。"""
+    if not token or not token.startswith(_FERNET_TOKEN_PREFIX):
+        return False
+    try:
+        raw = base64.urlsafe_b64decode(token.encode())
+    except Exception:
+        return False
+    return len(raw) >= _FERNET_MIN_RAW_LEN and raw[0] == 0x80
+
+
+def _looks_like_encrypted_pwd(value: str) -> bool:
+    """判断字符串是否为 DBCheck 加密密文。
+
+    识别两种形态：
+      1. DBCheck 标准存储格式 ``base64(Fernet token)``（``_encrypt_pwd`` 产出）；
+      2. 裸 Fernet token（兼容历史 / 外部写入的数据）。
+
+    Args:
+        value: 待判断的字符串（可为 None）。
+
+    Returns:
+        bool: True 表示该值是密文（尚未解密），False 表示是明文或非密文。
+    """
+    if not value or not isinstance(value, str):
+        return False
+    if len(value) < 40:
+        return False
+    # 形态 1：base64(Fernet token)
+    if value.startswith(_FERNET_B64_PREFIX):
+        try:
+            inner = base64.b64decode(value.encode(), validate=True).decode('ascii')
+        except Exception:
+            return False
+        return _is_fernet_token(inner)
+    # 形态 2：裸 Fernet token
+    return _is_fernet_token(value)
+
+
 def _decrypt_pwd(encrypted: str) -> str:
+    """解密数据源密码。
+
+    语义约定（重要）：
+      - 空值：原样返回；
+      - cryptography 不可用：原样返回（无法解密，维持旧行为）；
+      - 输入不是密文形态（例如历史明文密码）：原样返回；
+      - 输入是密文但解密失败（``.db_key`` 变更 / 损坏）：返回 ``''``。
+
+    最后一条是本函数与旧实现的关键差异。旧实现在解密失败时返回原密文，
+    调用方无法区分"明文"与"密文"，导致密文被回填到表单并直接用于数据库
+    认证（表现为 password authentication failed）。返回空字符串可以让上层
+    明确感知"没有拿到明文"。
+
+    Args:
+        encrypted: 数据库中存储的密码字段值。
+
+    Returns:
+        str: 解密后的明文；解密失败时为 ``''``。
+    """
     if not encrypted:
         return encrypted
     f = _get_fernet()
     if f is None:
         return encrypted
-    try:
-        return f.decrypt(base64.b64decode(encrypted.encode())).decode()
-    except Exception:
+    if not _looks_like_encrypted_pwd(encrypted):
+        # 明文（或非 DBCheck 密文格式）直接返回，兼容历史明文数据
         return encrypted
+    try:
+        if encrypted.startswith(_FERNET_B64_PREFIX):
+            token = base64.b64decode(encrypted.encode())
+        else:
+            token = encrypted.encode()
+        return f.decrypt(token).decode()
+    except Exception:
+        # 密钥不匹配 / 密文损坏：明确返回空串，绝不回吐密文
+        return ''
 
 
 @dataclass
@@ -813,6 +911,37 @@ class InstanceManager:
         if d.get('ssh_password'):
             d['ssh_password'] = _decrypt_pwd(d['ssh_password'])
         return d
+
+    def get_all_instances_decrypted(self) -> List[Dict]:
+        """获取所有实例，``password`` / ``ssh_password`` 已解密。
+
+        专供**服务端后台连接**场景使用（实时监控采集器、监控引擎、调度器等），
+        这些场景需要真实明文密码才能建立数据库 / SSH 连接。
+
+        与 ``get_all_instances(mask_password=False)`` 的区别：后者只是"不脱敏"，
+        返回的仍是加密密文；若直接把它交给驱动去认证，会表现为
+        ``ORA-01005: null password given`` / ``password authentication failed``
+        等认证错误（密文被当成密码提交）。
+
+        解密失败（``.db_key`` 变更 / 密文损坏）的实例，其密码字段为 ``''``
+        （见 ``_decrypt_pwd`` 的语义约定），调用方可据此判断需要用户重新录入。
+
+        Returns:
+            List[Dict]: 实例字典列表，密码字段为明文。
+        """
+        result = []
+        for inst in self._instances.values():
+            # 统一转为字典（兼容对象和字典两种存储格式）
+            if isinstance(inst, dict):
+                d = inst.copy()
+            else:
+                d = inst.to_dict()
+            if d.get('password'):
+                d['password'] = _decrypt_pwd(d['password'])
+            if d.get('ssh_password'):
+                d['ssh_password'] = _decrypt_pwd(d['ssh_password'])
+            result.append(d)
+        return result
 
 
 

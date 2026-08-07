@@ -135,7 +135,10 @@ class MonitorEngine:
         """执行一轮采集"""
         try:
             im = get_instance_manager()
-            all_instances = im.get_all_instances(mask_password=False)
+            # 使用解密后的实例：本轮采集会据此建立真实数据库连接。
+            # 虽然 _collect_slow / _collect_conn 内部还会各自调用 get_instance_decrypted()，
+            # 但此处统一取明文，避免后续维护者误以为 mask_password=False 就是明文密码。
+            all_instances = im.get_all_instances_decrypted()
             instances = [i for i in all_instances if i.get('enabled', True)]
             if not instances:
                 return

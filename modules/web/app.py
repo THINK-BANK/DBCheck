@@ -40,6 +40,10 @@ if _script_dir not in sys.path:
 
 # 旧路径一次性迁移（幂等；仅当检测到遗留旧路径时触发，异常降级不阻断启动）
 from modules.core import paths
+# 巡检配置库统一走中央路径（paths 为纯路径模块，无循环导入风险）。
+# 切勿用 BASE_DIR 拼 data/inspection.db：frozen 下 BASE_DIR=<exe>，
+# 而真实运行时数据目录是 <exe>/_internal/data。
+from modules.core.paths import INSPECTION_DB
 paths.ensure_migrated()
 
 from flask import Flask, request, jsonify, render_template, Response, send_file, make_response
@@ -3731,7 +3735,7 @@ def api_get_server_thresholds():
     """获取服务器巡检阈值配置"""
     try:
         import sqlite3, os
-        db_path = os.path.join(BASE_DIR, 'data', 'inspection.db')
+        db_path = str(INSPECTION_DB)
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
@@ -3757,7 +3761,7 @@ def api_save_server_thresholds():
     """保存服务器巡检阈值配置（批量更新）"""
     try:
         import sqlite3, os, datetime
-        db_path = os.path.join(BASE_DIR, 'data', 'inspection.db')
+        db_path = str(INSPECTION_DB)
         items = request.get_json(force=True)
         if not isinstance(items, list):
             return jsonify({'success': False, 'message': '请求数据必须是数组'}), 400
@@ -5637,17 +5641,31 @@ def api_pro_datasource_decrypt(instance_id):
     """获取单个数据源（解密密码，供表单回填）"""
     try:
         from modules.pro import get_instance_manager
+        from modules.pro.instance_manager import _looks_like_encrypted_pwd
         im = get_instance_manager()
         inst = im.get_instance_decrypted(instance_id)
         if not inst:
             return jsonify({'ok': False, 'error': '数据源不存在'})
-        # 检查密码是否成功解密（失败时返回的是加密密文）
-        pwd = inst.get('password', '')
-        likely_encrypted = pwd and len(pwd) > 50 and '=' in pwd and '/' in pwd
+        # 检查密码是否成功解密：对比"解密前的原始值"与"解密后的值"。
+        # 只有当原始值确实是密文形态、且解密结果非空且不再是密文时，
+        # 才算解密成功。.db_key 变更导致解密失败时 _decrypt_pwd 返回 ''，
+        # 此处会判定为 false，前端据此清空密码框并提示重新输入，
+        # 避免把密文当明文回填并送去数据库认证。
+        raw = im.get_instance(instance_id, mask_password=False) or {}
+        raw_pwd = raw.get('password') or ''
+        pwd = inst.get('password') or ''
+        if _looks_like_encrypted_pwd(raw_pwd):
+            password_decrypted = bool(pwd) and not _looks_like_encrypted_pwd(pwd)
+        else:
+            # 原始值本就不是密文（明文旧数据 / 未设置密码），无需解密
+            password_decrypted = True
+        if not password_decrypted:
+            # 解密失败：绝不把密文回传给前端
+            inst['password'] = ''
         return jsonify({
             'ok': True,
             'datasource': inst,
-            'password_decrypted': not likely_encrypted,
+            'password_decrypted': password_decrypted,
         })
     except ImportError as e:
         import traceback
@@ -6817,15 +6835,17 @@ def api_pro_backup_run():
     """执行备份"""
     try:
         from modules.pro.backup import get_backup_manager
+        from modules.pro.instance_manager import _looks_like_encrypted_pwd
         data = request.get_json()
         conn_info = data.get('conn_info', {})
         pwd = conn_info.get('password', '')
 
-        # 诊断信息
+        # 诊断信息（密文识别复用 instance_manager 的准确判定，
+        # 旧的 "len>50 且含 = 且含 /" 启发式会漏判不含 '/' 的密文）
         diag = {
             'password_length': len(pwd),
             'password_masked': (pwd[:2] + '***') if pwd else '(empty)',
-            'likely_encrypted': pwd and len(pwd) > 50 and '=' in pwd and '/' in pwd,
+            'likely_encrypted': _looks_like_encrypted_pwd(pwd),
         }
 
         bm = get_backup_manager()
@@ -9187,10 +9207,10 @@ def api_home_stats():
         'template_count': 0,
     }
     try:
-        base_dir = BASE_DIR
-
+        # 运行时数据目录统一走中央路径：frozen 下为 <exe>/_internal/data，
+        # 与各写入方（dal / server.inspect / db_history / 插件）保持一致。
         # 1. 巡检次数（Pro版 data/history.db 中的 snapshots JOIN history_instances）
-        history_db = os.path.join(base_dir, 'data', 'history.db')
+        history_db = str(paths.DATA_DIR / 'history.db')
         if os.path.exists(history_db):
             conn = sqlite3.connect(history_db)
             conn.row_factory = sqlite3.Row
@@ -9213,7 +9233,7 @@ def api_home_stats():
             conn.close()
 
         # 2. 服务器巡检次数
-        server_db = os.path.join(base_dir, 'data', 'server_history.db')
+        server_db = str(paths.DATA_DIR / 'server_history.db')
         if os.path.exists(server_db):
             try:
                 conn = sqlite3.connect(server_db)
@@ -9237,7 +9257,7 @@ def api_home_stats():
             pass
 
         # 4. 基线配置
-        inspection_db = os.path.join(base_dir, 'data', 'inspection.db')
+        inspection_db = str(INSPECTION_DB)
         if os.path.exists(inspection_db):
             conn = sqlite3.connect(inspection_db)
             conn.row_factory = sqlite3.Row
@@ -9627,6 +9647,24 @@ def main():
             print(f"[插件] 已加载 {loaded_count} 个插件（规则插件经 PluginRegistry 注册）")
     except Exception as e:
         print(f"[插件] 初始化跳过: {e}")
+
+    # 启动时为已启用插件补齐模板/基线数据（打包发布后 data/ 为空库时必需）
+    try:
+        from modules.pluginkit.loader import seed_enabled_plugins_data
+        seeded = seed_enabled_plugins_data(_enabled_dir)
+        if seeded:
+            print(f"[插件] 已补齐 {seeded} 个插件的模板/基线数据")
+    except Exception as e:
+        print(f"[插件] 模板/基线种子数据初始化跳过: {e}")
+
+    # 确保巡检配置库存在：data/ 是运行时目录（不随包发布），打包后首次启动
+    # 时 inspection.db 并不存在，需在此建库建表并写入预设模板/阈值/基线，
+    # 否则「巡检配置管理」相关接口会报 "unable to open database file"。
+    try:
+        from modules.inspection.dal import init_database as _init_inspection_db
+        _init_inspection_db()
+    except Exception as _e:
+        print(f"[startup] 初始化 inspection.db 失败（降级继续）: {_e}")
 
     _verify_agreement_integrity()
 

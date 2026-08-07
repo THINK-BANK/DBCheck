@@ -15,26 +15,63 @@
 - 历史记录功能
 """
 
-from modules.core.paths import PROJECT_ROOT
+from modules.core.paths import INSPECTION_DB
 import sqlite3
 import json
 import os
 import sys
+import shutil
 from datetime import datetime
 from typing import List, Dict, Optional, Any
 from modules.inspection.config_baseline import _get_default_baselines
 
 
-# 数据库文件路径
-# PyInstaller 打包后 __file__ 指向 _internal 目录，需用 sys.executable 定位
-if getattr(sys, 'frozen', False):
-    _BASE_DIR = os.path.dirname(sys.executable)
-else:
-    _BASE_DIR = str(PROJECT_ROOT)
-DEFAULT_DB_PATH = os.path.join(_BASE_DIR, 'data', 'inspection.db')
+# 数据库文件路径：统一由中央路径模块 modules/core/paths.py 解析
+# - 开发态：<项目根>/data/inspection.db
+# - PyInstaller one-folder 打包态：<exe 同级>/_internal/data/inspection.db
+# 注意：不要再用 sys.executable 自行推导 <exe>/data/，打包产物中该目录并不存在
+# （spec 中 data/ 属于运行时目录、不随包分发），会导致 sqlite3 报
+# "unable to open database file"，且与插件侧的路径解析结果不一致。
+DEFAULT_DB_PATH = str(INSPECTION_DB)
 
 # 数据库初始化标记（避免每次连接都检查）
 _db_initialized = False
+
+
+def _ensure_db_dir(db_path: str) -> None:
+    """确保数据库文件所在目录存在（防御性）。
+
+    打包发布后 data/ 为运行时目录，首次启动时并不存在；若不预先创建，
+    sqlite3.connect() 会直接抛出 "unable to open database file"。
+
+    :param db_path: 数据库文件路径
+    """
+    parent = os.path.dirname(os.path.abspath(db_path))
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+
+
+def _migrate_legacy_db_if_needed() -> None:
+    """迁移历史遗留的错误位置数据库（仅打包态；幂等、失败降级）。
+
+    旧版本在 frozen 模式下把库建在 ``<exe>/data/inspection.db``，与中央路径
+    ``<exe>/_internal/data/inspection.db`` 不一致。若检测到遗留文件且新位置
+    尚未建库，则整体搬迁，避免用户已有的模板/阈值/基线配置丢失。
+    """
+    if not getattr(sys, 'frozen', False):
+        return
+    try:
+        legacy_path = os.path.join(
+            os.path.dirname(sys.executable), 'data', 'inspection.db'
+        )
+        if os.path.abspath(legacy_path) == os.path.abspath(DEFAULT_DB_PATH):
+            return
+        if os.path.exists(legacy_path) and not os.path.exists(DEFAULT_DB_PATH):
+            _ensure_db_dir(DEFAULT_DB_PATH)
+            shutil.move(legacy_path, DEFAULT_DB_PATH)
+            print(f"[巡检] 已迁移遗留数据库: {legacy_path} → {DEFAULT_DB_PATH}")
+    except Exception as e:  # 降级：迁移失败不阻断启动，后续会重新建空库
+        print(f"[巡检] 遗留数据库迁移跳过: {e}")
 
 
 def _ensure_tables(conn):
@@ -166,7 +203,10 @@ def get_db_connection(db_path: str = None) -> sqlite3.Connection:
     """
     if db_path is None:
         db_path = DEFAULT_DB_PATH
-    
+
+    # 连接前确保父目录存在（打包发布后 data/ 不随包分发，需运行时创建）
+    _ensure_db_dir(db_path)
+
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row  # 使结果可以通过列名访问
     conn.execute("PRAGMA foreign_keys = ON")  # 启用外键约束
@@ -187,6 +227,10 @@ def init_database(db_path: str = None):
     
     :param db_path: 数据库文件路径，如果为 None，则使用默认路径
     """
+    # 仅默认路径场景才尝试搬迁旧版打包遗留库（显式指定路径时不干预）
+    if db_path is None:
+        _migrate_legacy_db_if_needed()
+
     conn = get_db_connection(db_path)
     try:
         _ensure_tables(conn)

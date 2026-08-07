@@ -16,7 +16,8 @@ pro/metrics_collector.py — 实时监控采集器（v2.10）
 
 设计要点：
   - 采集器运行在 web_ui 进程内（与 socketio 同进程），才能实时推流。
-  - 连接信息取自 instance_manager 的 get_instance_decrypted()，复用其连接参数与加密逻辑。
+  - 连接信息取自 instance_manager 的 get_all_instances_decrypted()，密码已解密为明文；
+    切勿改用 get_all_instances(mask_password=False)——那样拿到的是密文，会导致认证失败。
   - 每个指标的采集都包在 try/except 中，单点失败不影响整体循环。
 """
 
@@ -1449,10 +1450,14 @@ class MetricsCollector:
         try:
             from modules.pro import get_instance_manager
             im = get_instance_manager()
-            # 注意：采集器在服务端运行，需要真实密码才能建立数据库连接，
-            # 因此不能用 mask_password=True（会把密码替换为 ****）。
-            # 参考 scheduler.py / monitor_engine.py 的做法：使用 False 或 get_instance_decrypted()。
-            raw_instances = im.get_all_instances(mask_password=False)
+            # 注意：采集器在服务端运行，需要真实**明文**密码才能建立数据库 / SSH 连接。
+            # 这里必须用 get_all_instances_decrypted()：
+            #   - mask_password=True  → 密码被替换成 '****'；
+            #   - mask_password=False → 密码是 Fernet 密文（**不是**明文！）。
+            # 早期误用 mask_password=False，密文被原样传给 oracledb / Oracle JDBC 等驱动，
+            # 表现为 ORA-01005: null password given / ORA-28000: account is locked，
+            # 并因连续失败触发断路器，导致前端实时监控数据源下拉框为空。
+            raw_instances = im.get_all_instances_decrypted()
         except Exception as e:
             return [{'error': 'collector tick failed: %s' % str(e)[:200]}]
 
