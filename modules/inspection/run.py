@@ -44,6 +44,7 @@ from modules.core import paths
 paths.ensure_migrated()
 
 SCRIPT_DIR = str(PROJECT_ROOT)
+ENTRYPOINT_DIR = os.path.join(str(PROJECT_ROOT), "modules", "entrypoints")
 
 
 def _record_inspection(db_type, db_info, ret, report_path):
@@ -109,7 +110,7 @@ def run_mysql(db_info, inspector_name, ssh_info=None):
     """执行 MySQL 巡检"""
     import importlib.util
 
-    spec = importlib.util.spec_from_file_location("main_mysql", os.path.join(SCRIPT_DIR, "main_mysql.py"))
+    spec = importlib.util.spec_from_file_location("main_mysql", os.path.join(ENTRYPOINT_DIR, "main_mysql.py"))
     mod = importlib.util.module_from_spec(spec)
 
     class _FakeInfos:
@@ -170,7 +171,7 @@ def run_mariadb(db_info, inspector_name, ssh_info=None):
     """执行 MariaDB 巡检（复用 MySQL 连接逻辑，仅模块/模板标识为 mariadb）"""
     import importlib.util
 
-    spec = importlib.util.spec_from_file_location("main_mariadb", os.path.join(SCRIPT_DIR, "main_mariadb.py"))
+    spec = importlib.util.spec_from_file_location("main_mariadb", os.path.join(ENTRYPOINT_DIR, "main_mariadb.py"))
     mod = importlib.util.module_from_spec(spec)
 
     class _FakeInfos:
@@ -231,7 +232,7 @@ def run_oceanbase(db_info, inspector_name, ssh_info=None):
     """执行 OceanBase（MySQL 租户）巡检（复用 main_oceanbase 的连接与模板逻辑）"""
     import importlib.util
 
-    spec = importlib.util.spec_from_file_location("main_oceanbase", os.path.join(SCRIPT_DIR, "main_oceanbase.py"))
+    spec = importlib.util.spec_from_file_location("main_oceanbase", os.path.join(ENTRYPOINT_DIR, "main_oceanbase.py"))
     mod = importlib.util.module_from_spec(spec)
 
     class _FakeInfos:
@@ -291,7 +292,7 @@ def run_pg(db_info, inspector_name, ssh_info=None):
     """执行 PostgreSQL 巡检"""
     import importlib.util
 
-    spec = importlib.util.spec_from_file_location("main_pg", os.path.join(SCRIPT_DIR, "main_pg.py"))
+    spec = importlib.util.spec_from_file_location("main_pg", os.path.join(ENTRYPOINT_DIR, "main_pg.py"))
     mod = importlib.util.module_from_spec(spec)
 
     class _FakeInfos:
@@ -352,7 +353,7 @@ def run_oracle_full(db_info, inspector_name, ssh_info=None):
     import importlib.util, re, glob
 
     spec = importlib.util.spec_from_file_location(
-        "main_oracle_full", os.path.join(SCRIPT_DIR, "main_oracle_full.py"))
+        "main_oracle_full", os.path.join(ENTRYPOINT_DIR, "main_oracle_full.py"))
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
 
@@ -429,7 +430,7 @@ def run_dm(db_info, inspector_name, ssh_info=None):
     """执行 DM8 达梦巡检"""
     import importlib.util
 
-    spec = importlib.util.spec_from_file_location("main_dm", os.path.join(SCRIPT_DIR, "main_dm.py"))
+    spec = importlib.util.spec_from_file_location("main_dm", os.path.join(ENTRYPOINT_DIR, "main_dm.py"))
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
 
@@ -477,7 +478,7 @@ def run_sqlserver(db_info, inspector_name, ssh_info=None):
     """执行 SQL Server 巡检"""
     import importlib.util
 
-    spec = importlib.util.spec_from_file_location("main_sqlserver", os.path.join(SCRIPT_DIR, "main_sqlserver.py"))
+    spec = importlib.util.spec_from_file_location("main_sqlserver", os.path.join(ENTRYPOINT_DIR, "main_sqlserver.py"))
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
 
@@ -512,7 +513,7 @@ def run_tidb(db_info, inspector_name, ssh_info=None):
     """执行 TiDB 巡检"""
     import importlib.util
 
-    spec = importlib.util.spec_from_file_location("main_tidb", os.path.join(SCRIPT_DIR, "main_tidb.py"))
+    spec = importlib.util.spec_from_file_location("main_tidb", os.path.join(ENTRYPOINT_DIR, "main_tidb.py"))
     mod = importlib.util.module_from_spec(spec)
 
     class _FakeInfos:
@@ -573,7 +574,7 @@ def run_ivorysql(db_info, inspector_name, ssh_info=None):
     """执行 IvorySQL 巡检"""
     import importlib.util
 
-    spec = importlib.util.spec_from_file_location("main_ivorysql", os.path.join(SCRIPT_DIR, "main_ivorysql.py"))
+    spec = importlib.util.spec_from_file_location("main_ivorysql", os.path.join(ENTRYPOINT_DIR, "main_ivorysql.py"))
     mod = importlib.util.module_from_spec(spec)
 
     class _FakeInfos:
@@ -633,7 +634,7 @@ def run_yashandb(db_info, inspector_name, ssh_info=None):
     """执行崖山 YashanDB 巡检"""
     import importlib.util
 
-    spec = importlib.util.spec_from_file_location("main_yashandb", os.path.join(SCRIPT_DIR, "main_yashandb.py"))
+    spec = importlib.util.spec_from_file_location("main_yashandb", os.path.join(ENTRYPOINT_DIR, "main_yashandb.py"))
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
 
@@ -679,7 +680,7 @@ def run_gbase(db_info, inspector_name, ssh_info=None):
     """执行 GBase 8s 巡检"""
     import importlib.util
     spec = importlib.util.spec_from_file_location(
-        "main_gbase", os.path.join(SCRIPT_DIR, "main_gbase.py"))
+        "main_gbase", os.path.join(ENTRYPOINT_DIR, "main_gbase.py"))
     mod = importlib.util.module_from_spec(spec)
 
     class _FakeInfos:
@@ -721,7 +722,7 @@ def run_kingbase(db_info, inspector_name, ssh_info=None):
     """执行 KingbaseES 巡检"""
     import importlib.util
 
-    spec = importlib.util.spec_from_file_location("main_kingbase", os.path.join(SCRIPT_DIR, "main_kingbase.py"))
+    spec = importlib.util.spec_from_file_location("main_kingbase", os.path.join(ENTRYPOINT_DIR, "main_kingbase.py"))
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
 
