@@ -58,6 +58,74 @@ def _save_jobs(jobs):
         logger.error('保存任务配置失败: %s', e)
 
 
+def _run_plugin_inspection(db_info, inspector_name, ssh_info):
+    """为插件类型（如 hgdb_jdbc）执行定时巡检。
+
+    通过 plugin.json 中的 main_class 实例化 inspector，走
+    connect -> collect_data -> generate_report 标准流程。
+    """
+    db_type = db_info.get('db_type')
+    if not db_type:
+        raise ValueError('db_type 为空')
+
+    from modules.pluginkit.loader import discover_plugins
+    plugins = discover_plugins()
+    plugin_meta = None
+    for p in plugins:
+        if p.get('enabled') and p.get('db_type') == db_type:
+            plugin_meta = p
+            break
+
+    if not plugin_meta:
+        raise ValueError('不支持的数据库类型: %s' % db_type)
+
+    plugin_path = plugin_meta.get('path')
+    main_file = plugin_meta.get('main_file', 'main_plugin.py')
+    main_class = plugin_meta.get('main_class')
+    if not plugin_path or not main_class:
+        raise ValueError('插件元数据不完整: %s' % db_type)
+
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        'scheduled_plugin_%s' % db_type,
+        os.path.join(plugin_path, main_file)
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    inspector_cls = getattr(module, main_class, None)
+    if not inspector_cls:
+        raise ValueError('插件主类未找到: %s.%s' % (db_type, main_class))
+
+    host = db_info.get('host', '')
+    port = db_info.get('port', 3306)
+    user = db_info.get('user', '')
+    password = db_info.get('password', '')
+    database = db_info.get('database') or db_info.get('default_database') or ''
+
+    inspector = inspector_cls(
+        host, port, user, password,
+        database=database,
+        ssh_info=ssh_info
+    )
+    ok, msg = inspector.connect()
+    if not ok:
+        raise RuntimeError('插件数据库连接失败: %s' % msg)
+
+    inspector.collect_data()
+
+    # Generate output filename consistent with built-in runners
+    from datetime import datetime
+    ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+    safe_label = ''.join(c if c.isalnum() or c in '-_' else '_' for c in (db_info.get('label') or db_type))
+    output_dir = str(paths.REPORTS_DIR)
+    os.makedirs(output_dir, exist_ok=True)
+    ofile = os.path.join(output_dir, '%s_%s_%s.docx' % (db_type, safe_label, ts))
+
+    report_file = inspector.generate_report(ofile, inspector_name)
+    return report_file
+
+
 def _run_inspection(job_id, db_info, inspector_name, notify_on_done):
     """
     执行巡检并发送通知（在独立线程中运行）
@@ -110,33 +178,30 @@ def _run_inspection(job_id, db_info, inspector_name, notify_on_done):
                 'ssh_key_file': db_info.get('ssh_key_file', ''),
             }
 
-        # 执行巡检
-        if db_type == 'mysql':
-            report_file, *_ = run_mysql(db_info, inspector_name, ssh_info)
-        elif db_type == 'pg':
-            report_file, *_ = run_pg(db_info, inspector_name, ssh_info)
-        elif db_type == 'oracle_full':
-            report_file, *_ = run_oracle_full(db_info, inspector_name, ssh_info)
-        elif db_type == 'dm':
-            report_file, *_ = run_dm(db_info, inspector_name, ssh_info)
-        elif db_type == 'sqlserver':
-            report_file, *_ = run_sqlserver(db_info, inspector_name, ssh_info)
-        elif db_type == 'tidb':
-            report_file, *_ = run_tidb(db_info, inspector_name, ssh_info)
-        elif db_type == 'mariadb':
-            report_file, *_ = run_mariadb(db_info, inspector_name, ssh_info)
-        elif db_type == 'oceanbase':
-            report_file, *_ = run_oceanbase(db_info, inspector_name, ssh_info)
-        elif db_type == 'ivorysql':
-            report_file, *_ = run_ivorysql(db_info, inspector_name, ssh_info)
-        elif db_type == 'yashandb':
-            report_file, *_ = run_yashandb(db_info, inspector_name, ssh_info)
-        elif db_type == 'gbase':
-            report_file, *_ = run_gbase(db_info, inspector_name, ssh_info)
-        elif db_type == 'kingbase':
-            report_file, *_ = run_kingbase(db_info, inspector_name, ssh_info)
+        # Build runner map for built-in db_types (oracle_full -> oracle_full, oracle -> oracle_full)
+        runner_map = {
+            'mysql': run_mysql,
+            'mariadb': run_mariadb,
+            'oceanbase': run_oceanbase,
+            'pg': run_pg,
+            'oracle': run_oracle_full,
+            'oracle_full': run_oracle_full,
+            'dm': run_dm,
+            'sqlserver': run_sqlserver,
+            'tidb': run_tidb,
+            'ivorysql': run_ivorysql,
+            'yashandb': run_yashandb,
+            'gbase': run_gbase,
+            'kingbase': run_kingbase,
+        }
+
+        if db_type in runner_map:
+            report_file, *_ = runner_map[db_type](db_info, inspector_name, ssh_info)
         else:
-            raise ValueError('不支持的数据库类型: %s' % db_type)
+            report_file = _run_plugin_inspection(db_info, inspector_name, ssh_info)
+
+        if not report_file:
+            raise RuntimeError('Word 报告渲染失败')
 
         logger.info('[%s] 巡检完成: %s', job_id, report_file)
 
