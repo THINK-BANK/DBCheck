@@ -208,6 +208,19 @@ def _init_plugin_templates(plugin_dir: Path) -> None:
         description = None
         is_default = 1
         is_preset = 1
+        # 兼容 sql_templates.json 的两种顶层结构：
+        #   - dict：{ "chapters": [ { ..., "queries": [...] } ] }（mongodb / redis / redis-cluster）
+        #   - list：裸 queries 列表，无 chapter 包裹（oracle_jdbc）→ 包成一个默认章节
+        if isinstance(config, list):
+            raw_chapters = [{
+                'chapter_number': 1,
+                'chapter_title_zh': f"{db_type.upper()} 默认章节",
+                'chapter_title_en': '',
+                'description': None,
+                'queries': config,
+            }]
+        else:
+            raw_chapters = config.get('chapters', [])
         chapters = [{
             'number': c.get('chapter_number', 1),
             'title_zh': c.get('chapter_title_zh', '未命名章节'),
@@ -215,12 +228,12 @@ def _init_plugin_templates(plugin_dir: Path) -> None:
             'desc': c.get('description'),
             'queries': [{
                 'key': q.get('key', ''),
-                'sql': q.get('command', q.get('query_sql', '')),
+                'sql': q.get('command', q.get('query_sql', q.get('sql', ''))),
                 'desc_zh': q.get('desc_zh', ''),
                 'desc_en': q.get('desc_en', ''),
                 'sort': q.get('sort_order', 1),
             } for q in c.get('queries', [])]
-        } for c in config.get('chapters', [])]
+        } for c in raw_chapters]
     elif data_path.exists():
         config = json.loads(data_path.read_text(encoding='utf-8'))
         db_type = _plugin_db_type(plugin_dir)
@@ -308,8 +321,18 @@ def _init_plugin_baselines(plugin_dir: Path) -> None:
     data_path = plugin_dir / "baseline_data.json"
     if json_path.exists():
         config = json.loads(json_path.read_text(encoding='utf-8'))
-        db_type = config.get('db_type', plugin_dir.name)
-        baselines = config.get('baselines', [])
+        # 兼容 baselines.json 的两种顶层结构：
+        #   - dict：{ "db_type": ..., "baselines": [ {...} ] }（mongodb）
+        #   - list：裸 baselines 列表，无 db_type 包裹
+        if isinstance(config, list):
+            if not config:
+                print(f"[Plugin] baselines.json 为空，跳过基线初始化")
+                return
+            db_type = config[0].get('db_type', plugin_dir.name)
+            baselines = config
+        else:
+            db_type = config.get('db_type', plugin_dir.name)
+            baselines = config.get('baselines', [])
     elif data_path.exists():
         items = json.loads(data_path.read_text(encoding='utf-8'))
         if not isinstance(items, list) or not items:
