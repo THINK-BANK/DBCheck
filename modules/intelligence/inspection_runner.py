@@ -15,8 +15,13 @@ import os
 import sys
 from typing import Any, Dict, List, Optional
 
-# 确保项目根目录在 sys.path（与 web_ui 运行环境一致）
-_SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+from modules.core import paths
+
+# 确保项目根目录在 sys.path（与 web_ui 运行环境一致）。
+# 一律以 modules.core.paths.PROJECT_ROOT 为准，禁止用 __file__ 上溯推算：
+# intelligence/ 迁入 modules/intelligence/ 后，__file__ 上溯两级只到
+# D:/DBCheck/modules，插入的并非项目根，本注释所述保障实际失效。
+_SCRIPT_DIR = str(paths.PROJECT_ROOT)
 
 
 def _db_default(db_type: str) -> str:

@@ -12,21 +12,80 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sqlite3
+import sys
 import threading
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-_BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_DB_PATH = os.path.join(_BASE, "data", "intelligence_diagnoses.db")
+from modules.core import paths
+
+# 诊断库一律以 modules.core.paths.DATA_DIR 为准，禁止用 __file__ 上溯推算：
+# intelligence/ 迁入 modules/intelligence/ 后，__file__ 上溯两级只到
+# D:/DBCheck/modules，会把库错写到 modules/data/intelligence_diagnoses.db，
+# 与 inspection.db / instances.db 等运行时数据脱离同一持久目录。
+_DB_PATH = str(paths.DATA_DIR / "intelligence_diagnoses.db")
+
+# 旧（错误）位置：仅用于一次性幂等迁移，见 _migrate_legacy_db()
+_DB_PATH_LEGACY = str(
+    paths.PROJECT_ROOT / "modules" / "data" / "intelligence_diagnoses.db"
+)
 
 _LOCK = threading.Lock()
+# 迁移专用锁：与 _LOCK 分离，避免与 _init_db 的 `with _LOCK` 形成嵌套
+_MIGRATE_LOCK = threading.Lock()
+
+_MIGRATED = False
 
 _SEV_ORDER = {"critical": 3, "warning": 2, "info": 1}
 
 
 def _now() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _migrate_legacy_db() -> None:
+    """把错写在 modules/data/ 的旧诊断库幂等迁移到 data/。
+
+    迁移条件（保守，严格避免覆盖既有数据）：
+      - 新位置 data/intelligence_diagnoses.db **不存在**；且
+      - 旧位置 modules/data/intelligence_diagnoses.db 存在。
+    采用 ``shutil.copy2`` 只复制、**保留旧文件**（与 instance_manager 的
+    ``.db_key`` 迁移同策略），避免任何数据丢失风险。
+    先复制到同目录临时文件再 ``os.replace`` 落位，保证其它线程要么看不到新库、
+    要么看到完整新库，不会读到复制到一半的残缺文件。
+    降级策略：迁移失败仅告警，不阻断启动（新库会自动重新建表）。
+    """
+    global _MIGRATED
+    if _MIGRATED:
+        return
+    with _MIGRATE_LOCK:
+        if _MIGRATED:  # 双检：并发下只执行一次
+            return
+        _MIGRATED = True
+        tmp = _DB_PATH + ".migrating"
+        try:
+            if os.path.exists(_DB_PATH) or not os.path.exists(_DB_PATH_LEGACY):
+                return
+            os.makedirs(os.path.dirname(_DB_PATH), exist_ok=True)
+            shutil.copy2(_DB_PATH_LEGACY, tmp)
+            os.replace(tmp, _DB_PATH)  # 同目录原子落位
+            print(
+                f"[diagnosis_store] 已将诊断历史库迁移到持久目录: "
+                f"{_DB_PATH_LEGACY} → {_DB_PATH}（内容不变，旧文件保留）"
+            )
+        except Exception as e:  # 降级：迁移失败不阻断启动
+            print(
+                f"[diagnosis_store][WARN] 诊断历史库迁移失败（{_DB_PATH_LEGACY} → "
+                f"{_DB_PATH}）: {e}",
+                file=sys.stderr,
+            )
+            try:  # 清理残留临时文件，避免污染 data/
+                if os.path.exists(tmp):
+                    os.remove(tmp)
+            except OSError:
+                pass
 
 
 def _conn() -> sqlite3.Connection:
@@ -37,6 +96,7 @@ def _conn() -> sqlite3.Connection:
 
 
 def _init_db():
+    _migrate_legacy_db()
     with _LOCK, _conn() as c:
         c.execute("""
             CREATE TABLE IF NOT EXISTS diagnoses (

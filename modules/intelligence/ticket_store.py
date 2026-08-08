@@ -17,8 +17,12 @@ import threading
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-_BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_DB_PATH = os.path.join(_BASE, "data", "intelligence_tickets.db")
+from modules.core import paths
+
+# 工单库一律以 modules.core.paths.DATA_DIR 为准，禁止用 __file__ 上溯推算：
+# intelligence/ 迁入 modules/intelligence/ 后，__file__ 上溯两级只到
+# D:/DBCheck/modules，会把库错写到 modules/data/intelligence_tickets.db。
+_DB_PATH = str(paths.DATA_DIR / "intelligence_tickets.db")
 
 STATUS_OPEN = "open"
 STATUS_IN_PROGRESS = "in_progress"

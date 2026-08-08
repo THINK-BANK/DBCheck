@@ -13,7 +13,21 @@ DBCheck 官方插件 —— 数据库字符集与排序规则检查
 - GBase 8s: 检查数据库语言环境
 """
 import sys, os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+# 项目根目录一律以 modules.core.paths.PROJECT_ROOT 为准。
+# 历史写法 dirname×3 只上溯到 <项目根>/plugins（本文件位于
+# <项目根>/plugins/<available|enabled>/<插件目录>/__init__.py，需上溯四级），
+# 导致这条 sys.path 引导实际失效，只能靠宿主进程恰好已把项目根加入 sys.path。
+try:
+    from modules.core import paths as _paths
+    _PROJECT_ROOT = str(_paths.PROJECT_ROOT)
+except ImportError:
+    # 引导兜底：项目根尚未进入 sys.path 时无法 import modules.core，
+    # 此处按本文件层级上溯四级定位项目根（仅用于引导，不作常规路径来源）。
+    _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.dirname(os.path.abspath(__file__)))))
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
 
 from modules.pluginkit.core import InspectionPlugin, InspectionQuery, RiskItem, register
 

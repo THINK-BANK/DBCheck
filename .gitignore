@@ -146,6 +146,13 @@ data/.migration_manifest.json
 .migration_backup/
 .migration_manifest.json
 
+# 历史路径 Bug（__file__ 上溯少一级）曾把智能诊断/工单库错写到
+# modules/data/ 下。源码已改为统一走 modules.core.paths.DATA_DIR；
+# 此处防御性忽略该目录及其内部全部文件，避免 `git add -A` 把运行时
+# 数据库误提交进源码树（用 /** 通配确保对目录内文件同样生效）。
+modules/data/
+modules/data/**
+
 # 说明：data/ 未做整目录忽略，原因有二：
 #   1) 现有各运行时子路径（reports/backups/pro_data/user_db/logs/awr_uploads/
 #      *.db/scheduler_jobs.json 等）已逐一忽略，覆盖率完整；

@@ -25,9 +25,19 @@ import traceback
 from datetime import datetime
 from pathlib import Path
 
-# 添加项目根目录到路径，以便导入 BaseInspectionEngine
-_project_root = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(_project_root))
+# 添加项目根目录到路径，以便导入 BaseInspectionEngine。
+# 项目根一律以 modules.core.paths.PROJECT_ROOT 为准；历史写法
+# Path(__file__).parent.parent.parent 只上溯到 <项目根>/plugins
+# （本文件位于 <项目根>/plugins/<available|enabled>/mongodb/），引导实际失效。
+try:
+    from modules.core import paths as _paths
+    _project_root = str(_paths.PROJECT_ROOT)
+except ImportError:
+    # 引导兜底：项目根尚未进入 sys.path 时无法 import modules.core，
+    # 此处按本文件层级上溯四级定位项目根（仅用于引导，不作常规路径来源）。
+    _project_root = str(Path(__file__).resolve().parent.parent.parent.parent)
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
 
 # 插件自身目录也加入 sys.path（loader 动态加载时不会自动加），以便裸导入同级模块
 _plugin_dir = str(Path(__file__).parent)

@@ -813,9 +813,19 @@ def create_sample_plugin(plugin_name: str, db_type: str, output_dir: str = None)
 import sys
 from pathlib import Path
 
-# 添加项目根目录到路径，以便导入 BaseInspectionEngine
-_project_root = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(_project_root))
+# 添加项目根目录到路径，以便导入 BaseInspectionEngine。
+# 项目根一律以 modules.core.paths.PROJECT_ROOT 为准；本文件位于
+# <项目根>/plugins/<available|enabled>/<插件目录>/main_plugin.py，
+# 需上溯四级才到项目根（历史模板只写三级，会错停在 <项目根>/plugins）。
+try:
+    from modules.core import paths as _paths
+    _project_root = str(_paths.PROJECT_ROOT)
+except ImportError:
+    # 引导兜底：项目根尚未进入 sys.path 时无法 import modules.core，
+    # 此处按本文件层级上溯四级定位项目根（仅用于引导，不作常规路径来源）。
+    _project_root = str(Path(__file__).resolve().parent.parent.parent.parent)
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
 
 from modules.inspection.engine import BaseInspectionEngine
 

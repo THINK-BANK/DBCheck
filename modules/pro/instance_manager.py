@@ -677,8 +677,11 @@ class InstanceManager:
                             else:
                                 _sub, _mk = None, None
                             if _sub:
-                                _base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                                _bd = os.path.join(_base, 'drivers', 'oracle_client', _sub)
+                                # 随包 Instant Client 目录一律以 paths.PROJECT_ROOT 为准，
+                                # 禁止用 __file__ 上溯推算：pro/ 迁入 modules/pro/ 后，
+                                # 上溯两级只到 D:/DBCheck/modules，会去找不存在的
+                                # modules/drivers/oracle_client/<平台>，导致厚模式回退失败。
+                                _bd = str(paths.PROJECT_ROOT / 'drivers' / 'oracle_client' / _sub)
                                 _dir_exists = os.path.isdir(_bd)
                                 _marker_exists = os.path.isfile(os.path.join(_bd, _mk)) if _dir_exists else False
                                 print(f'[Oracle Thick Mode] Bundled dir={_bd}, dir_exists={_dir_exists}, marker_exists={_marker_exists}', flush=True)
