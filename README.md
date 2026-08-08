@@ -242,11 +242,11 @@ DBCheck supports more than 20 database systems:
 > **Note:** Oracle (JDBC) is an independent plugin based on JDBC (JPype) connections, providing the same inspection capabilities as Oracle native drivers, suitable for scenarios where Oracle clients cannot be installed.
 
 ---
-
-## 🐳 Docker Quick Start (Recommended)
+## Quick Start
+### Docker Quick Start (Recommended)
 
 One command to get started — no dependencies required:
-
+#### 1、docker images
 ```bash
 # Docker Hub
 docker pull jackge12345/dbcheck:latest
@@ -265,9 +265,7 @@ docker run -d -p 5003:5003 \
   ghcr.io/fiyo/dbcheck:latest
 ```
 
-Visit **http://localhost:5003**. Default credentials are `admin` / `admin123` (change your password in Account Center after first login).
-
-### docker-compose (Recommended)
+#### docker-compose
 
 ```bash
 curl -o deploy/docker-compose.yml https://raw.githubusercontent.com/fiyo/DBCheck/main/deploy/docker-compose.yml
@@ -278,14 +276,14 @@ docker compose -f deploy/docker-compose.yml up -d
 
 ---
 
-## Source Installation Quick Start
+### Source Installation Quick Start
 
-### Requirements
+#### 1. Requirements
 
 - Python 3.10+
 - Database-specific Python drivers (see table above)
 
-**1. Pull local model**
+#### 2. Pull local model
 
 Install Olama locally and use the following command to pull the model:
 
@@ -293,7 +291,7 @@ Install Olama locally and use the following command to pull the model:
 ollama pull qwen3:30b          # Pull diagnostic model (larger = better)
 ollama pull nomic-embed-text    # Pull RAG embedding model (required for knowledge base)
 ```
-**3. Clone the repository and Install dependencies**
+#### 3. Clone the repository and Install dependencies
 ```bash
 # Clone the repository
 git clone https://github.com/fiyo/DBCheck.git
@@ -303,15 +301,13 @@ cd DBCheck
 pip install -r deploy/requirements.txt
 
 ```
-**3. Start Web UI**
+#### 4. Start Web UI
 ```
 python web_ui.py
 ```
 
-Visit **http://localhost:5003**. Default credentials are `admin` / `admin123` (change your password in Account Center after first login).
 
-
-## Distribution Packaging
+### Distribution Packaging
 
 Package as a single executable using PyInstaller:
 
@@ -327,6 +323,9 @@ pyinstaller build/dbcheck_linux.spec
 cd dist
 ./dbcheck
 ```
+### Visit WebUI
+
+Visit **http://localhost:5003**. Default credentials are `admin` / `admin123` (change your password in Account Center after first login).
 
 ---
 

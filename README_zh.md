@@ -307,16 +307,6 @@ DBCheck 提供完整 Web UI：
 - 趋势分析
 - 插件管理
 
-
----
-
-# 🐳 Docker 快速部署
-
-
-DBCheck 提供 Docker 镜像。
-
-无需复杂环境配置即可快速运行。
-
 ---
 
 ## 支持的数据库
@@ -348,13 +338,18 @@ DBCheck 提供 Docker 镜像。
 > **说明**：Oracle (JDBC) 是基于 JDBC (JPype) 连接的独立插件，提供与 Oracle 原生驱动相同的巡检能力，适合无法安装 Oracle 客户端的场景。
 
 ---
+## 快速上手
 
-## 🐳 Docker 快速上手（推荐）
+### 一、Docker 快速上手（推荐）
 
+Docker 可以使用以下两种方式：
+
+#### 1、docker images
 一条命令启动，无需安装任何依赖：
 
 ```bash
-# Docker Hub
+# 两个 Docker 镜像源，选择其一
+# 1、Docker Hub
 docker pull jackge12345/dbcheck:latest
 docker run -d -p 5003:5003 \
   -v dbcheck_data:/app/data \
@@ -362,7 +357,7 @@ docker run -d -p 5003:5003 \
   --name dbcheck \
   jackge12345/dbcheck:latest
 
-# GitHub Container Registry（国内友好）
+# 2、GitHub Container Registry
 docker pull ghcr.io/fiyo/dbcheck:latest
 docker run -d -p 5003:5003 \
   -v dbcheck_data:/app/data \
@@ -371,29 +366,21 @@ docker run -d -p 5003:5003 \
   ghcr.io/fiyo/dbcheck:latest
 ```
 
-访问 **http://localhost:5003**，默认账号为 `admin`，密码为 `admin123`（首次登录后请在账户中心修改密码）。
-
-### docker-compose（推荐）
+#### 2、docker-compose
 
 ```bash
 curl -o deploy/docker-compose.yml https://raw.githubusercontent.com/fiyo/DBCheck/main/deploy/docker-compose.yml
 docker compose -f deploy/docker-compose.yml up -d
 ```
 
-> **GBase 8s 特别说明**：Docker 镜像已预装 JDK + JDBC 驱动，添加 GBase 数据源后直接可用，无需额外配置。
+### 二、源码安装快速上手
 
----
-
-## 源码安装快速上手
-
-### 环境要求
+#### 1、环境要求
 
 - Python 3.10+
-- 各数据库对应的 Python 驱动（见上表）
+- 各数据库对应的 Python 驱动
 
----
-
-**1、拉取本地模型**
+#### 2、拉取本地模型
 
 本地安装 Ollama，并使用以下命令拉取模型：
 
@@ -401,7 +388,7 @@ docker compose -f deploy/docker-compose.yml up -d
 ollama pull qwen3:30b          # 拉取诊断模型（此处以qwen3:30b为例）
 ollama pull nomic-embed-text    # 拉取 RAG 嵌入模型（知识库功能需要）
 ```
-**2、拉取源码并安装依赖**
+#### 3、拉取源码并安装依赖
 ```bash
 # 克隆项目
 git clone https://github.com/fiyo/DBCheck.git
@@ -411,33 +398,40 @@ cd DBCheck
 pip install -r deploy/requirements.txt
 
 ```
-**3、启动 Web UI**
+#### 4、启动 Web UI
 ```bash
 python web_ui.py
 ```
 
-访问 **http://localhost:5003**，默认账号为 `admin`，密码为 `admin123`（首次登录后请在账户中心修改密码）。
+### 三、打包分发
 
-
-## 打包分发
-
-使用 PyInstaller 打包为单个可执行文件：
+使用根据不同平台分别以下命令打包为单个可执行文件：
 
 ```bash
-# Windows
-rd /s /q build dist __pycache__
-pyinstaller dbcheck.spec
+# 1、Windows
+build/build_windows.bat
+
 cd dist
 dbcheck.exe
 
-# Linux
-pyinstaller build/dbcheck_linux.spec
+# 2、Linux
+build/build_linux.sh
+
+cd dist
+./dbcheck
+
+# 3、MacOS
+build/build_macos.sh
+
 cd dist
 ./dbcheck
 ```
+
+### 四、访问界面
+
+访问 **http://localhost:5003**，默认账号为 `admin`，密码为 `admin123`（首次登录后请在账户中心修改密码）。
+
 ---
-
-
 
 ## 核心功能一览
 
