@@ -34,6 +34,291 @@ Language switch（语言切换）: [English](../README.md) | [中文](./README_z
 
 ---
 
+# 为什么选择 DBCheck？
+
+
+现代应用系统高度依赖数据库。
+
+然而数据库日常运维仍然大量依赖：
+
+- 人工经验
+- 手工检查
+- 临时排查
+- 分散的监控工具
+
+
+这些方式存在：
+
+- 检查标准不统一
+- 问题发现不及时
+- 故障定位困难
+- 运维经验难以沉淀
+
+
+DBCheck 希望打造一个：
+
+> **开源、智能、可扩展的数据库健康管理平台。**
+
+
+帮助团队：
+
+✅ 提前发现数据库风险  
+✅ 标准化数据库巡检流程  
+✅ 降低重复运维工作  
+✅ 提升故障定位效率  
+✅ 利用 AI 沉淀数据库运维知识  
+
+
+---
+
+# ✨ 核心功能
+
+
+## 🗄️ 多数据库支持
+
+
+DBCheck 支持超过 20 种数据库系统：
+
+包括：
+
+- MySQL
+- MariaDB
+- PostgreSQL
+- Oracle
+- SQL Server
+- 达梦 DM8
+- TiDB
+- OceanBase
+- KingbaseES
+- 瀚高数据库 HGDB
+- 南大通用 GBase
+- MongoDB
+- DB2
+- Redis
+- ClickHouse
+
+以及更多数据库类型。
+
+
+---
+
+## 📋 自动化数据库巡检
+
+
+DBCheck 自动采集数据库运行状态，包括：
+
+
+### 基础信息
+
+- 数据库版本
+- 实例信息
+- 数据库状态
+- 连接信息
+
+
+### 性能指标
+
+- CPU
+- 内存
+- IO
+- 会话
+- SQL 性能
+
+
+### 配置检查
+
+- 参数配置
+- 安全策略
+- 容量配置
+- 最佳实践基线
+
+
+### 数据库健康检查
+
+- 锁等待
+- 死锁分析
+- 慢 SQL
+- 索引健康
+- 表空间
+- 备份状态
+
+
+自动生成：
+
+- Word 巡检报告
+- 风险分析
+- 优化建议
+- 历史趋势对比
+
+
+---
+
+# 🤖 AI 智能诊断
+
+
+DBCheck 集成 AI 能力，对数据库巡检结果进行智能分析。
+
+
+支持：
+
+| AI 模式 | 说明 |
+|-|-|
+| Ollama | 本地大模型部署，数据不离开内网 |
+| OpenAI Compatible API | 支持兼容 OpenAI 协议的 AI 服务 |
+| Disabled | 关闭 AI 功能 |
+
+
+AI 可以帮助：
+
+- 解释风险原因
+- 分析故障根因
+- 提供优化建议
+- 生成处理方案
+
+
+例如：
+
+> CPU 持续升高，结合慢 SQL、锁等待和历史趋势，分析可能原因并给出优化建议。
+
+
+---
+
+# 🔍 性能分析
+
+
+DBCheck 提供数据库性能分析能力：
+
+
+包括：
+
+- 慢 SQL 深度分析
+- SQL 执行计划分析
+- 锁等待分析
+- 阻塞链分析
+- 索引健康分析
+- 连接压力分析
+- 性能趋势分析
+
+
+帮助 DBA 从：
+
+> "发现问题"
+
+进一步做到：
+
+> "理解问题"
+
+和：
+
+> "解决问题"
+
+
+---
+
+# 📊 历史趋势分析
+
+
+DBCheck 保存多次巡检结果。
+
+
+支持：
+
+- 指标趋势变化
+- 历史风险对比
+- 优化前后分析
+- 数据库健康变化追踪
+
+
+帮助团队发现：
+
+- 性能退化
+- 容量增长
+- 配置变化
+- 潜在风险
+
+
+---
+
+# 🔌 插件扩展体系
+
+
+DBCheck 提供插件化架构。
+
+
+插件可以独立管理：
+
+- 数据库适配
+- 巡检规则
+- 报告模板
+- 参数基线
+
+
+开发者可以通过插件扩展 DBCheck 能力。
+
+
+适用于：
+
+- 企业内部数据库
+- 国产数据库适配
+- 自定义巡检规范
+
+
+---
+
+# 🖥️ 主机健康检查
+
+
+数据库问题往往与服务器资源相关。
+
+
+DBCheck 同时支持服务器巡检：
+
+
+检查：
+
+- CPU
+- 内存
+- 磁盘
+- 网络
+- 进程
+- 系统资源
+
+
+帮助定位：
+
+数据库问题还是基础设施问题。
+
+
+---
+
+# 🌐 Web 管理界面
+
+
+DBCheck 提供完整 Web UI：
+
+
+支持：
+
+- 数据源管理
+- 巡检任务管理
+- 报告查看
+- AI 诊断
+- 参数管理
+- 趋势分析
+- 插件管理
+
+
+---
+
+# 🐳 Docker 快速部署
+
+
+DBCheck 提供 Docker 镜像。
+
+无需复杂环境配置即可快速运行。
+
+---
+
 ## 支持的数据库
 
 | 数据库 | 驱动方式 | 默认端口 | 说明 |
@@ -106,6 +391,17 @@ docker compose -f deploy/docker-compose.yml up -d
 - Python 3.10+
 - 各数据库对应的 Python 驱动（见上表）
 
+---
+
+**1、拉取本地模型**
+
+本地安装 Ollama，并使用以下命令拉取模型：
+
+```bash
+ollama pull qwen3:30b          # 拉取诊断模型（此处以qwen3:30b为例）
+ollama pull nomic-embed-text    # 拉取 RAG 嵌入模型（知识库功能需要）
+```
+**2、拉取源码并安装依赖**
 ```bash
 # 克隆项目
 git clone https://github.com/fiyo/DBCheck.git
@@ -114,21 +410,34 @@ cd DBCheck
 # 安装依赖
 pip install -r deploy/requirements.txt
 
-# 启动 Web UI
+```
+**3、启动 Web UI**
+```bash
 python web_ui.py
 ```
 
-访问 **http://localhost:5003**。
+访问 **http://localhost:5003**，默认账号为 `admin`，密码为 `admin123`（首次登录后请在账户中心修改密码）。
 
-### CLI 命令行模式
+
+## 打包分发
+
+使用 PyInstaller 打包为单个可执行文件：
 
 ```bash
-python -m entrypoints.cli           # 中文界面
-python -m entrypoints.cli --lang en # 英文界面
-python web_ui.py         # Web 界面
-```
+# Windows
+rd /s /q build dist __pycache__
+pyinstaller dbcheck.spec
+cd dist
+dbcheck.exe
 
+# Linux
+pyinstaller build/dbcheck_linux.spec
+cd dist
+./dbcheck
+```
 ---
+
+
 
 ## 核心功能一览
 
@@ -401,14 +710,6 @@ Redis **3.0+** 通过两个独立插件提供支持——`redis`（单机）与 
 | `openai` | 云端 API（OpenAI / DeepSeek），需联网 | 允许云端 API 的环境 |
 | `disabled` | 禁用 AI（默认） | 不需要 AI 功能 |
 
-**快速开始：**
-
-```bash
-ollama pull qwen3:30b          # 拉取诊断模型（越大效果越好）
-ollama pull nomic-embed-text    # 拉取 RAG 嵌入模型（知识库功能需要）
-python web_ui.py                # 启动后在 AI 设置页面配置
-```
-
 ---
 
 ## 其他功能
@@ -531,25 +832,6 @@ curl -X POST http://localhost:5003/api/v1/inspect \
 | `/share/<share_id>` | GET | 查看分享报告 |
 
 > 生产环境建议搭配 nginx 反向代理，定期轮换 API Key。
-
----
-
-## 打包分发
-
-使用 PyInstaller 打包为单个可执行文件：
-
-```bash
-# Windows
-rd /s /q build dist __pycache__
-pyinstaller dbcheck.spec
-cd dist
-dbcheck.exe
-
-# Linux
-pyinstaller build/dbcheck_linux.spec
-cd dist
-./dbcheck
-```
 
 ---
 

@@ -38,7 +38,182 @@ Through automated inspection rules, system resource collection, AI-assisted diag
 
 ---
 
-## Supported Databases
+# Why DBCheck?
+
+
+Modern applications depend heavily on databases.
+
+However, database operation and maintenance still often rely on:
+
+- Manual inspections
+- Personal experience
+- Scattered monitoring tools
+- Temporary troubleshooting
+
+
+DBCheck aims to provide an open-source, intelligent, and extensible database inspection platform.
+
+It helps teams:
+
+✅ Discover database risks earlier  
+✅ Standardize database health checks  
+✅ Reduce repetitive DBA work  
+✅ Improve troubleshooting efficiency  
+✅ Preserve operational knowledge through AI and RAG  
+
+
+---
+
+# ✨ Features
+
+## 🗄️ Multi Database Support
+
+DBCheck supports more than 20 database systems:
+
+- MySQL
+- MariaDB
+- PostgreSQL
+- Oracle
+- SQL Server
+- DM8
+- TiDB
+- OceanBase
+- KingbaseES
+- YashanDB
+- GBase
+- HighGo
+- MongoDB
+- DB2
+- Redis
+- ClickHouse
+- And more...
+
+
+## 📋 Automated Database Inspection
+
+Automatically collects:
+
+- Database information
+- Configuration parameters
+- Performance metrics
+- Security settings
+- Storage information
+- Session status
+- Lock information
+- Slow SQL
+- Replication status
+
+
+Generates professional inspection reports:
+
+- Word reports
+- Risk analysis
+- Optimization suggestions
+- Historical comparison
+
+
+## 🤖 AI Assisted Diagnosis
+
+
+DBCheck integrates AI capabilities to help analyze inspection results.
+
+Supported AI modes:
+
+| Mode | Description |
+|------|-------------|
+| Ollama | Fully local AI deployment |
+| OpenAI compatible API | Cloud AI services |
+| Disabled | Traditional inspection mode |
+
+
+AI can assist with:
+
+- Risk explanation
+- Root cause analysis
+- Optimization suggestions
+- Operation recommendations
+
+
+## 🔍 Performance Analysis
+
+
+Built-in analysis capabilities:
+
+- Slow SQL analysis
+- Execution plan analysis
+- Lock diagnostics
+- Index health analysis
+- Connection analysis
+- Resource bottleneck detection
+
+
+## 📊 Historical Trend Analysis
+
+
+DBCheck stores inspection history and provides:
+
+- Trend charts
+- Before/after comparison
+- Risk evolution tracking
+- Database health changes
+
+
+## 🔌 Plugin Architecture
+
+
+DBCheck provides an extensible plugin system.
+
+Plugins can independently manage:
+
+- Inspection rules
+- Templates
+- Baselines
+- Database adapters
+
+
+Developers can extend DBCheck by creating custom plugins.
+
+
+## 🖥️ Server Health Inspection
+
+
+Database problems are often related to infrastructure.
+
+DBCheck can inspect:
+
+- CPU
+- Memory
+- Disk
+- Network
+- Processes
+- System resources
+
+
+## 🌐 Web Interface
+
+
+DBCheck provides a modern Web UI:
+
+- Database management
+- Inspection execution
+- Report viewing
+- AI diagnosis
+- Configuration management
+- Historical analysis
+
+
+## 🐳 Docker Ready
+
+
+DBCheck provides official Docker images.
+
+No complicated environment preparation required.
+
+---
+
+# Supported Databases
+
+DBCheck supports more than 20 database systems:
 
 | Database | Driver | Default Port | Notes |
 |----------|--------|:---:|-------|
@@ -110,6 +285,15 @@ docker compose -f deploy/docker-compose.yml up -d
 - Python 3.10+
 - Database-specific Python drivers (see table above)
 
+**1. Pull local model**
+
+Install Olama locally and use the following command to pull the model:
+
+```bash
+ollama pull qwen3:30b          # Pull diagnostic model (larger = better)
+ollama pull nomic-embed-text    # Pull RAG embedding model (required for knowledge base)
+```
+**3. Clone the repository and Install dependencies**
 ```bash
 # Clone the repository
 git clone https://github.com/fiyo/DBCheck.git
@@ -118,19 +302,30 @@ cd DBCheck
 # Install dependencies
 pip install -r deploy/requirements.txt
 
-# Start Web UI
+```
+**3. Start Web UI**
+```
 python web_ui.py
 ```
 
-Visit **http://localhost:5003**.
+Visit **http://localhost:5003**. Default credentials are `admin` / `admin123` (change your password in Account Center after first login).
 
 
-### CLI Mode
+## Distribution Packaging
+
+Package as a single executable using PyInstaller:
 
 ```bash
-python -m entrypoints.cli           # Chinese interface (default)
-python -m entrypoints.cli --lang en # English interface
-python web_ui.py         # Web interface
+# Windows
+rd /s /q build dist __pycache__
+pyinstaller dbcheck.spec
+cd dist
+dbcheck.exe
+
+# Linux
+pyinstaller build/dbcheck_linux.spec
+cd dist
+./dbcheck
 ```
 
 ---
@@ -402,14 +597,6 @@ Based on local **Ollama** deployment — all inspection data stays offline, no i
 | `openai` | Cloud API (OpenAI / DeepSeek), requires internet | Environments allowing cloud APIs |
 | `disabled` | Disable AI (default) | No AI functionality needed |
 
-**Quick Start:**
-
-```bash
-ollama pull qwen3:30b          # Pull diagnostic model (larger = better)
-ollama pull nomic-embed-text    # Pull RAG embedding model (required for knowledge base)
-python web_ui.py                # Configure in AI Settings page after launching
-```
-
 ---
 
 ## Other Features
@@ -537,24 +724,7 @@ curl -X POST http://localhost:5003/api/v1/inspect \
 
 ---
 
-## Distribution Packaging
 
-Package as a single executable using PyInstaller:
-
-```bash
-# Windows
-rd /s /q build dist __pycache__
-pyinstaller dbcheck.spec
-cd dist
-dbcheck.exe
-
-# Linux
-pyinstaller build/dbcheck_linux.spec
-cd dist
-./dbcheck
-```
-
----
 
 ## Environment Quick Reference
 
