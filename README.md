@@ -21,7 +21,7 @@ Through automated inspection rules, system resource collection, AI-assisted diag
 > 
 > Email: sdfiyon@gmail.com
 > 
-> Language: [English](./README.md) | 语言：[中文](./docs/README_zh.md)
+语言切换（Language switch）: [English](./README.md) | [中文](./docs/README_zh.md)
 
 [![Version](https://img.shields.io/badge/Version-v26.8.7.1-blue.svg)]()
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)]()

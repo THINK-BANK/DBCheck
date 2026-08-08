@@ -17,7 +17,7 @@ DBCheck 支持多个关系数据库、文档数据库和KV数据库。
 > 
 > 邮箱：sdfiyon@gmail.com
 > 
-> Language: [English](../README.md) | 语言：[中文](./README_zh.md)
+Language switch（语言切换）: [English](../README.md) | [中文](./README_zh.md)
 
 [![Version](https://img.shields.io/badge/版本-v26.8.7.1-blue.svg)]()
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)]()
