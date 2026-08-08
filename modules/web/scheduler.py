@@ -69,8 +69,9 @@ def _run_inspection(job_id, db_info, inspector_name, notify_on_done):
         notify_on_done: 是否在完成后发送通知
     """
     from modules.inspection.run import (
-        run_mysql, run_pg, run_oracle_full,
-        run_dm, run_sqlserver, run_tidb
+        run_mysql, run_mariadb, run_oceanbase, run_pg,
+        run_oracle_full, run_dm, run_sqlserver, run_tidb,
+        run_ivorysql, run_yashandb, run_gbase, run_kingbase
     )
     from modules.notify import EmailNotifier, WebhookNotifier
 
@@ -111,17 +112,29 @@ def _run_inspection(job_id, db_info, inspector_name, notify_on_done):
 
         # 执行巡检
         if db_type == 'mysql':
-            report_file, _ = run_mysql(db_info, inspector_name, ssh_info)
+            report_file, *_ = run_mysql(db_info, inspector_name, ssh_info)
         elif db_type == 'pg':
-            report_file, _ = run_pg(db_info, inspector_name, ssh_info)
+            report_file, *_ = run_pg(db_info, inspector_name, ssh_info)
         elif db_type == 'oracle_full':
-            report_file, _ = run_oracle_full(db_info, inspector_name, ssh_info)
+            report_file, *_ = run_oracle_full(db_info, inspector_name, ssh_info)
         elif db_type == 'dm':
-            report_file, _ = run_dm(db_info, inspector_name, ssh_info)
+            report_file, *_ = run_dm(db_info, inspector_name, ssh_info)
         elif db_type == 'sqlserver':
-            report_file, _ = run_sqlserver(db_info, inspector_name, ssh_info)
+            report_file, *_ = run_sqlserver(db_info, inspector_name, ssh_info)
         elif db_type == 'tidb':
-            report_file, _ = run_tidb(db_info, inspector_name, ssh_info)
+            report_file, *_ = run_tidb(db_info, inspector_name, ssh_info)
+        elif db_type == 'mariadb':
+            report_file, *_ = run_mariadb(db_info, inspector_name, ssh_info)
+        elif db_type == 'oceanbase':
+            report_file, *_ = run_oceanbase(db_info, inspector_name, ssh_info)
+        elif db_type == 'ivorysql':
+            report_file, *_ = run_ivorysql(db_info, inspector_name, ssh_info)
+        elif db_type == 'yashandb':
+            report_file, *_ = run_yashandb(db_info, inspector_name, ssh_info)
+        elif db_type == 'gbase':
+            report_file, *_ = run_gbase(db_info, inspector_name, ssh_info)
+        elif db_type == 'kingbase':
+            report_file, *_ = run_kingbase(db_info, inspector_name, ssh_info)
         else:
             raise ValueError('不支持的数据库类型: %s' % db_type)
 
