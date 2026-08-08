@@ -2,7 +2,7 @@
 
 ![logo](snapshot/dbcheck_logo_info.png)
 
-DBCheck Professional is a commercial, cross-platform database health inspection tool supporting **21 database types** (relational / document / KV cache). It automatically generates standardized Word inspection reports by executing predefined SQL checks and collecting system resources. Advanced features include a SQL editor, remote terminal, configurable inspection chapters, configuration baseline management, historical trend analysis, AI-powered smart diagnostics, index health analysis, in-depth slow query analysis, server inspection, shareable links, and masked data export.
+DBCheck is an open-source, cross-platform intelligent database inspection and health analysis tool licensed under Apache License 2.0. It supports multiple relational databases, document databases, and KV databases. DBCheck automatically executes inspection rules, collects database and system metrics, and generates standardized Word inspection reports.
 
 > **Note:** The software names, logos, trademarks, badges, etc. of third parties contained in this article and DBCheck software are the property of the third-party companies or organizations. The display of these items in this article and DBCheck software only indicates that the software supports connection to the corresponding database or platform, and does not imply any affiliation or cooperation with them.
 
@@ -147,11 +147,8 @@ python web_ui.py         # Web interface
 
 ---
 
-## Professional-Only Capabilities
+## Advanced ability
 
-> Identified by `EDITION='professional'` in `version.py`; dedicated entries (e.g. the Diagnosis Center) render only in the Professional build.
-
-The Professional edition goes beyond *discovering risks* to answer *why* and *what to fix first*. On top of all community capabilities above, it adds:
 
 ### Collaborative Diagnosis Hub (Smart Diagnosis Center)
 Hand a single goal plus one data source to a team of five specialized **diagnostic specialists** who collaborate on a **shared context (blackboard)** and produce: anomalies found, root-cause inference, executable remediation plans, plus cost evaluation and tickets.
@@ -187,7 +184,7 @@ For hosts where you don't want an agent:
 - **Credential safety** — instance passwords are **Fernet-encrypted at rest**, decrypted only at collection time; ciphertext is never sent to the remote or the DB as plaintext.
 
 ### Unified Observability View
-The Professional edition unifies **host resources (eBPF / psutil / SSH) + DB fine-grained metrics + inspection risks** on one analysis plane. In one collaborative diagnosis you can see both "disk p99 latency spiked" and "the slow SQL and lock waits in that window" — root cause becomes a connected evidence chain, not isolated numbers.
+**host resources (eBPF / psutil / SSH) + DB fine-grained metrics + inspection risks** on one analysis plane. In one collaborative diagnosis you can see both "disk p99 latency spiked" and "the slow SQL and lock waits in that window" — root cause becomes a connected evidence chain, not isolated numbers.
 
 ---
 
@@ -200,15 +197,14 @@ The Professional edition unifies **host resources (eBPF / psutil / SSH) + DB fin
 | AI smart diagnostics | ✅ | ✅ |
 | Plugin system | ✅ | ✅ |
 | Enterprise RBAC | ✅ | ✅ |
-| eBPF kernel-level host collection | — | ✅ (opt-in) |
-| SSH secure host collection | — | ✅ |
-| Collaborative diagnosis hub (5 specialists + shared context) | — | ✅ |
-| Remediation cost optimizer | — | ✅ |
-| Ticket closed-loop | — | ✅ |
-| Diagnosis history | — | ✅ |
-| Unified observability view | — | ✅ |
-
-> The Community edition focuses on *discovering risks*; the Professional edition further explains *why* and *what to do first*.
+| eBPF kernel-level host collection | ✅ | ✅ (opt-in) |
+| SSH secure host collection | ✅ | ✅ |
+| Collaborative diagnosis hub (5 specialists + shared context) | ✅ | ✅ |
+| Remediation cost optimizer | ✅ | ✅ |
+| Ticket closed-loop | ✅ | ✅ |
+| Diagnosis history | ✅ | ✅ |
+| Unified observability view | ✅ | ✅ |
+| Flow | — | ✅ |
 
 ---
 
@@ -598,7 +594,7 @@ This project references the following works:
 
 > ❤️ Thank you for supporting DBCheck.
 >
-> DBCheck Professional is proprietary commercial software. All rights reserved. No copying, modification, decompiling, or distribution is permitted without prior written authorization.
+> The DBCheck community is open source software that can be copied, modified, distributed, or used for commercial purposes within the scope of an open source license.
 >
 > If you find DBCheck useful, your support is appreciated. If not, that's completely okay too. A GitHub Star, bug report, feature suggestion, code contribution, or simply sharing the project with others is equally valuable.
 >
