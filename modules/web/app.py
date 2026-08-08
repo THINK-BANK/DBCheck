@@ -53,6 +53,54 @@ import socket
 from i18n import t as _t
 
 
+# ── 启动 Banner（与 CLI 保持一致：仅图案 + 版权信息，不含菜单）──────
+# Web 端不需要 CLI 的菜单行，因此只复用 cli.print_banner() 的 ASCII 图案部分，
+# 图案下方补充版本 / 版权 / 许可证信息。
+CYAN = "\033[96m"
+BOLD = "\033[1m"
+RESET = "\033[0m"
+DIM = "\033[2m"
+
+
+def _enable_ansi() -> None:
+    """Windows 旧终端开启 ANSI 颜色支持（失败静默降级为无色输出）。"""
+    try:
+        import ctypes
+        if os.name == "nt":
+            ctypes.windll.kernel32.SetConsoleMode(
+                ctypes.windll.kernel32.GetStdHandle(-11), 7)
+    except Exception:
+        pass
+
+
+def _print_startup_banner() -> None:
+    """打印 Web UI 启动 Banner：DBCheck ASCII 图案 + 版权信息。
+
+    必须是 main() 内的第一段控制台输出（早于下方插件加载日志），
+    与 CLI 先显示 banner 的行为保持一致。
+    注：web_ui.py 在 import 阶段会先打印若干初始化日志，
+    故 banner 实际出现在这些导入日志之后、main() 业务日志之前。
+    GBK 等窄编码控制台下 █ / ╗ 等字符可能无法编码，
+    此时回退为 errors='replace' 的安全输出，绝不因此中断启动。
+    """
+    _enable_ansi()
+    banner = f"""
+{CYAN}{BOLD}  ██████╗ ██████╗  ██████╗██╗  ██╗███████╗ ██████╗██╗  ██╗
+  ██╔══██╗██╔══██╗██╔════╝██║  ██║██╔════╝██╔════╝██║  ██╔╝
+  ██║  ██║██████╔╝██║     ███████║██║     ██║     █████╔╝
+  ██║  ██║██╔══██╗██║     ██╔══██║██║     ██║     ██╔═██╗
+  ██████╔╝██████╔╝╚██████╗██║  ██║███████╗╚██████╗██║  ██╗
+  ╚═════╝ ╚═════╝  ╚═════╝╚═╝  ╚═╝╚══════╝ ╚═════╝╚═╝  ╚═╝{RESET}
+{CYAN}{BOLD}DBCheck {__version__} ({EDITION}){RESET}
+{DIM}Copyright 2025-2026 fiyo (Jack Ge) <sdfiyon@gmail.com>{RESET}
+{DIM}Licensed under Apache-2.0 · https://github.com/fiyo/DBCheck{RESET}
+"""
+    try:
+        print(banner)
+    except UnicodeEncodeError:
+        enc = sys.stdout.encoding or 'ascii'
+        print(banner.encode(enc, errors='replace').decode(enc))
+
 
 # ── GBase 8s JDBC 支持（jaydebeapi 需要 JAVA_HOME）─────────────────
 _GBASE_JAVA_CANDIDATES = [
@@ -9754,6 +9802,9 @@ def main():
     #     主线程的 signal.signal 重注册因无 hub 也无效——这正是之前「运行一阵后停不了」的根因。
     #   - 因此 server 直接在【主线程】运行，gevent hub 在主线程，所有信号机制才有效。
     #   - Windows 控制台处理器（OS 层）绕开一切 Python/gevent 接管，作为最可靠必杀。
+
+    # ── 启动 Banner：必须是第一段控制台输出（早于下方插件加载日志）──
+    _print_startup_banner()
 
     _setup_driver_paths()
     # ── 初始化插件系统 ──
