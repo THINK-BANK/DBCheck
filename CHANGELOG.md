@@ -1,5 +1,11 @@
 # Changelog
 
+## v26.8.9.1 (2026-08-08)
+- **Web 启动控制台 Banner（cfc2d9d）**：复用 cli.py 的 DBCheck ASCII 图案（仅图案，不含菜单文字）注入 Web 启动流程，图案下方补充版本 / 版权 / 许可证信息；注入 `app.py:main()` 首行，`web_ui.py` 保持 63 行 shim 不变；含 Windows ANSI 兼容与 UnicodeEncodeError 兜底。
+- **Oracle 双模板遮蔽修复（dc13149）**：删除 `plugins/available/oracle_jdbc/sql_templates.json`（历史遗留 7 条裸 list），让 oracle 走 `template_data.json` 的 21 章 / 52 条完整模板。
+- **社区版「巡检编排」菜单 404 修复（dc13149）**：原 `pro_available` 被规则引擎探测误判为 True，致社区版显示 flow 菜单且 `/flow` 仅专业版注册而 404；改为 `pro_available=bool(is_pro())` 仅门控 flow，新增 `rules_available` 门控规则引擎，社区版规则引擎 UI 不受影响。
+- **版本号更新**：各源文件版本标记 v26.8.8.1 → v26.8.9.1（version.py / version.json / Dockerfile / build 脚本 / CI / login.js / skill `dbcheck` `scripts/version.py` / deploy 脚本）。
+
 ## v26.8.8.1 (2026-08-08)
 - **定时巡检入口路径错位（`24e126f`）**：`run.py` 以 `PROJECT_ROOT` 作根去加载 `main_xxx.py`，但入口脚本实际在 `modules/entrypoints/`，导致定时任务加载失败（`#43`/`#44`）；新增 `ENTRYPOINT_DIR` 并全量改用，12 个 `run_*` 一并修正。
 - **定时巡检报告为空（`bfaa817`）**：各 `run_*` 以空 context 调 `saveDoc.contextsave()` 仅生成空壳 docx；改为统一 `data.generate_report(ofile, inspector_name)` 真实渲染（含误判为已正确的 `run_yashandb`，本次补齐）。
