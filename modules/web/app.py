@@ -2587,13 +2587,21 @@ def index():
     # 检测 Pro 模块是否可用
     pro_available = False
     try:
+        from modules.pro import is_pro
+        pro_available = bool(is_pro())
+    except Exception:
+        pass
+    # 规则引擎：社区版与专业版均可用，独立于 Pro flow
+    rules_available = False
+    try:
         from modules.pro import get_rule_engine
         get_rule_engine()
-        pro_available = True
+        rules_available = True
     except Exception:
         pass
     resp = make_response(render_template('index.html', version=__version__, edition=EDITION, lang=lang, i18n_data=i18n_data,
                            pro_available=pro_available,
+                           rules_available=rules_available,
                            admin_token=get_admin_token(),
                            user_role=user_role))
     # 禁止缓存首页模板，避免浏览器复用旧版 index.html（旧 checkLogin 逻辑）导致登录回跳循环
