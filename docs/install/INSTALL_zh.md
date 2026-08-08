@@ -1,55 +1,92 @@
-# DBCheck 快速安装指南
+## 一、Docker 快速上手（推荐）
 
-## 方式一：使用依赖检查脚本（推荐）
+Docker 可以使用以下两种方式：
+
+### 1、docker images
+一条命令启动，无需安装任何依赖：
 
 ```bash
+# 两个 Docker 镜像源，选择其一
+# 1、Docker Hub
+docker pull jackge12345/dbcheck:latest
+docker run -d -p 5003:5003 \
+  -v dbcheck_data:/app/data \
+  -v dbcheck_reports:/app/reports \
+  --name dbcheck \
+  jackge12345/dbcheck:latest
+
+# 2、GitHub Container Registry
+docker pull ghcr.io/fiyo/dbcheck:latest
+docker run -d -p 5003:5003 \
+  -v dbcheck_data:/app/data \
+  -v dbcheck_reports:/app/reports \
+  --name dbcheck \
+  ghcr.io/fiyo/dbcheck:latest
+```
+
+### 2、docker-compose
+
+```bash
+curl -o deploy/docker-compose.yml https://raw.githubusercontent.com/fiyo/DBCheck/main/deploy/docker-compose.yml
+docker compose -f deploy/docker-compose.yml up -d
+```
+
+---
+
+## 二、源码安装快速上手
+
+### 1、环境要求
+
+- Python 3.10+
+- 各数据库对应的 Python 驱动
+
+### 2、拉取本地模型
+
+本地安装 Ollama，并使用以下命令拉取模型：
+
+```bash
+ollama pull qwen3:30b          # 拉取诊断模型（此处以qwen3:30b为例）
+ollama pull nomic-embed-text    # 拉取 RAG 嵌入模型（知识库功能需要）
+```
+### 3、拉取源码并安装依赖
+```bash
+# 克隆项目
+git clone https://github.com/fiyo/DBCheck.git
 cd DBCheck
 
-# 1. 安装所有依赖
-pip install -r requirements.txt
-
-# 2. 运行依赖检查
-python check_dependencies.py
-```
-
-如果检查通过，直接启动：
-```bash
-python web_ui.py
-```
-
-## 方式二：使用虚拟环境（推荐用于开发）
-
-```bash
-# 创建虚拟环境
-python -m venv venv
-
-# 激活虚拟环境
-# Windows:
-venv\Scripts\activate
-# Linux/Mac:
-source venv/bin/activate
-
 # 安装依赖
-pip install -r requirements.txt
+pip install -r deploy/requirements.txt
 
-# 运行检查
-python check_dependencies.py
 ```
-
-## 数据库驱动说明
-
-| 数据库 | 驱动 | 额外配置 |
-|--------|------|----------|
-| MySQL/TiDB | pymysql | 无 |
-| PostgreSQL | psycopg2-binary | 无 |
-| Oracle | oracledb | 推荐使用，pure Python |
-| 达梦 DM8 | dmpython | 无 |
-| SQL Server | pyodbc | 需要安装 [ODBC Driver 17](https://docs.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server) |
-
-## 启动 Web UI
-
+### 4、启动 Web UI
 ```bash
 python web_ui.py
 ```
 
-默认访问地址：http://localhost:5003
+## 三、打包分发
+
+使用根据不同平台分别以下命令打包为单个可执行文件：
+
+```bash
+# 1、Windows
+build/build_windows.bat
+
+cd dist
+dbcheck.exe
+
+# 2、Linux
+build/build_linux.sh
+
+cd dist
+./dbcheck
+
+# 3、MacOS
+build/build_macos.sh
+
+cd dist
+./dbcheck
+```
+---
+## 四、访问界面
+
+访问 **http://localhost:5003**，默认账号为 `admin`，密码为 `admin123`（首次登录后请在账户中心修改密码）。
