@@ -1,5 +1,14 @@
 # Changelog
 
+## v26.8.8.1 (2026-08-08)
+- **定时巡检入口路径错位（`24e126f`）**：`run.py` 以 `PROJECT_ROOT` 作根去加载 `main_xxx.py`，但入口脚本实际在 `modules/entrypoints/`，导致定时任务加载失败（`#43`/`#44`）；新增 `ENTRYPOINT_DIR` 并全量改用，12 个 `run_*` 一并修正。
+- **定时巡检报告为空（`bfaa817`）**：各 `run_*` 以空 context 调 `saveDoc.contextsave()` 仅生成空壳 docx；改为统一 `data.generate_report(ofile, inspector_name)` 真实渲染（含误判为已正确的 `run_yashandb`，本次补齐）。
+- **补充分发 6 库 + 3 元组解包（`8448aa8`）**：`scheduler.py` 原只分发 6 种内置库，MariaDB/OceanBase/IvorySQL/YashanDB/GBASE/KingbaseES 报「不支持」；补全 6 个分支，并将 `report_file, _ =` 改为 `report_file, *_ =` 修复 `too many values to unpack`。
+- **支持插件类型 + 统一报告落盘（`3d30c13`）**：重构为 `runner_map`（13 键）+ `_run_plugin_inspection()`（discover_plugins→按 db_type 匹配已启用插件→main_class 实例化→connect/collect_data/generate_report）；插件类型报告由 `history/<db_type>/` 统一改落 `paths.REPORTS_DIR`（`data/reports`），新增渲染失败兜底断言。
+- **深色主题可读性（`a5f1761`）**：`web_templates/index.html` 定时巡检任务卡片 4 处颜色改为 `color: var(--text)`，深色模式下文字/按钮可辨。
+- **版本号更新**：各源文件版本标记 v26.8.7.1 → v26.8.8.1（version.py / version.json / Dockerfile / build 脚本 / CI / login.js）。
+- **详情见**：`docs/release/v26.8.8.1-release-notes.md`。
+
 ## v26.8.7.1 (2026-08-07)
 - **版本号更新**：各源文件版本标记 → v26.8.7.1（version.py / version.json / skill `dbcheck` `scripts/version.py` / README + README_zh 徽章 / Dockerfile `VERSION.txt` / `scripts/build.sh` + `scripts/build-multiarch.sh` / CHANGELOG 顶段）；顺带修正此前 `version.py (v26.8.3.1)` 与 `version.json (v26.8.6.1)` 不一致造成的版本漂移。
 - **修复用户中心改密双重哈希 (`2c13a9d`)**：`change_password()` 先 `bcrypt` 一次、`user_service.update_user()` 内部再 `bcrypt` 一次，库内存 `bcrypt(bcrypt(pw))`，登录只单次校验 → 新旧密码均无法登录；改为传明文交由 service 层统一单次哈希。

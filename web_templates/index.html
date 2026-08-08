@@ -19127,7 +19127,7 @@ async function deleteBackupHistory(recordId) {
       </p>
       <div class="about-meta">
         <span class="about-meta-item">作者：fiyo (Jack Ge)</span>
-        <span class="about-meta-item">协议：专有软件许可（Proprietary Software License）</span>
+        <span class="about-meta-item">协议：{% if edition == 'professional' %}专有软件许可（Proprietary Software License）{% else %}Apache License 2.0（开源）{% endif %}</span>
         <span class="about-meta-item">项目：<a href="https://github.com/fiyo/DBCheck" target="_blank">github.com/fiyo/DBCheck</a></span>
         <span class="about-meta-item">邮箱：<a href="mailto:sdfiyon@gmail.com">sdfiyon@gmail.com</a></span>
         <span class="about-meta-item">官网：<a href="https://dbcheck.top" target="_blank">dbcheck.top</a></span>
@@ -19192,13 +19192,21 @@ document.addEventListener('keydown', function(e) {
       "5pys6L2v5Lu25Li6PHN0cm9uZz7kuJPmnInllYbkuJrova/ku7Y8L3N0cm9uZz7vvIzniYjmnYPlvZIgZml5b++8iEphY2sgR2XvvInmiYDmnInvvIzkv53nlZnkuIDliIfmnYPliKnjgII8YnIvPuacque7j+iRl+S9nOadg+S6uuS5pumdouaOiOadg++8jOS7u+S9leS6uuS4jeW+l+WkjeWItuOAgeS/ruaUueOAgeWPjee8luivkeOAgeWPjeaxh+e8luOAgeWIhuWPkeOAgeWHuuenn+OAgei9rOiuuOWPr+aIlueUqOS6juS7u+S9leWVhuS4muWGjeWIhuWPkeOAgjxici8+5q+P5bm0IDxzdHJvbmc+NeaciDE55pel6IezNeaciDIx5pelPC9zdHJvbmc+77yM55WM6Z2i5bCG5by65Yi25LulPHN0cm9uZz7ngbDluqbmqKHlvI88L3N0cm9uZz7mmL7npLrkuJTml6Dms5XliIfmjaLkuLvpopjvvIzor7flsIrph43ov5nkuIDorr7orqHjgII=",
       "VGhpcyBzb2Z0d2FyZSBpcyBhIDxzdHJvbmc+cHJvcHJpZXRhcnkgY29tbWVyY2lhbCBwcm9kdWN0PC9zdHJvbmc+IG93bmVkIGJ5IGZpeW8gKEphY2sgR2UpLiBBbGwgcmlnaHRzIHJlc2VydmVkLjxici8+Tm8gY29weWluZywgbW9kaWZpY2F0aW9uLCBkZWNvbXBpbGluZywgZGlzYXNzZW1ibHksIGRpc3RyaWJ1dGlvbiwgc3VibGljZW5zaW5nLCBvciBjb21tZXJjaWFsIHJlZGlzdHJpYnV0aW9uIGlzIHBlcm1pdHRlZCB3aXRob3V0IHByaW9yIHdyaXR0ZW4gYXV0aG9yaXphdGlvbi48YnIvPkV2ZXJ5IHllYXIgZnJvbSA8c3Ryb25nPk1heSAxOSB0byBNYXkgMjE8L3N0cm9uZz4sIHRoZSBpbnRlcmZhY2UgaXMgZm9yY2VkIGludG8gPHN0cm9uZz5ncmF5c2NhbGUgbW9kZTwvc3Ryb25nPiBhbmQgdGhlbWUgc3dpdGNoaW5nIGlzIGRpc2FibGVkOyBwbGVhc2UgcmVzcGVjdCB0aGlzIGRlc2lnbi4="
     ];
+    // Apache-2.0 / 社区版开源协议文案（professional 不展示，community 展示）
+    var _a_oss=[
+      "QXBhY2hlIExpY2Vuc2UgMi4w77yI5byA5rqQ5Y2P6K6u77yJ",
+      "5pys6L2v5Lu25LulIEFwYWNoZSBMaWNlbnNlIDIuMCDljY/orq7lvIDmupDlj5HluIPvvIzniYjmnYPlvZIgZml5b++8iEphY2sgR2XvvInmiYDmnInjgILkvaDlj6/ku6Xoh6rnlLHkvb/nlKjjgIHkv67mlLnjgIHliIblj5HmnKzova/ku7bvvIzljIXmi6zllYbkuJrnlKjpgJTvvIzkvYbpobvpgbXlroggQXBhY2hlLTIuMCDmnaHmrL7vvIjkv53nlZnniYjmnYPkuI7orrjlj6/lo7DmmI7jgIHms6jmmI7lj5jmm7TnrYnvvInjgILor6bnu4bmnaHmrL7op4Hku5PlupMgTElDRU5TRSDmlofku7bjgII=",
+      "VGhpcyBzb2Z0d2FyZSBpcyBvcGVuLXNvdXJjZWQgdW5kZXIgdGhlIEFwYWNoZSBMaWNlbnNlIDIuMCwgQ29weXJpZ2h0IGZpeW8gKEphY2sgR2UpLiBZb3UgbWF5IHVzZSwgbW9kaWZ5LCBhbmQgZGlzdHJpYnV0ZSBpdCBmcmVlbHksIGluY2x1ZGluZyBmb3IgY29tbWVyY2lhbCBwdXJwb3NlcywgcHJvdmlkZWQgeW91IGNvbXBseSB3aXRoIHRoZSBBcGFjaGUtMi4wIHRlcm1zIChyZXRhaW4gY29weXJpZ2h0IGFuZCBsaWNlbnNlIG5vdGljZXMsIHN0YXRlIGNoYW5nZXMsIGV0Yy4pLiBTZWUgdGhlIExJQ0VOU0UgZmlsZSBmb3IgZGV0YWlscy4="
+    ];
     var _d=function(s){var b=atob(s);var l=b.length;var a=new Uint8Array(l);for(var i=0;i<l;i++)a[i]=b.charCodeAt(i);return new TextDecoder('utf-8').decode(a);};
     var t=document.getElementById('agreement-title');
     var z=document.getElementById('agreement-zh');
     var e=document.getElementById('agreement-en');
     console.log('[DBCheck] agreement elements:', !!t, !!z, !!e);
     if(t&&z&&e){
-      var dt=_d(_a[0]); var dz=_d(_a[1]); var de=_d(_a[2]);
+      var _edition = "{{ edition }}";
+      var _src = (_edition === 'professional') ? _a : _a_oss;
+      var dt=_d(_src[0]); var dz=_d(_src[1]); var de=_d(_src[2]);
       console.log('[DBCheck] decoded lengths:', dt.length, dz.length, de.length);
       t.innerHTML=dt; z.innerHTML=dz; e.innerHTML=de;
       console.log('[DBCheck] agreement content injected OK');
