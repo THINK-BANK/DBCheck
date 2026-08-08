@@ -294,6 +294,105 @@ def _start_ctrl_keepalive():
     except Exception:
         pass
 
+
+# ── Git Bash / MSYS2 兜底：stdin 监听（SetConsoleCtrlHandler 在伪终端下无效）──
+# 根因：Git Bash(mintty/MSYS2) 里 `python web_ui.py` 启动的是【原生 Windows 进程】，
+# 它的 stdin/stdout 是 MSYS2 管道而非 Windows 控制台。于是：
+#   - mintty 的 Ctrl+C 走 MSYS2 的模拟信号体系，无法投递给原生子进程；
+#   - Windows 的 SetConsoleCtrlHandler 因为根本没有真实控制台事件而永不触发；
+#   - 主线程也就收不到 SIGINT，_signal_handler / _console_ctrl_handler 全部落空。
+# 兜底做法：直接从 fd 0 读原始字节，收到 ETX(0x03，即 Ctrl+C 的原始字符) 或
+# FS(0x1c，Ctrl+\) 即强杀；读到 EOF（终端被关闭 / 管道断开）同样强杀。
+_STDIN_WATCHDOG_GRACE_SEC = 3.0  # EOF 宽限期：启动即 EOF 视为非交互式重定向，不退出
+_STDIN_KILL_BYTES = (b'\x03', b'\x1c')  # Ctrl+C / Ctrl+\
+
+
+def _stdin_is_watchable():
+    """判断 stdin 是否值得监听（交互式终端或 MSYS2 伪终端）。
+
+    返回 False 的典型场景：stdin 被重定向到文件 / NUL、PyInstaller 无控制台
+    窗口模式、stdin 不可用——这些情况下监听毫无意义且可能误杀，必须跳过。
+    """
+    try:
+        stdin = getattr(sys, 'stdin', None)
+        if stdin is None:
+            return False
+        if stdin.fileno() != 0:
+            return False
+    except Exception:
+        return False
+    try:
+        if stdin.isatty():
+            return True
+    except Exception:
+        pass
+    # Git Bash 下原生 python 的 stdin 是管道，isatty() 为 False；
+    # 但 MSYSTEM（MINGW64/MINGW32/MSYS）会被子进程继承，可据此判定为伪终端。
+    return bool(os.environ.get('MSYSTEM'))
+
+
+def _stdin_watchdog_loop():
+    """阻塞读取 fd 0 的原始字节流，捕获 Ctrl+C 字符或 EOF → 强制退出。
+
+    只读不写，不消费任何业务输入（本程序无 input() 交互），因此不影响功能。
+    任何异常都视为"stdin 不可用"，安静地结束本线程，绝不影响服务运行。
+    """
+    started_at = _shutdown_time.monotonic()
+    while True:
+        try:
+            chunk = os.read(0, 1)
+        except Exception:
+            return  # stdin 已失效（被关闭/无控制台），放弃监听即可
+        if not chunk:
+            # EOF：终端窗口被关闭或管道断开 → 强杀，避免残留进程占用 5003 端口。
+            # 但启动瞬间就 EOF 说明 stdin 本就是重定向/空设备，此时不能退出。
+            if _shutdown_time.monotonic() - started_at < _STDIN_WATCHDOG_GRACE_SEC:
+                return
+            _request_shutdown()
+            return
+        if chunk in _STDIN_KILL_BYTES:
+            try:
+                print("\n\n[主程序] 检测到 Ctrl+C（终端输入），正在强制退出...")
+            except Exception:
+                pass
+            _request_shutdown()
+            return
+
+
+def _start_stdin_watchdog():
+    """启动 stdin 退出监听线程（daemon，不阻塞退出）。非交互式环境自动跳过。"""
+    if not _stdin_is_watchable():
+        return
+    try:
+        _shutdown_threading.Thread(target=_stdin_watchdog_loop, daemon=True).start()
+    except Exception:
+        pass
+
+
+def _signal_rearm_loop():
+    """gevent 协程循环：周期性重装 Python 层 SIGINT/SIGTERM 处理器。
+
+    gevent hub 与 flask-socketio 在运行期可能改写 C 层信号处理器，把退出入口
+    夺走。本协程运行在【主线程的 hub】上，故 signal.signal() 合法可用；每 2 秒
+    抢回一次，保证 Ctrl+C 始终指向 _signal_handler → os._exit(0)。
+    """
+    while True:
+        try:
+            gevent.sleep(2)
+            _install_python_signals()
+        except Exception:
+            return
+
+
+def _start_signal_rearm():
+    """在 gevent 模式下派生信号重装协程（hub 启动后自动开始运行）。"""
+    if _socketio_async_mode != 'gevent':
+        return
+    try:
+        gevent.spawn(_signal_rearm_loop)
+    except Exception:
+        pass
+
 # ── 本地模块 ──────────────────────────────────────────────
 try:
     import modules.entrypoints.main_mysql as main_mysql
@@ -9696,6 +9795,11 @@ def main():
     # 2) 标准 Python 信号（非 gevent 模式下主线程注册即生效）
     _install_python_signals()
 
+    # 2.5) Git Bash / MSYS2 伪终端兜底：那里没有真实 Windows 控制台事件，
+    #      第 1 步的 SetConsoleCtrlHandler 永不触发、SIGINT 也投递不到原生进程，
+    #      只能靠直接读 stdin 的 Ctrl+C 原始字符（0x03）与 EOF 来强杀。
+    _start_stdin_watchdog()
+
     # 3) gevent 模式：必须在【主线程】用 gevent.signal_handler 注册，因为它的信号 watcher
     #    挂在当前线程（主线程）的 hub 上。server 即将在主线程运行，hub 会在此线程启动，
     #    此处注册即可成为 SIGINT/SIGTERM 的权威退出入口（直接 os._exit(0)）。
@@ -9709,13 +9813,20 @@ def main():
         except Exception:
             pass
 
-    # 4) 主线程运行 server（gevent hub 在此线程），Ctrl+C 由 1/2/3 接管 → os._exit(0)
+        # 3.5) hub 起来后周期性抢回 Python 层信号处理器，防止运行期被 gevent/
+        #      flask-socketio 改写导致「刚启动能停、跑一阵停不了」。
+        _start_signal_rearm()
+
+    # 4) 主线程运行 server（gevent hub 在此线程），Ctrl+C 由 1~3.5 接管 → os._exit(0)
     try:
         socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)
     except KeyboardInterrupt:
         _request_shutdown()
-    except Exception as _e:
-        print(f"[主程序] server 异常: {_e}")
+    except BaseException as _e:  # 含 SystemExit/GreenletExit：一律强杀，绝不留残进程
+        try:
+            print(f"[主程序] server 退出: {type(_e).__name__}: {_e}")
+        except Exception:
+            pass
     _request_shutdown()
 
 
