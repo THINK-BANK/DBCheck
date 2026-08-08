@@ -9170,8 +9170,8 @@ async function loadDatasourcesForSelect() {
     const sel = document.getElementById('f-datasource');
     sel.innerHTML = '<option value="">-- 手动输入连接信息 --</option>';
     if (data.ok && data.datasources) {
-      // 如果 dbType 还是初始默认类型（oracle），则显示所有数据源，不过滤
-      const filterType = (dbType && dbType !== 'oracle') ? dbType.toLowerCase() : null;
+      // 按当前选中的数据库类型过滤已保存数据源
+      const filterType = dbType ? dbType.toLowerCase() : null;
       let hasMatch = false;
       data.datasources.forEach(ds => {
         if (!filterType || (ds.db_type && ds.db_type.toLowerCase() === filterType)) {
