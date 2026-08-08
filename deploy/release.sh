@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ============================================================
 #  DBCheck 版本发布脚本 (Bash)
-#  Usage: bash release.sh 2.5.4
+#  Usage: bash release.sh 26.8.8.1
 # ============================================================
 
 set -euo pipefail
@@ -9,13 +9,13 @@ set -euo pipefail
 VERSION="${1:-}"
 if [[ -z "$VERSION" ]]; then
     echo "❌ 用法: $0 <版本号>"
-    echo "   示例: $0 2.5.4"
+    echo "   示例: $0 26.8.8.1"
     exit 1
 fi
 
 # 版本号格式验证
 if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-    echo "❌ 版本号格式错误！正确格式：X.Y.Z（如 2.5.4）"
+    echo "❌ 版本号格式错误！正确格式：X.Y.Z（如 26.8.8.1）"
     exit 1
 fi
 
