@@ -1,7 +1,15 @@
 # Changelog
 
 ## v26.8.7.1 (2026-08-07)
-- **版本号更新**：各源文件版本标记 → v26.8.7.1（version.py / version.json / skill `dbcheck` `scripts/version.py` / README + README_zh 徽章 / Dockerfile `VERSION.txt` / `scripts/build.sh` + `scripts/build-multiarch.sh` / CHANGELOG 顶段）。
+- **版本号更新**：各源文件版本标记 → v26.8.7.1（version.py / version.json / skill `dbcheck` `scripts/version.py` / README + README_zh 徽章 / Dockerfile `VERSION.txt` / `scripts/build.sh` + `scripts/build-multiarch.sh` / CHANGELOG 顶段）；顺带修正此前 `version.py (v26.8.3.1)` 与 `version.json (v26.8.6.1)` 不一致造成的版本漂移。
+- **修复用户中心改密双重哈希 (`2c13a9d`)**：`change_password()` 先 `bcrypt` 一次、`user_service.update_user()` 内部再 `bcrypt` 一次，库内存 `bcrypt(bcrypt(pw))`，登录只单次校验 → 新旧密码均无法登录；改为传明文交由 service 层统一单次哈希。
+- **修复 SQL Server(JDBC) 路由 (`4ff35a8`)**：显式 `connection_mode='jdbc'` 在 JDBC 环境不可用时静默穿透到 pyodbc 兜底（报 `unixODBC Can't open lib 'SQL Server'`）；改为显式 jdbc 直接报具体原因、`auto` 仍 JDBC 优先→ODBC 兜底，`sqlserver_jdbc` 缺省一律按 jdbc；`main_sqlserver_dual._PROJECT_ROOT` 改走 `paths.PROJECT_ROOT` 并新增 `jdbc_unavailable_reason()`；`main_sqlserver.py` 零修改。
+- **补齐 KingbaseES 默认基线 (`51a6bdd`)**：`_builtin_default_baselines()` 新增 `kingbase` 段（13 条，复用 PostgreSQL 基线）；新增 `ensure_missing_db_type_baselines()` 按 db_type 计数>0 整段跳过、纯增量零重置，老库启动自动补齐且不影响自定义基线。
+- **`.db_key` 迁移至 `data/` (`d7754ff`)**：`paths.DB_KEY_PATH` 锚定 `DATA_DIR/.db_key`（原 `PROJECT_ROOT/.db_key` 在 frozen 下重装会丢密钥）；新增 `DB_KEY_PATH_LEGACY`，`instance_manager._get_fernet()` 首次启动 `shutil.copy2` 幂等迁移且保留旧文件，历史密码可继续解密。
+- **修复巡检配置库路径与密码解密运行时错误 (`4540dee`)**：`inspection.db` frozen 下 `unable to open database file`（统一 `paths.INSPECTION_DB` + 确保父目录 + legacy 迁移）；`._decrypt_pwd` 失败返空串而非密文，新增 `get_all_instances_decrypted()` 供 `metrics_collector`/`monitor/engine` 用明文密码，修复首页实时监控 Oracle JDBC `ORA-01005`/`ORA-28000` 无数据。
+- **插件模板/基线种子兼容 (`21ffd36`)**：loader 同时识别 `sql_templates.json`/`template_data.json` 与 `baselines.json`/`baseline_data.json`；新增 `seed_enabled_plugins_data()` 启动时幂等播种，修复打包后 `data/` 为空导致 5 个 JDBC 插件模板缺失。
+- **其他 (`d4b6940`)**：修复 `web_templates/index.html` 结果展示相关问题（2 行）。
+- **详情见**：`docs/release/v26.8.7.1-release-notes.md`。
 
 ## v26.8.3.1 (2026-08-03)
 - **版本号更新**：各源文件版本标记 v26.8.2.2 → v26.8.3.1（version.py / version.json / skill `dbcheck` `scripts/version.py` / README + README_zh 徽章 / Dockerfile `VERSION.txt` / `scripts/build.sh` + `scripts/build-multiarch.sh` / CHANGELOG 顶段）。
