@@ -1,17 +1,31 @@
-﻿# DBCheck Professional — Commercial Intelligent Database Inspection Tool
+﻿# DBCheck
 
-![logo](snapshot/dbcheck_logo_info.png)
+🚀 **Open Source Intelligent Database Inspection & Health Analysis Platform**
 
-DBCheck is an open-source, cross-platform intelligent database inspection and health analysis tool licensed under Apache License 2.0. It supports multiple relational databases, document databases, and KV databases. DBCheck automatically executes inspection rules, collects database and system metrics, and generates standardized Word inspection reports.
+![DBCheck Logo](snapshot/dbcheck_logo_info.png)
 
-> **Note:** The software names, logos, trademarks, badges, etc. of third parties contained in this article and DBCheck software are the property of the third-party companies or organizations. The display of these items in this article and DBCheck software only indicates that the software supports connection to the corresponding database or platform, and does not imply any affiliation or cooperation with them.
 
-> Website: [https://dbcheck.top](https://dbcheck.top) &nbsp;|&nbsp; Email: sdfiyon@gmail.com
+DBCheck is an **Apache License 2.0 licensed open-source database inspection and health analysis platform**.
+
+It helps Database Administrators (DBAs), developers, and operation teams automatically inspect databases, discover potential risks, analyze performance problems, and generate standardized health inspection reports.
+
+DBCheck supports multiple relational databases, document databases, and KV databases.
+
+Through automated inspection rules, system resource collection, AI-assisted diagnosis, and extensible plugins, DBCheck helps teams build a more reliable and efficient database operation process.
+
+
+> Third-party software names, logos, trademarks, badges, and related assets displayed in this project belong to their respective owners. Their appearance only indicates compatibility or support, and does not imply any affiliation or partnership.
+
+
+> Website: [https://dbcheck.top](https://dbcheck.top) &nbsp;|&nbsp; 
+> 
+> Email: sdfiyon@gmail.com
 > 
 > Language: [English](./README.md) | 语言：[中文](./docs/README_zh.md)
 
 [![Version](https://img.shields.io/badge/Version-v26.8.7.1-blue.svg)]()
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)]()
+[![Open Source](https://img.shields.io/badge/Open%20Source-Yes-green.svg)]()
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)]()
 [![AI](https://img.shields.io/badge/AI-Ollama+OpenAI-orange.svg)]()
 [![RAG](https://img.shields.io/badge/RAG-Knowledge_Base-red.svg)]()
@@ -594,11 +608,39 @@ This project references the following works:
 
 > ❤️ Thank you for supporting DBCheck.
 >
-> The DBCheck community is open source software that can be copied, modified, distributed, or used for commercial purposes within the scope of an open source license.
->
-> If you find DBCheck useful, your support is appreciated. If not, that's completely okay too. A GitHub Star, bug report, feature suggestion, code contribution, or simply sharing the project with others is equally valuable.
->
+> DBCheck is an open-source project licensed under Apache License 2.0.
+> 
+> You are free to use, modify, distribute, and contribute to this project according to the license terms.
+> 
+> If DBCheck helps your work, your support is appreciated:
+> 
+> - ⭐ Star the GitHub repository
+> - 🐛 Submit bug reports
+> - 💡 Suggest new features
+> - 🔧 Contribute code
+> - 📢 Share the project with the community
+> 
+> Every contribution helps DBCheck become better.
+> 
 > Thank you for being part of the DBCheck community.
+
+## Enterprise Services
+
+>For organizations requiring professional database consulting, customized inspection rules, deployment assistance, training, or technical support, please contact the project maintainer.
+>
+>Available services include:
+>
+>- Enterprise deployment support
+>- Custom inspection templates
+>- Database health assessment
+>- Performance optimization consulting
+>- Technical training
+>
+>Contact:
+>
+>Website: https://dbcheck.top
+>
+>Email: sdfiyon@gmail.com
 
 <img src="snapshot/pay-en.png" alt="QR Code" width="800" />
 
@@ -606,7 +648,7 @@ This project references the following works:
 
 > Please specify your name or nickname when sponsoring ❤️
 
-### Sponsors
+### Community Supporters
 
 | Date | Name | ID |
 |------|------|------|

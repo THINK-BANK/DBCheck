@@ -1,17 +1,27 @@
-﻿# DBCheck 社区版 — 开源数据库智能巡检工具
+﻿# DBCheck
+🚀 **开源智能数据库检测与健康分析平台**
 
-![logo](snapshot/dbcheck_logo_info.png)
+![DBCheck Logo](snapshot/dbcheck_logo_info.png)
 
-DBCheck 是一款基于 Apache License 2.0 开源协议的跨平台智能数据库巡检与健康分析工具，支持关系型数据库、文档数据库以及 KV 数据库。通过自动化巡检规则、系统资源采集、风险分析和 AI 辅助诊断能力，帮助数据库管理员快速发现问题、定位风险并生成标准化巡检报告。
+DBCheck是一个 **Apache License 2.0 许可的开源数据库检查和健康分析平台**。
 
-> **注意**：本文及 DBCheck 软件中包含第三方的软件名称、logo、商标、徽章等均为第三方公司或机构所有，本文以及 DBCheck 软件中展示仅表示本软件支持对接相应的数据库或平台，并不暗示与其有任何关联或合作。
+它帮助数据库管理员（DBA）、开发人员和操作团队自动检查数据库，发现潜在风险，分析性能问题，并生成标准化的健康检查报告。
 
-> 官网：[https://dbcheck.top](https://dbcheck.top) &nbsp;|&nbsp; 邮箱：sdfiyon@gmail.com
+DBCheck 支持多个关系数据库、文档数据库和KV数据库。
+
+通过自动检查规则、系统资源收集、人工智能辅助诊断和可扩展插件，DBCheck帮助团队构建更可靠、更高效的数据库操作流程。
+
+> 本项目中显示的第三方软件名称、徽标、商标、徽章和相关资产属于其各自的所有者。它们的出现仅表示兼容或支持，并不意味着任何从属关系或合作关系。
+
+> 官网：[https://dbcheck.top](https://dbcheck.top) 
+> 
+> 邮箱：sdfiyon@gmail.com
 > 
 > Language: [English](../README.md) | 语言：[中文](./README_zh.md)
 
 [![Version](https://img.shields.io/badge/版本-v26.8.7.1-blue.svg)]()
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)]()
+[![Open Source](https://img.shields.io/badge/Open%20Source-Yes-green.svg)]()
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)]()
 [![AI](https://img.shields.io/badge/AI-Ollama+OpenAI-orange.svg)]()
 [![RAG](https://img.shields.io/badge/知识库增强-RAG-red.svg)]()
@@ -600,6 +610,22 @@ A：内置阈值基于通用最佳实践，请结合实际业务评估。
 > 如果项目曾帮助过您，欢迎支持；如果您选择不赞助，也完全没有关系。一个 Star、一条建议、一次 Bug 反馈，甚至一句鼓励的话，都是推动项目前进的动力。
 >
 > 尊重每一种选择，也感谢每一位使用者。
+>
+## 企业服务
+> 对于需要专业数据库咨询、定制检查规则、部署协助、培训或技术支持的组织，请联系项目维护人员。
+> 
+> 可用服务包括：
+> - 企业部署支持
+> - 自定义检查模板
+> - 数据库健康评估
+> - 性能优化咨询
+> - 技术培训
+> 
+> 联系方式：
+> 
+> 网站：https://dbcheck.top
+> 
+> 电子邮件：sdfiyon@gmail.com
 
 <img src="snapshot/pay.png" alt="赞助二维码" width="800" />
 
@@ -607,7 +633,7 @@ A：内置阈值基于通用最佳实践，请结合实际业务评估。
 
 > 赞助时请备注姓名或昵称 ❤️
 
-### 赞助者列表
+### 社区支持者
 
 | 日期 | 昵称 | 编号 |
 |------|------|------|
