@@ -121,10 +121,6 @@ def run_mysql(db_info, inspector_name, ssh_info=None):
     spec.loader.exec_module(mod)
     mod.infos = _FakeInfos()
 
-    ifile = mod.create_word_template(inspector_name)
-    if not ifile:
-        raise RuntimeError("Word 模板创建失败")
-
     reports_dir = str(paths.REPORTS_DIR)
     os.makedirs(reports_dir, exist_ok=True)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -149,14 +145,7 @@ def run_mysql(db_info, inspector_name, ssh_info=None):
     ret.update({"port": [{'PORT': db_info['port']}]})
     ret.update({"ip": [{'IP': db_info['host']}]})
 
-    savedoc = mod.saveDoc(context=ret, ofile=ofile, ifile=ifile, inspector_name=inspector_name)
-    success = savedoc.contextsave()
-
-    try:
-        if os.path.exists(ifile):
-            os.remove(ifile)
-    except Exception:
-        pass
+    success = data.generate_report(ofile, inspector_name)
 
     if not success:
         raise RuntimeError("Word 报告渲染失败")
@@ -182,10 +171,6 @@ def run_mariadb(db_info, inspector_name, ssh_info=None):
     spec.loader.exec_module(mod)
     mod.infos = _FakeInfos()
 
-    ifile = mod.create_word_template(inspector_name)
-    if not ifile:
-        raise RuntimeError("Word 模板创建失败")
-
     reports_dir = str(paths.REPORTS_DIR)
     os.makedirs(reports_dir, exist_ok=True)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -210,14 +195,7 @@ def run_mariadb(db_info, inspector_name, ssh_info=None):
     ret.update({"port": [{'PORT': db_info['port']}]})
     ret.update({"ip": [{'IP': db_info['host']}]})
 
-    savedoc = mod.saveDoc(context=ret, ofile=ofile, ifile=ifile, inspector_name=inspector_name)
-    success = savedoc.contextsave()
-
-    try:
-        if os.path.exists(ifile):
-            os.remove(ifile)
-    except Exception:
-        pass
+    success = data.generate_report(ofile, inspector_name)
 
     if not success:
         raise RuntimeError("Word 报告渲染失败")
@@ -243,10 +221,6 @@ def run_oceanbase(db_info, inspector_name, ssh_info=None):
     spec.loader.exec_module(mod)
     mod.infos = _FakeInfos()
 
-    ifile = mod.create_word_template(inspector_name)
-    if not ifile:
-        raise RuntimeError("Word 模板创建失败")
-
     reports_dir = str(paths.REPORTS_DIR)
     os.makedirs(reports_dir, exist_ok=True)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -270,14 +244,7 @@ def run_oceanbase(db_info, inspector_name, ssh_info=None):
     ret.update({"port": [{'PORT': db_info['port']}]})
     ret.update({"ip": [{'IP': db_info['host']}]})
 
-    savedoc = mod.saveDoc(context=ret, ofile=ofile, ifile=ifile, inspector_name=inspector_name)
-    success = savedoc.contextsave()
-
-    try:
-        if os.path.exists(ifile):
-            os.remove(ifile)
-    except Exception:
-        pass
+    success = data.generate_report(ofile, inspector_name)
 
     if not success:
         raise RuntimeError("Word 报告渲染失败")
@@ -303,10 +270,6 @@ def run_pg(db_info, inspector_name, ssh_info=None):
     spec.loader.exec_module(mod)
     mod.infos = _FakeInfos()
 
-    ifile = mod.create_word_template(inspector_name)
-    if not ifile:
-        raise RuntimeError("Word 模板创建失败")
-
     reports_dir = str(paths.REPORTS_DIR)
     os.makedirs(reports_dir, exist_ok=True)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -330,14 +293,7 @@ def run_pg(db_info, inspector_name, ssh_info=None):
     ret.update({"port": [{'PORT': db_info['port']}]})
     ret.update({"ip": [{'IP': db_info['host']}]})
 
-    savedoc = mod.saveDoc(context=ret, ofile=ofile, ifile=ifile, inspector_name=inspector_name)
-    success = savedoc.contextsave()
-
-    try:
-        if os.path.exists(ifile):
-            os.remove(ifile)
-    except Exception:
-        pass
+    success = data.generate_report(ofile, inspector_name)
 
     if not success:
         raise RuntimeError("Word 报告渲染失败")
@@ -456,14 +412,7 @@ def run_dm(db_info, inspector_name, ssh_info=None):
     ret.update({"port": [{'PORT': db_info['port']}]})
     ret.update({"ip": [{'IP': db_info['host']}]})
 
-    # DM8 的 saveDoc 调用方式（与 MySQL/PG 不同）
-    savedoc = mod.saveDoc(
-        context=ret,
-        ofile=ofile,
-        inspector_name=inspector_name,
-        label=db_info['label']
-    )
-    success = savedoc.contextsave() if hasattr(savedoc, 'contextsave') else savedoc.save()
+    success = data.generate_report(ofile, inspector_name)
 
     if not success:
         raise RuntimeError("Word 报告渲染失败")
@@ -524,10 +473,6 @@ def run_tidb(db_info, inspector_name, ssh_info=None):
     spec.loader.exec_module(mod)
     mod.infos = _FakeInfos()
 
-    ifile = mod.create_word_template(inspector_name)
-    if not ifile:
-        raise RuntimeError("Word 模板创建失败")
-
     reports_dir = str(paths.REPORTS_DIR)
     os.makedirs(reports_dir, exist_ok=True)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -552,14 +497,7 @@ def run_tidb(db_info, inspector_name, ssh_info=None):
     ret.update({"port": [{'PORT': db_info['port']}]})
     ret.update({"ip": [{'IP': db_info['host']}]})
 
-    savedoc = mod.saveDoc(context=ret, ofile=ofile, ifile=ifile, inspector_name=inspector_name)
-    success = savedoc.contextsave()
-
-    try:
-        if os.path.exists(ifile):
-            os.remove(ifile)
-    except Exception:
-        pass
+    success = data.generate_report(ofile, inspector_name)
 
     if not success:
         raise RuntimeError("Word 报告渲染失败")
@@ -585,10 +523,6 @@ def run_ivorysql(db_info, inspector_name, ssh_info=None):
     spec.loader.exec_module(mod)
     mod.infos = _FakeInfos()
 
-    ifile = mod.create_word_template(inspector_name)
-    if not ifile:
-        raise RuntimeError("Word 模板创建失败")
-
     reports_dir = str(paths.REPORTS_DIR)
     os.makedirs(reports_dir, exist_ok=True)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -613,14 +547,7 @@ def run_ivorysql(db_info, inspector_name, ssh_info=None):
     ret.update({"port": [{'PORT': db_info['port']}]})
     ret.update({"ip": [{'IP': db_info['host']}]})
 
-    savedoc = mod.saveDoc(context=ret, ofile=ofile, ifile=ifile, inspector_name=inspector_name)
-    success = savedoc.contextsave()
-
-    try:
-        if os.path.exists(ifile):
-            os.remove(ifile)
-    except Exception:
-        pass
+    success = data.generate_report(ofile, inspector_name)
 
     if not success:
         raise RuntimeError("Word 报告渲染失败")
@@ -660,13 +587,7 @@ def run_yashandb(db_info, inspector_name, ssh_info=None):
     ret.update({"port": [{'PORT': db_info['port']}]})
     ret.update({"ip": [{'IP': db_info['host']}]})
 
-    savedoc = mod.saveDoc(
-        context=ret,
-        ofile=ofile,
-        inspector_name=inspector_name,
-        label=db_info['label']
-    )
-    success = savedoc.contextsave() if hasattr(savedoc, 'contextsave') else savedoc.save()
+    success = data.generate_report(ofile, inspector_name)
 
     if not success:
         raise RuntimeError("Word 报告渲染失败")
@@ -749,13 +670,7 @@ def run_kingbase(db_info, inspector_name, ssh_info=None):
     ret.update({"port": [{'PORT': db_info['port']}]})
     ret.update({"ip": [{'IP': db_info['host']}]})
 
-    savedoc = mod.saveDoc(
-        context=ret,
-        ofile=ofile,
-        inspector_name=inspector_name,
-        label=db_info['label']
-    )
-    success = savedoc.contextsave() if hasattr(savedoc, 'contextsave') else savedoc.save()
+    success = data.generate_report(ofile, inspector_name)
 
     if not success:
         raise RuntimeError("Word 报告渲染失败")
