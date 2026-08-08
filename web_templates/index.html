@@ -4748,8 +4748,8 @@ function formatBytes(bytes) {
                 '<input id="ds-jdbc-url" style="width:100%;margin-top:4px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px" placeholder="jdbc:oracle:thin:@//host:1521/ORCLCDB 或 @host:1521:ORCL"></div>' +
               '<div id="ds-connection-mode-wrap" style="display:none"><label style="font-size:12px;color:var(--text-muted)">连接模式 (connection_mode) <span style="color:var(--text-muted);font-weight:normal">（SQL Server 双轨驱动路由）</span></label>' +
                 '<select id="ds-connection-mode" style="width:100%;margin-top:4px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">' +
-                  '<option value="odbc">odbc（pyodbc，默认）</option>' +
-                  '<option value="jdbc">jdbc（JPype1 + mssql-jdbc.jar）</option>' +
+                  '<option value="jdbc">jdbc（JPype1 + mssql-jdbc.jar，默认）</option>' +
+                  '<option value="odbc">odbc（pyodbc）</option>' +
                   '<option value="auto">auto（优先 JDBC，失败回退 ODBC）</option>' +
                 '</select></div>' +
               '<div id="ds-mongo-wrap" style="display:none">' +

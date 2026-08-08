@@ -33,12 +33,12 @@ CRITICAL_FILES = [
     {'path': 'data/history.db', 'name': '巡检快照历史', 'category': 'data', 'required': True},
     {'path': 'data/server_history.db', 'name': '服务器巡检历史', 'category': 'data', 'required': True},
     {'path': 'data/inspection.db', 'name': '巡检配置数据库', 'category': 'config', 'required': True},
-    {'path': '.db_key', 'name': '密码加密密钥', 'category': 'security', 'required': True},
-    {'path': str(paths.USER_DB_DIR.relative_to(paths.PROJECT_ROOT) / 'um_rbac.db'), 'name': 'RBAC权限管理数据库', 'category': 'security', 'required': True},
+    {'path': paths.DB_KEY_PATH.relative_to(paths.PROJECT_ROOT).as_posix(), 'name': '密码加密密钥', 'category': 'security', 'required': True},
+    {'path': (paths.USER_DB_DIR.relative_to(paths.PROJECT_ROOT) / 'um_rbac.db').as_posix(), 'name': 'RBAC权限管理数据库', 'category': 'security', 'required': True},
 ]
 
 CRITICAL_DIRS = [
-    {'path': str(paths.PRO_DATA_DIR.relative_to(paths.PROJECT_ROOT)), 'name': 'Pro版数据目录', 'category': 'pro', 'required': True},
+    {'path': paths.PRO_DATA_DIR.relative_to(paths.PROJECT_ROOT).as_posix(), 'name': 'Pro版数据目录', 'category': 'pro', 'required': True},
 ]
 
 
