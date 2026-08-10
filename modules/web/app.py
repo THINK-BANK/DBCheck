@@ -229,14 +229,44 @@ def _sync_delete_trend_for_report(filename: str):
     except Exception:
         pass
 
-# Werkzeug 3.x 移除了 threading 模式支持，改用 gevent（见 requirements.txt）。
-# 打包时 gevent 已通过 build/dbcheck_windows.spec 的 hiddenimports 包含；
-# dev 环境若未安装 gevent 则回退 threading，保证本地也能跑。
-try:
-    import gevent  # noqa: F401
-    _socketio_async_mode = 'gevent'
-except ImportError:
-    _socketio_async_mode = 'threading'
+# async_mode 决定：默认 gevent；未装 gevent 时回退 threading（保证本地也能跑）。
+# 允许通过启动参数 --async-mode <mode> 覆盖——开发期指定 threading 可规避 gevent
+# 接管 SIGINT 导致的 Ctrl+C 失效（详见 main() 信号处理说明）。
+# 注意：socketio 在模块导入时即创建（下方 SocketIO(...)），故参数须在导入期从
+# sys.argv 解析，不能等 main() 解析。
+_ALLOWED_ASYNC_MODES = ('gevent', 'threading', 'eventlet', 'asgi')
+
+
+def _resolve_async_mode():
+    try:
+        import gevent  # noqa: F401
+        _gevent_ok = True
+    except ImportError:
+        _gevent_ok = False
+    default = 'gevent' if _gevent_ok else 'threading'
+
+    override = None
+    try:
+        _args = sys.argv[1:]
+        if '--async-mode' in _args:
+            _i = _args.index('--async-mode')
+            if _i + 1 < len(_args):
+                override = _args[_i + 1].strip().lower()
+    except Exception:
+        override = None
+
+    if not override:
+        return default
+    if override not in _ALLOWED_ASYNC_MODES:
+        print(f"[警告] 未知 --async-mode '{override}'，回退为 {default}")
+        return default
+    if override == 'gevent' and not _gevent_ok:
+        print("[警告] 指定 gevent 但未安装，回退 threading")
+        return 'threading'
+    return override
+
+
+_socketio_async_mode = _resolve_async_mode()
 socketio = SocketIO(cors_allowed_origins='*', async_mode=_socketio_async_mode)
 
 # ── 强制退出机制（Ctrl+C / 关闭窗口 必杀，独立于 gevent/Python signal） ──

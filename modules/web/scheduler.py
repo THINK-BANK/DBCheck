@@ -35,6 +35,27 @@ _handler.setFormatter(logging.Formatter(
 ))
 logger.addHandler(_handler)
 
+
+def _normalize_cron_expression(expr):
+    """将常见 cron 变体规范化为 APScheduler 的 CronTrigger.from_crontab 接受的
+    5 字段标准表达式（分 时 日 月 周）。仅做语法层面的容错转换，不改变字段语义：
+      - '?' 视作 '*'（Quartz 中 ? 等价于 * 在 day-of-month / day-of-week 位）
+      - 6 字段：去掉首段（秒），保留后 5 段（分 时 日 月 周）—— 兼容 Quartz/Spring
+      - 7 字段：去掉首段（秒）与末段（年），保留中段 5 —— 兼容含年的写法
+      - 其余字段数原样返回，交由 from_crontab 校验并报错
+    返回规范化后的表达式字符串。
+    """
+    if not expr:
+        return expr
+    e = expr.strip().replace('?', '*')
+    parts = e.split()
+    if len(parts) == 6:
+        parts = parts[1:]          # 去掉秒字段
+    elif len(parts) == 7:
+        parts = parts[1:-1]        # 去掉秒字段与年字段
+    return ' '.join(parts)
+
+
 # ── 并发巡检排除机制 ────────────────────────────────────────
 # 多个定时任务可能在同一次触发中并发执行（例如同一分钟命中多个 cron）。
 # 巡检过程涉及数据库连接、报告渲染（docx/docxtpl/openpyxl）、importlib 动态
@@ -417,21 +438,24 @@ class SchedulerManager:
         
         # 构建 CronTrigger
         cron = config.get('cron', {})
+        expr = cron.get('expression')
         trigger_kwargs = {}
-        for unit in ('second', 'minute', 'hour', 'day', 'month', 'day_of_week'):
-            if unit in cron and cron[unit] not in (None, '*'):
-                trigger_kwargs[unit] = cron[unit]
-        
-        if not trigger_kwargs:
-            logger.warning('任务 %s 没有有效的 cron 配置', job_id)
-            return False
-        
+        if not expr:
+            # 非自定义表达式：从结构化字段（秒/分/时/日/月/周）构建；
+            # 若全部为空则视为无效配置，提前返回。
+            for unit in ('second', 'minute', 'hour', 'day', 'month', 'day_of_week'):
+                if unit in cron and cron[unit] not in (None, '*'):
+                    trigger_kwargs[unit] = cron[unit]
+            if not trigger_kwargs:
+                logger.warning('任务 %s 没有有效的 cron 配置', job_id)
+                return False
+
         try:
-            expr = cron.get('expression')
             if expr:
-                # 自定义 cron（标准 5 字段：分 时 日 月 周），后端校验合法性；
-                # 非法表达式会抛异常，被下方 except 捕获并返回 400
-                trigger = CronTrigger.from_crontab(expr)
+                # 自定义 cron：支持标准 5 字段（分 时 日 月 周），并兼容 Quartz/Spring
+                # 的 6 字段（秒 分 时 日 月 周，含 '?'）与 7 字段（含年）。先规范化再交给
+                # APScheduler 校验；仍非法则抛异常，被下方 except 捕获并返回 400。
+                trigger = CronTrigger.from_crontab(_normalize_cron_expression(expr))
             else:
                 trigger = CronTrigger(**trigger_kwargs)
             self.scheduler.add_job(

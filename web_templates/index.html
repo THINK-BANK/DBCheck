@@ -12190,7 +12190,8 @@ function renderScheduleParams() {
     html = `<div class="field" style="grid-column:1/-1;"><label>CRON 表达式（分 时 日 月 周）</label>`
          + `<input type="text" id="job-cron-expr" placeholder="0 2 * * *" class="input" oninput="updateCronPreview()"></div>`
          + `<div class="field" style="grid-column:1/-1;font-size:12px;color:var(--text-muted)">`
-         + `示例：0 2 * * 1-5 = 工作日 02:00；*/15 * * * * = 每 15 分钟；0 0 1 * * = 每月 1 号 00:00</div>`;
+         + `示例：0 2 * * 1-5 = 工作日 02:00；*/15 * * * * = 每 15 分钟；0 0 1 * * = 每月 1 号 00:00。`
+         + `也支持 Quartz 风格（6 字段含秒与 ?），如 * 53 16 * * ? = 每天 16:53</div>`;
   }
   box.innerHTML = html;
   updateCronPreview();
