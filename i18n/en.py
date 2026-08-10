@@ -2409,7 +2409,7 @@ EN = {
     # ── License ──
     "webui.nav_license": "License",
     "webui.license_title": "Pro License",
-    "webui.license_desc": "Manage DBCheck Pro license activation and status",
+    "webui.license_desc": "Manage RaccoonX Pro license activation and status",
     "webui.license_key_label": "License Key",
     "webui.license_key_placeholder": "DBCheck-Pro-XXXX-XXXX-XXXX",
     "webui.license_activate_btn": "Activate Pro",
@@ -2495,7 +2495,7 @@ EN = {
     "webui.ds_operation_fail": "Operation failed: {}",
     "webui.ds_load_fail": "Failed to load datasources",
     # ── Home Overview ──
-    "webui.home_welcome": "Welcome to DBCheck",
+    "webui.home_welcome": "Welcome to RaccoonX",
     "webui.home_instance_dist": "Instance Distribution",
     "webui.home_instance_dist_sub": "Database type counts",
     "webui.home_scheduler": "Scheduled Inspection",
@@ -2668,12 +2668,12 @@ EN = {
     "webui.nav_section_dr": "Disaster Recovery",
     "webui.nav_section_config": "Config Management",
     "webui.nav_section_tools": "Tools",
-    "webui.nav_data_management": "DBCheck Backup",
-    "webui.data_management_title": "DBCheck Backup",
-    "webui.data_management_desc": "Back up DBCheck's own data files: backup, restore, upgrade detection",
+    "webui.nav_data_management": "RaccoonX Backup",
+    "webui.data_management_title": "RaccoonX Backup",
+    "webui.data_management_desc": "Back up RaccoonX's own data files: backup, restore, upgrade detection",
     "dr.db_empty_hint": "This data source has no default database; please enter manually",
     "webui.dm_overview_title": "Data Files Overview",
-    "webui.dm_overview_desc": "The following files are core DBCheck data that must be backed up before upgrading or migrating",
+    "webui.dm_overview_desc": "The following files are core RaccoonX data that must be backed up before upgrading or migrating",
     "webui.dm_table_file": "File/Directory",
     "webui.dm_table_name": "Description",
     "webui.dm_table_category": "Category",
@@ -2704,7 +2704,7 @@ EN = {
     "webui.dm_upgrade_check": "Check Upgrade Status",
     "webui.dm_upgrade_ready": "Data status is healthy",
     "webui.dm_upgrade_need_backup": "It is recommended to backup data before upgrading",
-    "webui.dm_upgrade_hint": "When upgrading DBCheck, make sure to backup the following core files:",
+    "webui.dm_upgrade_hint": "When upgrading RaccoonX, make sure to backup the following core files:",
     "webui.dm_upgrade_files": "data/ directory, pro_data/ directory, data/inspection.db, .db_key",
     "webui.dm_upgrade_total_size": "Total Data Size",
     "webui.dm_upgrade_backup_count": "Existing Backups",
@@ -2762,10 +2762,10 @@ EN = {
     "webui.login_error_empty": "Please enter username and password",
     "webui.network_error": "Network error, please try again later",
     # ── About Page ──
-    "webui.nav_about": "About DBCheck",
-    "webui.about_desc": "DBCheck is an open-source intelligent database inspection tool that supports health inspection and AI diagnostics for MySQL, PostgreSQL, Oracle, SQL Server, DM, TiDB, IvorySQL and other mainstream databases.",
+    "webui.nav_about": "About RaccoonX",
+    "webui.about_desc": "RaccoonX is an open-source intelligent database inspection tool that supports health inspection and AI diagnostics for MySQL, PostgreSQL, Oracle, SQL Server, DM, TiDB, IvorySQL and other mainstream databases.",
     "webui.about_author": "Author: Jack Ge · Apache License 2.0 · Website: dbcheck.top",
-    "webui.about_grayscale_note": "The anniversary grayscale mode is part of DBCheck's original design and is stated in the open-source agreement above. Please do not modify or bypass it.",
+    "webui.about_grayscale_note": "The anniversary grayscale mode is part of RaccoonX's original design and is stated in the open-source agreement above. Please do not modify or bypass it.",
 
     # PG High-priority check items (2026-05-21)
     "report.pg_issue_tablespace_large": "Tablespace too large",
@@ -2991,7 +2991,7 @@ EN = {
     "webui.nav_shares": "Share Management",
     "webui.shares_title": "🔗 Share Management",
     "webui.shares_desc": "Manage generated inspection report share links. You can view access counts and delete links you no longer need.",
-    "webui.plugin_market_subtitle": "Browse community plugins and install them in one click to extend your DBCheck",
+    "webui.plugin_market_subtitle": "Browse community plugins and install them in one click to extend your RaccoonX",
     "webui.plugin_market_refresh": "🔄 Refresh",
     "webui.plugin_market_search": "🔍 Search plugins...",
     "webui.plugin_market_category_all": "All",
@@ -3167,7 +3167,7 @@ EN = {
     "dr.password_saved": "Saved; leave empty to use data source password",
     "dr.password_empty": "Please enter password",
     "dr.mechanism_title": "Backup mechanism",
-    "dr.mechanism_note": "MySQL/MariaDB via mysqldump and PostgreSQL via pg_dump local commands; files/directories packed via Python tarfile. Backup commands run on the same machine hosting DBCheck, which must reach the target database and have the client tools installed.",
+    "dr.mechanism_note": "MySQL/MariaDB via mysqldump and PostgreSQL via pg_dump local commands; files/directories packed via Python tarfile. Backup commands run on the same machine hosting RaccoonX, which must reach the target database and have the client tools installed.",
 }
 
 
@@ -3256,7 +3256,7 @@ EN.update({
     "webui.status_version": "Version",
 
     # ══ Login page ══
-    "login.title": "DBCheck",
+    "login.title": "RaccoonX",
     "login.subtitle": "Intelligent Database Inspection & Performance Analysis",
     "login.welcome": "Welcome Back",
     "login.welcome_desc": "Sign in to start your database inspection journey",
@@ -3281,10 +3281,10 @@ EN.update({
     "login.demo_viewer": "Viewer",
     "login.demo_operator": "Operator",
     "login.theme_toggle": "Toggle Theme",
-    "login.copyright": "DBCheck © 2026",
+    "login.copyright": "RaccoonX © 2026",
     "login.show_password": "Show password",
     "login.hide_password": "Hide password",
-    "login.mascot_badge": "DBCheck Inspection Officer",
+    "login.mascot_badge": "RaccoonX Inspection Officer",
 
     # User Center & System Management
     "webui.user_menu_logged_in": "Logged in",

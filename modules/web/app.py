@@ -48,6 +48,7 @@ paths.ensure_migrated()
 
 from flask import Flask, request, jsonify, render_template, Response, send_file, make_response
 from modules.config.version import __version__, EDITION
+from modules.core.brand import PRODUCT_NAME_EN, PRODUCT_NAME_ZH, PRODUCT_FULL_NAME, PRODUCT_TAGLINE_EN
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import socket
 from i18n import t as _t
@@ -701,7 +702,11 @@ try:
     @app.route('/um/login')
     def um_login_page():
         from flask import render_template
-        resp = make_response(render_template('user_management/login.html'))
+        resp = make_response(render_template('user_management/login.html',
+                                   product_name=PRODUCT_NAME_EN,
+                                   product_name_zh=PRODUCT_NAME_ZH,
+                                   product_full_name=PRODUCT_FULL_NAME,
+                                   product_tagline=PRODUCT_TAGLINE_EN))
         # 禁止缓存登录页，避免浏览器复用旧模板导致登录回跳循环
         resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
         resp.headers['Pragma'] = 'no-cache'
@@ -2681,7 +2686,11 @@ def index():
                            pro_available=pro_available,
                            rules_available=rules_available,
                            admin_token=get_admin_token(),
-                           user_role=user_role))
+                           user_role=user_role,
+                           product_name=PRODUCT_NAME_EN,
+                           product_name_zh=PRODUCT_NAME_ZH,
+                           product_full_name=PRODUCT_FULL_NAME,
+                           product_tagline=PRODUCT_TAGLINE_EN))
     # 禁止缓存首页模板，避免浏览器复用旧版 index.html（旧 checkLogin 逻辑）导致登录回跳循环
     resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
     resp.headers['Pragma'] = 'no-cache'

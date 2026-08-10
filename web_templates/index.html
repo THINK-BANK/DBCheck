@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>DBCheck · Database Inspector</title>
+<title>{{ product_name }} · {{ product_tagline }}</title>
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
 <style>
 /* ─── Reset & Base ─── */
@@ -415,7 +415,7 @@ async function executeFixSql(taskId, sql) {
   height: 36px;
   margin-bottom: 0;
 }
-/* 折叠态在 logo 下竖排显示 DBCheck - 通过 HTML 实现 */
+/* 折叠态在 logo 下竖排显示产品名 - 通过 HTML 实现 */
 .sidebar.collapsed .sidebar-logo {
   padding: 16px 8px 12px;
   text-align: center;
@@ -3341,7 +3341,7 @@ async function executeFixSql(taskId, sql) {
 <!-- 水印 + 水波效果 -->
 <script>
 (function(){
-var phrases = ['DBCheck', 'MySQL', 'PostgreSQL', 'Oracle', 'DM'];
+var phrases = ['{{ product_name }}', 'MySQL', 'PostgreSQL', 'Oracle', 'DM'];
   var el = document.createElement('div');
   el.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:1;overflow:hidden';
   document.body.appendChild(el);
@@ -5286,9 +5286,9 @@ function formatBytes(bytes) {
   <!-- ─── Sidebar ─── -->
   <aside class="sidebar">
     <div class="sidebar-logo">
-      <img src="/dbcheck_logo_icon.png" alt="DBCheck" class="sidebar-brand-logo">
-      <span class="sidebar-vertical-text">DBCheck</span>
-      <h1>DBCheck {% if edition == 'professional' %}<span class="edition-badge pro" id="sidebar-edition-badge" data-i18n="webui.edition_badge">专业版</span>{% else %}<span class="edition-badge community" id="sidebar-edition-badge" data-i18n="webui.edition_community">社区版</span>{% endif %}</h1>
+      <img src="/dbcheck_logo_icon.png" alt="{{ product_name }}" class="sidebar-brand-logo">
+      <span class="sidebar-vertical-text">{{ product_name }}</span>
+      <h1>{{ product_name }} {% if edition == 'professional' %}<span class="edition-badge pro" id="sidebar-edition-badge" data-i18n="webui.edition_badge">专业版</span>{% else %}<span class="edition-badge community" id="sidebar-edition-badge" data-i18n="webui.edition_community">社区版</span>{% endif %}</h1>
       <p data-i18n="webui.logo_subtitle">基于 AI 的智能数据库巡检平台</p>
     </div>
 
@@ -5397,7 +5397,7 @@ function formatBytes(bytes) {
       <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 8v4"/><path d="m10 10 2-2 2 2"/></svg></span> <span data-i18n="webui.nav_disaster_recovery">容灾备份</span>
     </div>
     <div class="nav-item" onclick="showPage('data-management')" id="nav-data-management">
-      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="4" width="20" height="5" rx="1"/><path d="M4 9v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9"/><path d="M10 13h4"/></svg></span> <span data-i18n="webui.nav_data_management">DBCheck 备份</span>
+      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="4" width="20" height="5" rx="1"/><path d="M4 9v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9"/><path d="M10 13h4"/></svg></span> <span data-i18n="webui.nav_data_management">RaccoonX 备份</span>
     </div>
 
     <!-- ── 系统 ── -->
@@ -5419,7 +5419,7 @@ function formatBytes(bytes) {
       <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg></span> <span data-i18n="webui.nav_license">许可证</span>
     </div>
     <div class="nav-item" onclick="showAboutModal()" id="nav-about">
-      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></span> <span data-i18n="webui.nav_about">关于 DBCheck</span>
+      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></span> <span data-i18n="webui.nav_about">关于 {{ product_name }}</span>
     </div>
 
     </div><!-- /sidebar-nav -->
@@ -5433,7 +5433,7 @@ function formatBytes(bytes) {
   <div class="main">
     <div class="topbar">
       <span class="topbar-title" id="topbar-title">首页</span>
-      <span class="topbar-sub" id="topbar-sub">欢迎使用 DBCheck 数据库巡检工具</span>
+      <span class="topbar-sub" id="topbar-sub">欢迎使用 {{ product_name }} 数据库巡检工具</span>
       <span style="margin-left:auto;display:inline-flex;align-items:center;gap:4px;font-size:12px;">
         🌐
         <select id="lang-select" onchange="changeLang()" style="font-size:12px;padding:3px 6px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;">
@@ -5473,9 +5473,9 @@ function formatBytes(bytes) {
         <section class="home-hero" id="home-hero">
           <div class="hero-inner">
             <div class="hero-brand">
-              <img class="hero-logo" src="/dbcheck_logo_icon.png" alt="DBCheck">
+              <img class="hero-logo" src="/dbcheck_logo_icon.png" alt="{{ product_name }}">
               <div class="hero-titles">
-                <h1 class="hero-title">DBCheck</h1>
+                <h1 class="hero-title">{{ product_name }}</h1>
                 <p class="hero-subtitle" data-i18n="webui.home_hero_subtitle">基于 AI 的智能数据库巡检平台</p>
               </div>
             </div>
@@ -5484,7 +5484,7 @@ function formatBytes(bytes) {
               <button class="hero-btn hero-btn--ghost" onclick="showPage('intelligence')" data-i18n="webui.home_quick_diagnose">智能诊断</button>
             </div>
           </div>
-          <img class="hero-mascot" src="/mascot.png" alt="DBCheck Mascot">
+          <img class="hero-mascot" src="/mascot.png" alt="{{ product_name }} Mascot">
         </section>
 
         <!-- ══ 首屏 6 统计 ══ -->
@@ -6464,7 +6464,7 @@ function formatBytes(bytes) {
 
         <div class="card" style="margin-bottom:16px;font-size:13px;color:var(--text-muted);" id="dr-mechanism-card">
           <span style="font-weight:600;color:var(--text);" data-i18n="dr.mechanism_title">备份机制说明</span>
-          <span data-i18n="dr.mechanism_note">MySQL/MariaDB 通过 mysqldump、PostgreSQL 通过 pg_dump 本地命令执行；文件/目录使用 Python tarfile 直接打包。执行备份命令的机器即运行 DBCheck 的机器，需确保该机器网络可达目标数据库且已安装对应客户端工具。</span>
+          <span data-i18n="dr.mechanism_note">MySQL/MariaDB 通过 mysqldump、PostgreSQL 通过 pg_dump 本地命令执行；文件/目录使用 Python tarfile 直接打包。执行备份命令的机器即运行 RaccoonX 的机器，需确保该机器网络可达目标数据库且已安装对应客户端工具。</span>
         </div>
 
         <div class="card" style="margin-bottom:16px;" id="dr-health-card">
@@ -6613,7 +6613,7 @@ function formatBytes(bytes) {
         <div class="card">
           <div class="card-title"><span>🔐</span> API Key 管理</div>
           <div class="card-desc" style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">
-            API Key 用于外部系统（CI/CD、监控）调用 DBCheck REST API。创建后<b>仅显示一次</b>，请立即复制保存。
+            API Key 用于外部系统（CI/CD、监控）调用 {{ product_name }} REST API。创建后<b>仅显示一次</b>，请立即复制保存。
           </div>
           <div style="display:flex;gap:8px;margin-bottom:16px;">
             <button class="btn btn-primary" onclick="createApiKey()" style="font-size:12px;padding:6px 14px;">➕ 创建 API Key</button>
@@ -6808,14 +6808,14 @@ curl -H "X-API-Key: YOUR_API_KEY" http://localhost:5003/api/v1/inspect/{task_id}
           <div style="color:var(--text-muted);font-size:13px;margin-bottom:20px;line-height:1.7;white-space:pre-line">
             配置数据库客户端库，用于连接需要本地驱动的数据库（Oracle、YashanDB）。<br/>
             SQL Server 需要安装 Microsoft ODBC Driver（内置安装包可供使用）。<br/>
-            <strong style="color:var(--warn)">注意：</strong>修改后需要重启 DBCheck 才能生效。
+            <strong style="color:var(--warn)">注意：</strong>修改后需要重启 {{ product_name }} 才能生效。
           </div>
 
           <!-- 驱动自动配置 -->
           <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px;">
             <div style="font-weight:600;font-size:14px;margin-bottom:10px;">⬇️ 驱动自动配置</div>
             <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;line-height:1.6;">
-              一键下载并解压数据库客户端库到 DBCheck 目录，无需手动前往官网下载。
+              一键下载并解压数据库客户端库到 {{ product_name }} 目录，无需手动前往官网下载。
             </div>
             <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;line-height:1.6;">
               当前下载版本：Oracle Instant Client 23.26，支持 Windows / Linux / macOS。
@@ -7162,7 +7162,7 @@ curl -H "X-API-Key: YOUR_API_KEY" http://localhost:5003/api/v1/inspect/{task_id}
             <div>
               <h2 style="margin:0;font-size:18px;" data-i18n="webui.plugin_market_title">🧩 插件市场</h2>
               <p style="margin:4px 0 0 0;font-size:12px;color:var(--text-muted);">
-                <span data-i18n="webui.plugin_market_subtitle">浏览社区插件，一键安装扩展你的 DBCheck</span>
+                <span data-i18n="webui.plugin_market_subtitle">浏览社区插件，一键安装扩展你的 RaccoonX</span>
                 &nbsp;<a href="#" onclick="loadMarketPlugins(true)" style="font-size:11px;" data-i18n="webui.plugin_market_refresh">🔄 刷新</a>
               </p>
             </div>
@@ -7974,7 +7974,7 @@ curl -H "X-API-Key: YOUR_API_KEY" http://localhost:5003/api/v1/inspect/{task_id}
           <!-- 1. 数据文件概览 -->
           <div class="card" style="margin-bottom:16px;">
             <h3 style="font-size:15px;font-weight:600;margin-bottom:4px;" data-i18n="webui.dm_overview_title">数据文件概览</h3>
-            <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;" data-i18n="webui.dm_overview_desc">以下文件是 DBCheck 的核心数据，升级或迁移时必须备份</p>
+            <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;" data-i18n="webui.dm_overview_desc">以下文件是 RaccoonX 的核心数据，升级或迁移时必须备份</p>
             <div class="table-wrap">
               <table class="data-table" style="font-size:13px;">
                 <thead>
@@ -8025,7 +8025,7 @@ curl -H "X-API-Key: YOUR_API_KEY" http://localhost:5003/api/v1/inspect/{task_id}
               <button class="btn btn-ghost" onclick="dmCheckUpgrade()" data-i18n="webui.dm_upgrade_check">检测升级状态</button>
             </div>
             <div id="dm-upgrade-result">
-              <p style="font-size:13px;color:var(--text-muted);" data-i18n="webui.dm_upgrade_hint">升级 DBCheck 时，请确保备份以下核心文件：</p>
+              <p style="font-size:13px;color:var(--text-muted);" data-i18n="webui.dm_upgrade_hint">升级 RaccoonX 时，请确保备份以下核心文件：</p>
               <p style="font-size:12px;color:var(--text-muted);" data-i18n="webui.dm_upgrade_files">data/ 目录、pro_data/ 目录、inspection.db、.db_key</p>
             </div>
           </div>
@@ -8145,7 +8145,7 @@ curl -H "X-API-Key: YOUR_API_KEY" http://localhost:5003/api/v1/inspect/{task_id}
           <div class="card">
             <div class="card-title"><span>📊</span> <span data-i18n="webui.awr_upload_title">上传 AWR 报告</span></div>
             <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;" data-i18n="webui.awr_upload_hint">
-              上传 Oracle AWR HTML 报告（由 awrrpt.sql 生成），DBCheck 将自动解析并生成分析报告
+              上传 Oracle AWR HTML 报告（由 awrrpt.sql 生成），{{ product_name }} 将自动解析并生成分析报告
             </p>
             <div id="awr-drop-zone" style="border:2px dashed var(--border-color);border-radius:10px;padding:48px 24px;text-align:center;cursor:pointer;transition:all .2s;background:var(--surface);margin-bottom:16px"
                  ondragover="event.preventDefault();this.style.borderColor='var(--accent)';this.style.background='var(--card)'"
@@ -8314,7 +8314,7 @@ function applyI18N() {
   const subtitle = document.getElementById('topbar-sub');
   if (pageName === 'home') {
     if (title) title.textContent = i18n('webui.home_title') || '首页';
-    if (subtitle) subtitle.textContent = i18n('webui.home_subtitle') || '欢迎使用 DBCheck 数据库巡检工具';
+    if (subtitle) subtitle.textContent = i18n('webui.home_subtitle') || '欢迎使用 {{ product_name }} 数据库巡检工具';
   } else {
     // 用 showPage 中相同的 titles 映射刷新翻译
     const _titles = {
@@ -8731,7 +8731,7 @@ function showPage(name) {
   var navEl = document.getElementById('nav-' + name);
   if (navEl) navEl.classList.add('active');
   const titles = {
-    home:    [i18n('webui.home_title') || '首页',                      i18n('webui.home_subtitle') || '欢迎使用 DBCheck 数据库巡检工具'],
+    home:    [i18n('webui.home_title') || '首页',                      i18n('webui.home_subtitle') || '欢迎使用 {{ product_name }} 数据库巡检工具'],
     wizard:  [i18n('webui.nav_wizard') || '数据库巡检',                    i18n('webui.wizard_desc') || ''],
     reports: [i18n('webui.reports_title') || '数据库巡检历史',               i18n('webui.reports_desc') || ''],
     trend:   [i18n('webui.trend_title') || '历史趋势',                    i18n('webui.trend_desc') || ''],
@@ -8740,7 +8740,7 @@ function showPage(name) {
     ai:      [i18n('webui.ai_title') || 'AI 诊断',                       i18n('webui.ai_desc') || ''],
     datasources: [i18n('webui.nav_datasources') || '数据源管理',        i18n('webui.datasources_desc') || ''],
     rules:   [i18n('webui.nav_rules') || '巡检规则',                    i18n('webui.rules_desc') || ''],
-    license: [i18n('webui.nav_license') || '许可证',                    i18n('webui.license_desc') || '管理 DBCheck 许可证'],
+    license: [i18n('webui.nav_license') || '许可证',                    i18n('webui.license_desc') || '管理 {{ product_name }} 许可证'],
     backup:  ['💾 ' + (i18n('webui.backup_title') || '数据库备份管理'),  i18n('webui.backup_desc') || ''],
     apikey:  ['🔐 API Key 管理',                                    i18n('webui.apikey_desc') || '创建和管理 API 访问密钥'],
     account: ['👤 用户中心',                                         i18n('webui.account_desc') || '管理账户信息和安全设置'],
@@ -8754,7 +8754,7 @@ function showPage(name) {
     shares: [i18n('webui.shares_title') || '🔗 分享管理', i18n('webui.shares_desc') || '管理已生成的巡检报告分享链接'],
     'monitor-slow': [i18n('monitor.slow_title') || '实时慢查询', i18n('monitor.slow_desc') || '定时拉取各数据源 Top SQL'],
     'monitor-conn': [i18n('monitor.conn_title') || '活跃连接监控', i18n('monitor.conn_desc') || '实时查看各数据源连接数'],
-    'data-management': [i18n('webui.data_management_title') || '数据管理', i18n('webui.data_management_desc') || '管理 DBCheck 自身数据文件'],
+    'data-management': [i18n('webui.data_management_title') || '数据管理', i18n('webui.data_management_desc') || '管理 {{ product_name }} 自身数据文件'],
     'disaster-recovery': [i18n('webui.nav_disaster_recovery') || '容灾备份', i18n('dr.page_subtitle') || '基于 autobackup 的定时备份与调度'],
     'awr': [i18n('webui.awr_nav') || 'AWR 报告分析', i18n('webui.awr_desc') || '上传 Oracle AWR HTML 报告自动生成分析报告'],
     'oracle-client': [i18n('webui.oracle_client_title') || '数据库驱动设置', ''],
@@ -17154,7 +17154,7 @@ async function deleteBackupHistory(recordId) {
   </div>
   <div class="chat-messages" id="chat-messages">
     <div class="chat-msg ai" id="chat-welcome">
-      您好！我是 DBCheck AI 巡检助手 🎉<br><br>
+      您好！我是 {{ product_name }} AI 巡检助手 🎉<br><br>
       <strong>🔍 巡检执行</strong><br>
       • 巡检 MySQL-01 的连接数<br>
       • 查看 PostgreSQL 的锁等待<br>
@@ -18397,7 +18397,7 @@ async function deleteBackupHistory(recordId) {
         el.innerHTML =
           `✅ <strong>SQL Server ODBC 驱动已安装</strong><br/>` +
           `已安装驱动: ${data.available.map(d => '<code>' + d + '</code>').join(' / ')}<br/>` +
-          `DBCheck 将自动使用: <code>${data.using || data.available[0]}</code>`;
+          `{{ product_name }} 将自动使用: <code>${data.using || data.available[0]}</code>`;
         el.style.background = 'rgba(76,175,80,0.08)';
         el.style.border = '1px solid rgba(76,175,80,0.3)';
         el.style.color = '#00C8A0';
@@ -19226,9 +19226,9 @@ async function deleteBackupHistory(recordId) {
     <div class="about-hero">
       <button class="about-close-btn" onclick="closeAboutModal()">✕</button>
       <div class="about-hero-inner">
-        <img class="about-logo" src="/dbcheck_logo_icon.png" alt="DBCheck">
+        <img class="about-logo" src="/dbcheck_logo_icon.png" alt="{{ product_name }}">
         <div class="about-hero-text">
-          <h2>DBCheck</h2>
+          <h2>{{ product_name }}</h2>
           <div class="about-sub">Database Intelligent Inspector <span id="about-version">{{ version }}{% if edition == 'professional' %} · <span data-i18n="webui.edition_badge">专业版</span>{% endif %}</span></div>
         </div>
       </div>
@@ -19236,7 +19236,7 @@ async function deleteBackupHistory(recordId) {
     <!-- Body -->
     <div class="about-body">
       <p class="about-desc" data-i18n="webui.about_desc">
-        DBCheck 专业版是一款商业数据库智能巡检工具，支持 MySQL、PostgreSQL、Oracle、SQL Server、达梦（DM）、TiDB、IvorySQL、YashanDB、GBase 等主流数据库的健康巡检与 AI 诊断。
+        {{ product_name }} 专业版是一款商业数据库智能巡检工具，支持 MySQL、PostgreSQL、Oracle、SQL Server、达梦（DM）、TiDB、IvorySQL、YashanDB、GBase 等主流数据库的健康巡检与 AI 诊断。
       </p>
       <div class="about-meta">
         <span class="about-meta-item">作者：fiyo (Jack Ge)</span>
@@ -19269,7 +19269,7 @@ async function deleteBackupHistory(recordId) {
     </div>
     <!-- Footer -->
     <div class="about-footer">
-      © 2026 DBCheck · fiyo (Jack Ge) · <a href="https://github.com/fiyo/DBCheck" target="_blank">GitHub</a> · Apache License 2.0
+      © 2026 {{ product_name }} · fiyo (Jack Ge) · <a href="https://github.com/fiyo/DBCheck" target="_blank">GitHub</a> · Apache License 2.0
     </div>
   </div>
 </div>
@@ -19334,8 +19334,8 @@ document.addEventListener('keydown', function(e) {
   // ─── Slogan 动画循环 ───
   (function(){
     const slogans = [
-      { text: '全库掌控，一检即安', sub: 'DBCheck · Database Inspector' },
-      { text: '数据库安全，尽在 DBCheck', sub: 'Secure Your Data, Simplify Your Work' },
+      { text: '全库掌控，一检即安', sub: '{{ product_name }} · Database Inspector' },
+      { text: '数据库安全，尽在 {{ product_name }}', sub: 'Secure Your Data, Simplify Your Work' },
       { text: '洞悉每一行，守护每一库', sub: 'Insight in Every Row, Guard for Every DB' },
       { text: '一键巡检，万无一失', sub: 'One-Click Inspection, Zero Miss' }
     ];
@@ -20442,7 +20442,7 @@ function mkdirRemote() {
 <div class="status-bar" id="status-bar">
   <div class="sb-item sb-brand">
     <span class="version-badge" id="version-badge">{{ version }}{% if edition == 'professional' %} · <span data-i18n="webui.edition_badge">专业版</span>{% endif %}</span>
-    <span style="font-size:10px;color:var(--text-muted,#8a8f98);white-space:nowrap;">DBCheck · <a href="https://github.com/fiyo/DBCheck" target="_blank" style="color:inherit;">fiyo</a></span>
+    <span style="font-size:10px;color:var(--text-muted,#8a8f98);white-space:nowrap;">{{ product_name }} · <a href="https://github.com/fiyo/DBCheck" target="_blank" style="color:inherit;">fiyo</a></span>
   </div>
   <div class="sb-item" id="sb-inspection">
     <span>⏱️</span>

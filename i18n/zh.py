@@ -210,7 +210,7 @@ ZI = {
 
     # Web UI - 页面
     "webui.home_title": "首页",
-    "webui.home_subtitle": "欢迎使用 DBCheck 数据库巡检工具",
+    "webui.home_subtitle": "欢迎使用 RaccoonX 数据库巡检工具",
     "webui.home_health_score": "健康评分",
     "webui.home_health_score_sub": "综合健康状态",
     "webui.home_overview_title": "系统概览",
@@ -2437,7 +2437,7 @@ ZI = {
     # ── 许可证 ──
     "webui.nav_license": "许可证",
     "webui.license_title": "专业版许可证",
-    "webui.license_desc": "管理 DBCheck Pro 许可证激活与状态",
+    "webui.license_desc": "管理 RaccoonX Pro 许可证激活与状态",
     "webui.license_key_label": "许可证密钥",
     "webui.license_key_placeholder": "DBCheck-Pro-XXXX-XXXX-XXXX",
     "webui.license_activate_btn": "激活专业版",
@@ -2524,7 +2524,7 @@ ZI = {
     "webui.ds_operation_fail": "操作失败：{}",
     "webui.ds_load_fail": "加载数据源失败",
     # ── 首页概览 ──
-    "webui.home_welcome": "欢迎使用 DBCheck",
+    "webui.home_welcome": "欢迎使用 RaccoonX",
     "webui.home_instance_dist": "实例分布",
     "webui.home_instance_dist_sub": "各类型数据库数量",
     "webui.home_scheduler": "定时巡检",
@@ -2696,12 +2696,12 @@ ZI = {
     "webui.nav_inspect_config": "巡检配置管理",
     "webui.nav_section_system": "系统配置",
     "webui.nav_section_dr": "容灾备份",
-    "webui.nav_data_management": "DBCheck 备份",
-    "webui.data_management_title": "DBCheck 备份",
-    "webui.data_management_desc": "备份 DBCheck 自身数据文件：备份、还原、升级检测",
+    "webui.nav_data_management": "RaccoonX 备份",
+    "webui.data_management_title": "RaccoonX 备份",
+    "webui.data_management_desc": "备份 RaccoonX 自身数据文件：备份、还原、升级检测",
     "dr.db_empty_hint": "该数据源未配置默认库，请手动填写",
     "webui.dm_overview_title": "数据文件概览",
-    "webui.dm_overview_desc": "以下文件是 DBCheck 的核心数据，升级或迁移时必须备份",
+    "webui.dm_overview_desc": "以下文件是 RaccoonX 的核心数据，升级或迁移时必须备份",
     "webui.dm_table_file": "文件/目录",
     "webui.dm_table_name": "说明",
     "webui.dm_table_category": "类型",
@@ -2732,7 +2732,7 @@ ZI = {
     "webui.dm_upgrade_check": "检测升级状态",
     "webui.dm_upgrade_ready": "数据状态正常",
     "webui.dm_upgrade_need_backup": "升级前建议先备份数据",
-    "webui.dm_upgrade_hint": "升级 DBCheck 时，请确保备份以下核心文件：",
+    "webui.dm_upgrade_hint": "升级 RaccoonX 时，请确保备份以下核心文件：",
     "webui.dm_upgrade_files": "data/ 目录、pro_data/ 目录、data/inspection.db、.db_key",
     "webui.dm_upgrade_total_size": "当前数据总量",
     "webui.dm_upgrade_backup_count": "现有备份数",
@@ -2790,10 +2790,10 @@ ZI = {
     "webui.login_error_empty": "请输入用户名和密码",
     "webui.network_error": "网络错误，请稍后重试",
     # ── 关于页面 ──
-    "webui.nav_about": "关于 DBCheck",
-    "webui.about_desc": "DBCheck 是一款开源数据库智能巡检工具，支持 MySQL、PostgreSQL、Oracle、SQL Server、达梦（DM）、TiDB、IvorySQL、YashanDB 等主流数据库的健康巡检与 AI 诊断。",
+    "webui.nav_about": "关于 RaccoonX",
+    "webui.about_desc": "RaccoonX 是一款开源数据库智能巡检工具，支持 MySQL、PostgreSQL、Oracle、SQL Server、达梦（DM）、TiDB、IvorySQL、YashanDB 等主流数据库的健康巡检与 AI 诊断。",
     "webui.about_author": "作者：Jack Ge · Apache License 2.0 · 官网：dbcheck.top",
-    "webui.about_grayscale_note": "纪念日灰度模式是 DBCheck 的原创设计，已写入上方开源协议。请勿修改或绕过该模式。",
+    "webui.about_grayscale_note": "纪念日灰度模式是 RaccoonX 的原创设计，已写入上方开源协议。请勿修改或绕过该模式。",
 
     # PG 高优先级检查项（2026-05-21 新增）
     "report.pg_issue_tablespace_large": "表空间过大",
@@ -3021,7 +3021,7 @@ ZI = {
     "webui.nav_shares": "分享管理",
     "webui.shares_title": "🔗 分享管理",
     "webui.shares_desc": "管理已生成的巡检报告分享链接，可以查看访问次数和删除不需要的链接。",
-    "webui.plugin_market_subtitle": "浏览社区插件，一键安装扩展你的 DBCheck",
+    "webui.plugin_market_subtitle": "浏览社区插件，一键安装扩展你的 RaccoonX",
     "webui.plugin_market_refresh": "🔄 刷新",
     "webui.plugin_market_search": "🔍 搜索插件...",
     "webui.plugin_market_category_all": "全部",
@@ -3197,7 +3197,7 @@ ZI = {
     "dr.password_saved": "已保存，留空则使用数据源密码",
     "dr.password_empty": "请输入密码",
     "dr.mechanism_title": "备份机制说明",
-    "dr.mechanism_note": "MySQL/MariaDB 通过 mysqldump、PostgreSQL 通过 pg_dump 本地命令执行；文件/目录使用 Python tarfile 直接打包。执行备份命令的机器即运行 DBCheck 的机器，需确保该机器网络可达目标数据库且已安装对应客户端工具。",
+    "dr.mechanism_note": "MySQL/MariaDB 通过 mysqldump、PostgreSQL 通过 pg_dump 本地命令执行；文件/目录使用 Python tarfile 直接打包。执行备份命令的机器即运行 RaccoonX 的机器，需确保该机器网络可达目标数据库且已安装对应客户端工具。",
 }
 
 
@@ -3257,7 +3257,7 @@ ZI.update({
     "webui.status_version": "版本",
 
     # ══ 登录页 ══
-    "login.title": "DBCheck",
+    "login.title": "RaccoonX",
     "login.subtitle": "智能数据库巡检与性能分析平台",
     "login.welcome": "欢迎回来",
     "login.welcome_desc": "登录以开始您的数据库巡检之旅",
@@ -3282,10 +3282,10 @@ ZI.update({
     "login.demo_viewer": "只读",
     "login.demo_operator": "运维",
     "login.theme_toggle": "切换主题",
-    "login.copyright": "DBCheck © 2026",
+    "login.copyright": "RaccoonX © 2026",
     "login.show_password": "显示密码",
     "login.hide_password": "隐藏密码",
-    "login.mascot_badge": "DBCheck 智能巡检官",
+    "login.mascot_badge": "RaccoonX 智能巡检官",
 
     # User Center & System Management
     "webui.user_menu_logged_in": "已登录",

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DBCheck - Login</title>
+    <title>{{ product_name }} - Login</title>
     <style>
         /* ─── 基础重置 ─── */
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -685,21 +685,21 @@
             <div class="brand-content">
                 <!-- 吉祥物 -->
                 <div class="mascot-wrap">
-                    <img src="/mascot.png" class="mascot-img" alt="DBCheck Mascot"
+                    <img src="/mascot.png" class="mascot-img" alt="{{ product_name }} Mascot"
                          onerror="this.style.display='none'">
                 </div>
 
                 <!-- 徽章 -->
                 <div class="mascot-badge">
                     <span class="dot"></span>
-                    <span data-i18n="login.mascot_badge">DBCheck 智能巡检官</span>
+                    <span data-i18n="login.mascot_badge">{{ product_name }} 智能巡检官</span>
                 </div>
 
                 <!-- Logo + 产品名 -->
                 <div class="brand-logo-row">
-                    <img src="/dbcheck_logo_icon.png" class="brand-logo" alt="DBCheck Logo"
+                    <img src="/dbcheck_logo_icon.png" class="brand-logo" alt="{{ product_name }} Logo"
                          onerror="this.style.display='none'">
-                    <span class="brand-name" data-i18n="login.title">DBCheck</span>
+                    <span class="brand-name" data-i18n="login.title">{{ product_name }}</span>
                 </div>
 
                 <!-- Slogan -->
@@ -788,7 +788,7 @@
 
                 <!-- 底部版本 -->
                 <div class="login-footer">
-                    <span id="login-version">v2.6.3</span> · <span data-i18n="login.copyright">DBCheck © 2026</span>
+                    <span id="login-version">v2.6.3</span> · <span data-i18n="login.copyright">{{ product_name }} © 2026</span>
                 </div>
             </div>
         </div>
@@ -859,7 +859,7 @@
             });
 
             // 更新页面标题
-            document.title = (i18n('login.title') || 'DBCheck') + ' - Login';
+            document.title = (i18n('login.title') || '{{ product_name }}') + ' - Login';
         }
 
         async function changeLang() {

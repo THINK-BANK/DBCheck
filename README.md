@@ -1,17 +1,17 @@
-﻿# DBCheck
+﻿# RaccoonX
 
 🚀 **Open Source Intelligent Database Inspection & Health Analysis Platform**
 
-![DBCheck Logo](snapshot/dbcheck_logo_info.png)
+![RaccoonX Logo](snapshot/dbcheck_logo_info.png)
 
 
-DBCheck is an **Apache License 2.0 licensed open-source database inspection and health analysis platform**.
+RaccoonX is an **Apache License 2.0 licensed open-source database inspection and health analysis platform**.
 
 It helps Database Administrators (DBAs), developers, and operation teams automatically inspect databases, discover potential risks, analyze performance problems, and generate standardized health inspection reports.
 
-DBCheck supports multiple relational databases, document databases, and KV databases.
+RaccoonX supports multiple relational databases, document databases, and KV databases.
 
-Through automated inspection rules, system resource collection, AI-assisted diagnosis, and extensible plugins, DBCheck helps teams build a more reliable and efficient database operation process.
+Through automated inspection rules, system resource collection, AI-assisted diagnosis, and extensible plugins, RaccoonX helps teams build a more reliable and efficient database operation process.
 
 
 > Third-party software names, logos, trademarks, badges, and related assets displayed in this project belong to their respective owners. Their appearance only indicates compatibility or support, and does not imply any affiliation or partnership.
@@ -38,7 +38,7 @@ Through automated inspection rules, system resource collection, AI-assisted diag
 
 ---
 
-# Why DBCheck?
+# Why RaccoonX?
 
 
 Modern applications depend heavily on databases.
@@ -51,7 +51,7 @@ However, database operation and maintenance still often rely on:
 - Temporary troubleshooting
 
 
-DBCheck aims to provide an open-source, intelligent, and extensible database inspection platform.
+RaccoonX aims to provide an open-source, intelligent, and extensible database inspection platform.
 
 It helps teams:
 
@@ -68,7 +68,7 @@ It helps teams:
 
 ## 🗄️ Multi Database Support
 
-DBCheck supports more than 20 database systems:
+RaccoonX supports more than 20 database systems:
 
 - MySQL
 - MariaDB
@@ -115,7 +115,7 @@ Generates professional inspection reports:
 ## 🤖 AI Assisted Diagnosis
 
 
-DBCheck integrates AI capabilities to help analyze inspection results.
+RaccoonX integrates AI capabilities to help analyze inspection results.
 
 Supported AI modes:
 
@@ -150,7 +150,7 @@ Built-in analysis capabilities:
 ## 📊 Historical Trend Analysis
 
 
-DBCheck stores inspection history and provides:
+RaccoonX stores inspection history and provides:
 
 - Trend charts
 - Before/after comparison
@@ -161,7 +161,7 @@ DBCheck stores inspection history and provides:
 ## 🔌 Plugin Architecture
 
 
-DBCheck provides an extensible plugin system.
+RaccoonX provides an extensible plugin system.
 
 Plugins can independently manage:
 
@@ -171,7 +171,7 @@ Plugins can independently manage:
 - Database adapters
 
 
-Developers can extend DBCheck by creating custom plugins.
+Developers can extend RaccoonX by creating custom plugins.
 
 
 ## 🖥️ Server Health Inspection
@@ -179,7 +179,7 @@ Developers can extend DBCheck by creating custom plugins.
 
 Database problems are often related to infrastructure.
 
-DBCheck can inspect:
+RaccoonX can inspect:
 
 - CPU
 - Memory
@@ -192,7 +192,7 @@ DBCheck can inspect:
 ## 🌐 Web Interface
 
 
-DBCheck provides a modern Web UI:
+RaccoonX provides a modern Web UI:
 
 - Database management
 - Inspection execution
@@ -205,7 +205,7 @@ DBCheck provides a modern Web UI:
 ## 🐳 Docker Ready
 
 
-DBCheck provides official Docker images.
+RaccoonX provides official Docker images.
 
 No complicated environment preparation required.
 
@@ -213,7 +213,7 @@ No complicated environment preparation required.
 
 # Supported Databases
 
-DBCheck supports more than 20 database systems:
+RaccoonX supports more than 20 database systems:
 
 | Database | Driver | Default Port | Notes |
 |----------|--------|:---:|-------|
@@ -418,7 +418,7 @@ For hosts where you don't want an agent:
 
 ## 🔌 Plugin System
 
-DBCheck v2.8.0 introduces a fully independent plugin architecture. Plugins can now manage their own lifecycle and data, enabling true extensibility.
+RaccoonX v2.8.0 introduces a fully independent plugin architecture. Plugins can now manage their own lifecycle and data, enabling true extensibility.
 
 ### Key Features
 
@@ -768,7 +768,7 @@ A: Built-in thresholds are based on general best practices. Evaluate against you
 
 ## On Reliability and Bugs
 
-**DBCheck is developed and maintained by one person in their spare time.** It is fully open source under Apache-2.0, and the Community Edition is free forever, with no charge of any kind.
+**RaccoonX is developed and maintained by one person in their spare time.** It is fully open source under Apache-2.0, and the Community Edition is free forever, with no charge of any kind.
 
 The project covers 21 database types and 330+ inspection rules, across a wide range of major versions, parameter configurations, and privilege models. There is no dedicated QA team and no test pipeline behind it, so **zero defects across all scenarios cannot be guaranteed**. Main workflows are self-tested before each release, but a single test environment cannot reproduce every real-world production setup.
 
@@ -793,13 +793,13 @@ This project references the following works:
 
 ## Support the Project
 
-> ❤️ Thank you for supporting DBCheck.
+> ❤️ Thank you for supporting RaccoonX.
 >
-> DBCheck is an open-source project licensed under Apache License 2.0.
+> RaccoonX is an open-source project licensed under Apache License 2.0.
 > 
 > You are free to use, modify, distribute, and contribute to this project according to the license terms.
 > 
-> If DBCheck helps your work, your support is appreciated:
+> If RaccoonX helps your work, your support is appreciated:
 > 
 > - ⭐ Star the GitHub repository
 > - 🐛 Submit bug reports
@@ -807,9 +807,9 @@ This project references the following works:
 > - 🔧 Contribute code
 > - 📢 Share the project with the community
 > 
-> Every contribution helps DBCheck become better.
+> Every contribution helps RaccoonX become better.
 > 
-> Thank you for being part of the DBCheck community.
+> Thank you for being part of the RaccoonX community.
 
 ## Enterprise Services
 
@@ -831,7 +831,7 @@ This project references the following works:
 
 <img src="snapshot/pay-en.png" alt="QR Code" width="800" />
 
-<img src="snapshot/dbcheck-badge-800w.png" alt="DBCheck Supporter Badge" width="800" />
+<img src="snapshot/dbcheck-badge-800w.png" alt="RaccoonX Supporter Badge" width="800" />
 
 > Please specify your name or nickname when sponsoring ❤️
 

@@ -3011,7 +3011,7 @@ ZH_TW.update({
     "webui.status_version": "版本",
 
     # ══ 登入頁 ══
-    "login.title": "DBCheck",
+    "login.title": "RaccoonX",
     "login.subtitle": "智能資料庫巡檢與效能分析平台",
     "login.welcome": "歡迎回來",
     "login.welcome_desc": "登入以開始您的資料庫巡檢之旅",
@@ -3036,10 +3036,10 @@ ZH_TW.update({
     "login.demo_viewer": "唯讀",
     "login.demo_operator": "維運",
     "login.theme_toggle": "切換主題",
-    "login.copyright": "DBCheck © 2026",
+    "login.copyright": "RaccoonX © 2026",
     "login.show_password": "顯示密碼",
     "login.hide_password": "隱藏密碼",
-    "login.mascot_badge": "DBCheck 智能巡檢官",
+    "login.mascot_badge": "RaccoonX 智能巡檢官",
 
     # User Center & System Management
     "webui.user_menu_logged_in": "Logged in",
