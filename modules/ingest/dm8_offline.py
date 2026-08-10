@@ -30,6 +30,8 @@ import time
 from pathlib import Path
 from datetime import datetime
 from collections import defaultdict
+from dataclasses import dataclass
+from typing import Optional
 from modules.core import paths
 
 # ── DM8 存储常量（来自 DM8 官方公开文档）──────────────────────────
@@ -68,6 +70,42 @@ BLOCK_ZERO = 'ZERO_PAGE'
 BLOCK_CONSTANT = 'CONSTANT_FILL'
 BLOCK_TRUNCATED = 'TRUNCATED'
 
+# ── 新增：页结构级具体坏块（基于独立验证的公开格式候选偏移）──
+#   - PAGE_NO_MISMATCH  : 页头 page_no ≠ 物理页号（页错位 / 拷贝损坏的直接证据）
+#   - REF_OUT_OF_RANGE  : prev/next 链指针引用指向文件外页号（B 树/段链指针损坏）
+#   - PAGE_KIND_UNKNOWN : 页类型落入未知/损坏区间
+#   - STORAGE_ID_DRIFT  : 存储对象归属异常（疑似混页 / 拷贝错位）
+BLOCK_PAGE_NO_MISMATCH = 'PAGE_NO_MISMATCH'
+BLOCK_REF_OUT_OF_RANGE = 'REF_OUT_OF_RANGE'
+BLOCK_PAGE_KIND_UNKNOWN = 'PAGE_KIND_UNKNOWN'
+BLOCK_STORAGE_ID_DRIFT = 'STORAGE_ID_DRIFT'
+
+# ── DM8 页头偏移候选 ─────────────────────────────────────────────
+# 偏移假设源自 dmdul 公开研究笔记 DM8_PAGE_STRUCTURE_NOTES.md（标注 working
+# candidate）。DBCheck 独立实现并保守校验，零侵权，未引入 dmdul 代码。
+PAGE_OFF_GROUP_RAW = 0x00
+PAGE_OFF_PAGE_NO = 0x04
+PAGE_OFF_PREV_REF = 0x08
+PAGE_OFF_NEXT_REF = 0x0e
+PAGE_OFF_PAGE_KIND = 0x14
+PAGE_OFF_STORAGE_ID = 0x3a
+NULL_REF_RAW = b'\xff' * 6
+
+KNOWN_PAGE_KINDS = {
+    0x00000011: 'space-bitmap',
+    0x00000013: 'file-control',
+    0x00000014: 'btree-data',
+    0x00000015: 'segment-root',
+    0x1a1a001a: 'internal-metadata',
+    0xffff00ff: 'empty-initialized',
+}
+# 仅对这些页类型做强 page_no 一致性校验；
+# 控制页(0x13)/位图页(0x11)的 page_no 可能合法地 ≠ 物理页号，予以豁免。
+PAGE_NO_STRICT_KINDS = {0x00000014, 0x00000015}  # btree-data / segment-root
+
+# 阻断离线恢复建议（fatal 级）的坏块类型
+RECOVERY_BLOCKING_TYPES = {BLOCK_PAGE_NO_MISMATCH}
+
 
 class DM8DataFileInfo:
     """单个 DM8 数据文件的基本信息"""
@@ -88,6 +126,7 @@ class DM8DataFileInfo:
         self.too_small = False  # 小于一个页大小
         self.header_hex = ''  # 首页头部前 64 字节的十六进制
         self.md5_prefix = ''  # 首页前 512 字节的 MD5（用于快速去重检测）
+        self.page_storage_samples = []  # [(page_idx, storage_id), ...] 用于归属一致性分析
 
         if self.exists:
             try:
@@ -183,6 +222,93 @@ class DM8Diagnostic:
             'file_name': self.file_name,
             'detail': self.detail,
         }
+
+
+@dataclass
+class DM8PageHeader:
+    """DM8 数据页头部解析（仅用于离线健康检查的坏块定位）。
+
+    偏移假设源自 dmdul 公开研究笔记 DM8_PAGE_STRUCTURE_NOTES.md（标注 working
+    candidate），DBCheck 独立实现并保守校验，零侵权，未引入 dmdul 代码。
+    """
+
+    page_no: int
+    prev_ref: Optional[tuple]      # (file_no, page_no) 或 None
+    next_ref: Optional[tuple]
+    page_kind_raw: int
+    group_id: int
+    file_no_hint: int
+    storage_id: int
+
+    @classmethod
+    def from_bytes(cls, page: bytes) -> 'DM8PageHeader':
+        if len(page) < 64:
+            raise ValueError('page must contain at least 64 bytes')
+        group_raw = int.from_bytes(
+            page[PAGE_OFF_GROUP_RAW:PAGE_OFF_GROUP_RAW + 4], 'little')
+        return cls(
+            page_no=int.from_bytes(
+                page[PAGE_OFF_PAGE_NO:PAGE_OFF_PAGE_NO + 4], 'little'),
+            prev_ref=cls._decode_ref(
+                page[PAGE_OFF_PREV_REF:PAGE_OFF_PREV_REF + 6]),
+            next_ref=cls._decode_ref(
+                page[PAGE_OFF_NEXT_REF:PAGE_OFF_NEXT_REF + 6]),
+            page_kind_raw=int.from_bytes(
+                page[PAGE_OFF_PAGE_KIND:PAGE_OFF_PAGE_KIND + 4], 'little'),
+            group_id=group_raw & 0xffff,
+            file_no_hint=group_raw >> 16,
+            storage_id=int.from_bytes(
+                page[PAGE_OFF_STORAGE_ID:PAGE_OFF_STORAGE_ID + 4], 'little'),
+        )
+
+    @staticmethod
+    def _decode_ref(raw6: bytes) -> Optional[tuple]:
+        if raw6 == NULL_REF_RAW:
+            return None
+        return (int.from_bytes(raw6[0:2], 'little'),
+                int.from_bytes(raw6[2:6], 'little'))
+
+
+def analyze_dm8_page(page_data: bytes, page_idx: int,
+                     pages_total: int) -> dict:
+    """对单页做坏块分类，返回 {blocks: [...], storage_id: int|None}。
+
+    纯字节解析，零侵权。blocks 为坏块字典列表（含 PAGE_NO_MISMATCH /
+    REF_OUT_OF_RANGE / PAGE_KIND_UNKNOWN），每个坏块含 type 与占位字段；
+    file_name/file_path/file_offset 由调用方（_scan_pages）回填。
+    """
+    result: dict = {'blocks': [], 'storage_id': None}
+    if len(page_data) < 64:
+        return result
+    try:
+        h = DM8PageHeader.from_bytes(page_data)
+    except Exception:
+        return result
+    result['storage_id'] = h.storage_id
+
+    # 坏块 1：页号错位（仅对数据页/段根页做强校验，控制页/位图页豁免）
+    if h.page_kind_raw in PAGE_NO_STRICT_KINDS and h.page_no != page_idx:
+        result['blocks'].append({
+            'type': BLOCK_PAGE_NO_MISMATCH,
+        })
+
+    # 坏块 2：链指针越界（同文件提示且引用页号超出文件总页数）
+    for ref in (h.prev_ref, h.next_ref):
+        if (ref is not None
+                and ref[0] == h.file_no_hint
+                and ref[1] >= pages_total):
+            result['blocks'].append({
+                'type': BLOCK_REF_OUT_OF_RANGE,
+            })
+            break
+
+    # 坏块 3：页类型异常（未知/损坏区间）
+    if h.page_kind_raw != 0 and h.page_kind_raw not in KNOWN_PAGE_KINDS:
+        result['blocks'].append({
+            'type': BLOCK_PAGE_KIND_UNKNOWN,
+        })
+
+    return result
 
 
 class DM8OfflineHealthChecker:
@@ -390,6 +516,8 @@ class DM8OfflineHealthChecker:
 
             # 扫描页面统计
             self._scan_pages(info, ps)
+            # 跨页存储对象归属一致性（疑似混页）分析
+            self._analyze_storage_id_consistency(info)
 
         self.scan_stats['total_pages_scanned'] = sum(
             f.total_pages for f in self.data_files if f.total_pages > 0
@@ -399,11 +527,16 @@ class DM8OfflineHealthChecker:
         """
         扫描数据文件的所有页面，识别坏块（数据块损坏）。
 
-        坏块识别基于"页内容明显异常"的通用信号，不读取任何 DM8 页头私有偏移、
-        不依赖 bic-dmdul 代码、不依赖达梦未公开的页格式知识，零侵权：
-          - ZERO_PAGE    : 整页字节全为 0x00
-          - CONSTANT_FILL: 整页为单一非全零字节（异常填充 / 磁盘坏道特征）
-          - TRUNCATED    : 文件末页字节数不足页大小（文件被截断）
+        坏块识别在原有"页内容明显异常"的通用信号基础上，新增页结构级具体坏块
+        检测（基于独立验证的公开格式候选偏移，纯字节解析，不依赖 bic-dmdul
+        代码、不依赖达梦未公开页格式知识，零侵权）：
+          - ZERO_PAGE         : 整页字节全为 0x00
+          - CONSTANT_FILL     : 整页为单一非全零字节（异常填充 / 磁盘坏道特征）
+          - TRUNCATED         : 文件末页字节数不足页大小（文件被截断）
+          - PAGE_NO_MISMATCH  : 页头 page_no ≠ 物理页号（页错位 / 拷贝损坏）
+          - REF_OUT_OF_RANGE  : prev/next 链指针引用指向文件外页号（链损坏）
+          - PAGE_KIND_UNKNOWN : 页类型落入未知/损坏区间
+          - STORAGE_ID_DRIFT  : 存储对象归属异常（疑似混页，跨页聚合判定）
 
         每个坏块记录物理页号（= file_offset // page_size，纯文件布局数学）
         与文件偏移，便于精确定位。
@@ -415,6 +548,8 @@ class DM8OfflineHealthChecker:
             header_buf = None
             md5_buf = None
             pages_checked = 0
+            pages_total = info.size // page_size
+            storage_samples = []
 
             # 多扫描一页以覆盖末页截断（文件大小非页大小整数倍）；
             # 限制单文件最大扫描页数，防止超大文件耗时过长
@@ -467,6 +602,20 @@ class DM8OfflineHealthChecker:
                         })
                         continue
 
+                    # ── 新增：页结构级具体坏块检测（独立验证的公开候选偏移）──
+                    page_analysis = analyze_dm8_page(page_data, page_idx, pages_total)
+                    if page_analysis['storage_id'] is not None:
+                        storage_samples.append((page_idx, page_analysis['storage_id']))
+                    for blk in page_analysis['blocks']:
+                        corrupt_blocks.append({
+                            'file_name': info.name,
+                            'file_path': str(info.path),
+                            'page_no': page_idx,
+                            'file_offset': file_offset,
+                            'type': blk['type'],
+                            'tablespace': '',
+                        })
+
                     # 保存首页头部信息
                     if page_idx == 0:
                         header_buf = page_data[:64]
@@ -477,6 +626,7 @@ class DM8OfflineHealthChecker:
             info.zero_pages = zero_count
             info.total_pages = pages_checked  # 使用实际扫描的页数
             info.corrupt_blocks = corrupt_blocks
+            info.page_storage_samples = storage_samples
 
             # 全零页诊断（保留按文件详细诊断）
             if zero_count > 0:
@@ -502,6 +652,42 @@ class DM8OfflineHealthChecker:
             self._add_diag(SEVERITY_ERROR, 'FILE_READ_ERROR',
                            f'读取文件异常: {info.name} - {e}',
                            file_name=info.name)
+
+    def _analyze_storage_id_consistency(self, info: DM8DataFileInfo):
+        """跨页存储对象归属一致性（疑似混页）分析。
+
+        收集自 _scan_pages 的 (page_idx, storage_id) 样本，统计主流 storage_id；
+        若存在与主流值集合不相交的 storage_id，且占比超过阈值（默认 5%）则判定
+        为 STORAGE_ID_DRIFT 坏块。保守策略：占比不超阈值不报，避免误报。
+        """
+        samples = getattr(info, 'page_storage_samples', []) or []
+        if len(samples) < 20:
+            return
+
+        from collections import Counter
+        counts = Counter(sid for _, sid in samples)
+        # 主流值取前二（兼容并列），构成"合法归属"集合
+        top = [sid for sid, _ in counts.most_common(2)]
+        drift_pages = [
+            page_idx for page_idx, sid in samples
+            if sid not in top
+        ]
+        if not drift_pages:
+            return
+
+        drift_ratio = len(drift_pages) / len(samples)
+        if drift_ratio <= 0.05:
+            return
+
+        for page_idx in drift_pages:
+            info.corrupt_blocks.append({
+                'file_name': info.name,
+                'file_path': str(info.path),
+                'page_no': page_idx,
+                'file_offset': page_idx * (info.page_size or DEFAULT_PAGE_SIZE),
+                'type': BLOCK_STORAGE_ID_DRIFT,
+                'tablespace': '',
+            })
 
     # ── Step 5: 解析控制文件 ──────────────────────────────────────
 
@@ -709,6 +895,10 @@ class DM8OfflineHealthChecker:
             BLOCK_ZERO: 0,
             BLOCK_CONSTANT: 0,
             BLOCK_TRUNCATED: 0,
+            BLOCK_PAGE_NO_MISMATCH: 0,
+            BLOCK_REF_OUT_OF_RANGE: 0,
+            BLOCK_PAGE_KIND_UNKNOWN: 0,
+            BLOCK_STORAGE_ID_DRIFT: 0,
         }
         all_blocks = []
         for info in self.data_files:
@@ -727,14 +917,36 @@ class DM8OfflineHealthChecker:
             pct = (summary['total'] / total_pages * 100) if total_pages > 0 else 0
             msg = (f'发现 {summary["total"]} 个可疑坏块 '
                    f'(全零 {summary[BLOCK_ZERO]}, 异常填充 {summary[BLOCK_CONSTANT]}, '
-                   f'截断 {summary[BLOCK_TRUNCATED]}，损坏率 {pct:.2f}%)')
-            if pct > 5 or summary[BLOCK_TRUNCATED] > 0:
+                   f'截断 {summary[BLOCK_TRUNCATED]}, '
+                   f'页号错位 {summary[BLOCK_PAGE_NO_MISMATCH]}, '
+                   f'链指针越界 {summary[BLOCK_REF_OUT_OF_RANGE]}, '
+                   f'页类型异常 {summary[BLOCK_PAGE_KIND_UNKNOWN]}, '
+                   f'归属漂移 {summary[BLOCK_STORAGE_ID_DRIFT]}，损坏率 {pct:.2f}%)')
+            if pct > 5 or summary[BLOCK_TRUNCATED] > 0 or summary[BLOCK_PAGE_NO_MISMATCH] > 0:
                 sev = SEVERITY_ERROR
             elif pct > 1:
                 sev = SEVERITY_WARN
             else:
                 sev = SEVERITY_INFO
             self._add_diag(sev, 'BLOCK_CORRUPT_SUMMARY', msg)
+
+        # 各类"具体坏块"独立诊断（便于 UI 直接呈现与恢复门禁判定）
+        if summary[BLOCK_PAGE_NO_MISMATCH] > 0:
+            self._add_diag(SEVERITY_FATAL, 'PAGE_NO_MISMATCH',
+                           f'发现 {summary[BLOCK_PAGE_NO_MISMATCH]} 个页号错位坏块'
+                           f'（页头 page_no ≠ 物理页号，疑似页错位/拷贝损坏）')
+        if summary[BLOCK_REF_OUT_OF_RANGE] > 0:
+            self._add_diag(SEVERITY_ERROR, 'REF_OUT_OF_RANGE',
+                           f'发现 {summary[BLOCK_REF_OUT_OF_RANGE]} 个链指针越界坏块'
+                           f'（prev/next 引用指向文件外页号，链损坏）')
+        if summary[BLOCK_PAGE_KIND_UNKNOWN] > 0:
+            self._add_diag(SEVERITY_WARN, 'PAGE_KIND_UNKNOWN',
+                           f'发现 {summary[BLOCK_PAGE_KIND_UNKNOWN]} 个页类型异常页'
+                           f'（page_kind 落入未知/损坏区间）')
+        if summary[BLOCK_STORAGE_ID_DRIFT] > 0:
+            self._add_diag(SEVERITY_ERROR, 'STORAGE_ID_DRIFT',
+                           f'发现 {summary[BLOCK_STORAGE_ID_DRIFT]} 个存储对象归属异常页'
+                           f'（疑似混页/拷贝错位，占比超阈值）')
 
     def _build_result(self) -> dict:
         """构建最终结果字典"""
@@ -779,7 +991,18 @@ class DM8OfflineHealthChecker:
                 'zero': sum(1 for b in self.corrupt_blocks if b['type'] == BLOCK_ZERO),
                 'constant_fill': sum(1 for b in self.corrupt_blocks if b['type'] == BLOCK_CONSTANT),
                 'truncated': sum(1 for b in self.corrupt_blocks if b['type'] == BLOCK_TRUNCATED),
+                'page_no_mismatch': sum(1 for b in self.corrupt_blocks if b['type'] == BLOCK_PAGE_NO_MISMATCH),
+                'ref_out_of_range': sum(1 for b in self.corrupt_blocks if b['type'] == BLOCK_REF_OUT_OF_RANGE),
+                'page_kind_unknown': sum(1 for b in self.corrupt_blocks if b['type'] == BLOCK_PAGE_KIND_UNKNOWN),
+                'storage_id_drift': sum(1 for b in self.corrupt_blocks if b['type'] == BLOCK_STORAGE_ID_DRIFT),
             },
+            # Level B 恢复门禁（借鉴 dmdul preflight 分层，仅给建议性信号，不做抽取）
+            'recoverable': not any(
+                b['type'] in RECOVERY_BLOCKING_TYPES for b in self.corrupt_blocks),
+            'recovery_blocking_codes': sorted({
+                b['type'] for b in self.corrupt_blocks
+                if b['type'] in RECOVERY_BLOCKING_TYPES
+            }),
         }
 
 
@@ -1485,6 +1708,7 @@ class DM8RemoteHealthChecker(DM8OfflineHealthChecker):
                 info.too_small = (0 < file_size < 4096)
                 info.header_hex = ''
                 info.md5_prefix = ''
+                info.page_storage_samples = []
 
                 self.data_files.append(info)
                 self.scan_stats['total_files_scanned'] += 1
@@ -1515,17 +1739,18 @@ class DM8RemoteHealthChecker(DM8OfflineHealthChecker):
 
     def _scan_pages(self, info: DM8DataFileInfo, page_size: int):
         """
-        远程页面扫描：通过 SSH 在远程执行 Python 脚本，识别坏块
-        （全零页 / 整页单一字节异常填充 / 末页截断）。
+        远程页面扫描：通过 SSH 在远程执行 Python 脚本，识别坏块。
 
-        与本地版逻辑一致，仅检测"页内容明显异常"的通用信号，不读取 DM8 页头
-        私有偏移、不依赖 bic-dmdul 代码，零侵权。
+        与本地版逻辑一致，在原有"页内容明显异常"通用信号基础上，新增页结构级
+        具体坏块检测（页号错位 / 链指针越界 / 页类型异常 / 归属漂移）。远端脚本
+        内的页头解析镜像 DM8PageHeader，纯字节解析，零侵权，未引入 dmdul 代码。
 
         若远程不支持 python3，降级为仅检查首页头（标记 REMOTE_SCAN_LIMITED）。
         """
         remote_path = info.path if isinstance(info.path, str) else str(info.path)
 
-        # 远程 python3 脚本：扫描零页 + 异常填充 + 截断，输出 JSON
+        # 远程 python3 脚本：扫描零页 + 异常填充 + 截断 + 页结构级坏块，输出 JSON。
+        # 远端页头解析镜像 DM8PageHeader，纯字节解析，零侵权，未引入 dmdul。
         scan_script = (
             "python3 -c \""
             "import sys,os,json,binascii;"
@@ -1534,19 +1759,24 @@ class DM8RemoteHealthChecker(DM8OfflineHealthChecker):
             "total=os.path.getsize(fp);"
             "pages=total//ps;"
             "maxp=min(pages+(1 if total%ps else 0),500000);"
-            "z=0;cf=0;cb=[];"
+            "z=0;cf=0;cb=[];sd=[];NULL=b'\\xff'*6;"
+            "KNOWN={0x11,0x13,0x14,0x15,0x1A1A001A,0xFFFF00FF};STRICT={0x14,0x15};"
             "f=open(fp,'rb');"
             "hdr=f.read(ps)[:64];"
             "hx=binascii.hexlify(hdr).decode();"
             "zero=b'\\x00'*ps;"
             "for i in range(maxp):"
-            " o=i*ps;"
-            " d=f.read(ps);"
+            " o=i*ps;d=f.read(ps);"
             " if len(d)<ps: cb.append({'page_no':i,'file_offset':o,'type':'TRUNCATED'});break;"
             " if d==zero: z+=1;cb.append({'page_no':i,'file_offset':o,'type':'ZERO_PAGE'});continue;"
-            " if d==d[:1]*ps: cf+=1;cb.append({'page_no':i,'file_offset':o,'type':'CONSTANT_FILL'});"
+            " if d==d[:1]*ps: cf+=1;cb.append({'page_no':i,'file_offset':o,'type':'CONSTANT_FILL'});continue;"
+            " gr=int.from_bytes(d[0:4],'little');pno=int.from_bytes(d[4:8],'little');pr=d[8:14];nr=d[14:20];pk=int.from_bytes(d[20:24],'little');sid=int.from_bytes(d[58:62],'little');fno=gr>>16;"
+            " if pk in STRICT and pno!=i: cb.append({'page_no':i,'file_offset':o,'type':'PAGE_NO_MISMATCH'});"
+            " for ref in (pr,nr): if ref!=NULL: rfile=int.from_bytes(ref[0:2],'little');rpage=int.from_bytes(ref[2:6],'little');if rfile==fno and rpage>=pages: cb.append({'page_no':i,'file_offset':o,'type':'REF_OUT_OF_RANGE'});break;"
+            " if pk!=0 and pk not in KNOWN: cb.append({'page_no':i,'file_offset':o,'type':'PAGE_KIND_UNKNOWN'});"
+            " if len(sd)<4000: sd.append([i,sid]);"
             "f.close();"
-            "print(json.dumps({'z':z,'pages':pages,'hx':hx,'cf':cf,'cb':cb}))"
+            "print(json.dumps({'z':z,'pages':pages,'hx':hx,'cf':cf,'cb':cb,'sd':sd}))"
             " \" \"" + remote_path + "\" 2>/dev/null"
         )
 
@@ -1569,6 +1799,10 @@ class DM8RemoteHealthChecker(DM8OfflineHealthChecker):
                     'type': b.get('type', ''),
                     'tablespace': '',
                 } for b in data.get('cb', [])]
+                # 还原 storage_id 样本，供 _analyze_storage_id_consistency 做归属漂移分析
+                info.page_storage_samples = [
+                    (s[0], s[1]) for s in data.get('sd', [])
+                ]
                 self._diag_zero_pages(info)
                 return
             except (ValueError, IndexError, json.JSONDecodeError):

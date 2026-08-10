@@ -6245,37 +6245,18 @@ function formatBytes(bytes) {
 
           <div style="margin-top:20px;">
             <label style="font-weight:600;margin-bottom:12px;display:block;">⏰ 执行周期</label>
-            <div class="form-grid">
-              <div class="field">
-                <label data-i18n="webui.scheduler_cron_hour">小时</label>
-                <select id="job-cron-hour" onchange="updateCronPreview()">
-                  <option value="*" data-i18n="webui.scheduler_cron_hourly">每小时</option>
-                  <option value="2">凌晨 2 点</option>
-                  <option value="3">凌晨 3 点</option>
-                  <option value="6">早上 6 点</option>
-                  <option value="9">上午 9 点</option>
-                  <option value="14">下午 2 点</option>
-                  <option value="18">下午 6 点</option>
-                </select>
-              </div>
-              <div class="field">
-                <label data-i18n="webui.scheduler_cron_minute">分钟</label>
-                <select id="job-cron-minute" onchange="updateCronPreview()">
-                  <option value="0" data-i18n="webui.scheduler_cron_onhour">整点</option>
-                  <option value="15">15 分</option>
-                  <option value="30">30 分</option>
-                  <option value="45">45 分</option>
-                </select>
-              </div>
-              <div class="field">
-                <label data-i18n="webui.scheduler_cron_period">执行周期</label>
-                <select id="job-cron-day" onchange="updateCronPreview()">
-                  <option value="*" data-i18n="webui.scheduler_cron_daily">每天</option>
-                  <option value="1-5">工作日（周一至周五）</option>
-                  <option value="0,6">周末（周六、周日）</option>
-                </select>
-              </div>
+            <div class="field" style="margin-bottom:14px;">
+              <select id="job-schedule-type" onchange="onScheduleTypeChange()">
+                <option value="hourly">每小时</option>
+                <option value="every_min">每隔 N 分钟</option>
+                <option value="every_hour">每隔 N 小时</option>
+                <option value="daily" selected>每天（指定时间）</option>
+                <option value="weekly">每周（指定星期）</option>
+                <option value="monthly">每月（指定日期）</option>
+                <option value="custom">自定义 cron</option>
+              </select>
             </div>
+            <div id="job-schedule-params" class="form-grid"></div>
             <div style="margin-top:8px;font-size:12px;color:var(--text-muted);">
               当前配置预览: <code id="job-cron-preview">每天 02:00 执行</code>
             </div>
@@ -11948,25 +11929,39 @@ function renderJobList(jobs) {
 }
 
 function formatCronText(cron) {
+  if (!cron) return '—';
+  if (cron.expression) return '自定义: ' + cron.expression;
   const hour = cron.hour || '*';
-  const minute = cron.minute || '0';
+  const minute = (cron.minute != null && cron.minute !== '') ? String(cron.minute) : '0';
   const day = cron.day || '*';
-  
-  let timeText = '';
-  if (hour === '*') {
-    timeText = '每小时';
-  } else if (minute === '0') {
-    timeText = `每天 ${hour}:00`;
-  } else {
-    timeText = `每天 ${hour}:${minute.padStart(2, '0')}`;
+  const dow = cron.day_of_week || '*';
+  const pad = (n) => String(n).padStart(2, '0');
+
+  // 每小时
+  if (hour === '*' && minute === '0' && day === '*' && dow === '*') return '每小时';
+  // 每隔 N 分钟
+  if (typeof minute === 'string' && minute.indexOf('*/') === 0 && hour === '*') {
+    return '每隔 ' + minute.slice(2) + ' 分钟';
   }
-  
+  // 每隔 N 小时
+  if (typeof hour === 'string' && hour.indexOf('*/') === 0) {
+    return '每隔 ' + hour.slice(2) + ' 小时（' + (minute === '0' ? '00' : minute) + ' 分）';
+  }
+  // 每月（指定具体数字日期；聚合值 1-5 / 0,6 仍按"每天+工作日/周末"处理）
+  if (day !== '*' && dow === '*' && /^\d+$/.test(day)) {
+    return '每月 ' + day + ' 号 ' + pad(hour) + ':' + pad(minute);
+  }
+  // 每周（指定星期）
+  if (dow !== '*') {
+    const wmap = {mon:'周一', tue:'周二', wed:'周三', thu:'周四', fri:'周五', sat:'周六', sun:'周日', '1-5':'工作日', '0,6':'周末'};
+    const wlabel = wmap[dow] || dow;
+    return '每周' + wlabel + ' ' + pad(hour) + ':' + pad(minute);
+  }
+  // 每天
   let dayText = '';
-  if (day === '*') dayText = '';
-  else if (day === '1-5') dayText = '（工作日）';
+  if (day === '1-5') dayText = '（工作日）';
   else if (day === '0,6') dayText = '（周末）';
-  
-  return timeText + dayText;
+  return '每天 ' + pad(hour) + ':' + pad(minute) + dayText;
 }
 
 async function onJobDbTypeChange() {
@@ -12148,22 +12143,93 @@ async function onJobDatasourceChange() {
 }
 
 function updateCronPreview() {
-  const hour = document.getElementById('job-cron-hour').value;
-  const minute = document.getElementById('job-cron-minute').value;
-  const day = document.getElementById('job-cron-day').value;
-  
-  let timeText = '';
-  if (hour === '*') {
-    timeText = '每小时';
-  } else {
-    timeText = `每天 ${hour}:${minute.padStart(2, '0')}`;
+  const cron = buildCronFromForm();
+  document.getElementById('job-cron-preview').textContent = formatCronText(cron);
+}
+
+// 根据所选周期类型，渲染对应的子控件到 #job-schedule-params
+function renderScheduleParams() {
+  const type = document.getElementById('job-schedule-type').value;
+  const box = document.getElementById('job-schedule-params');
+  const hhOpts = [2, 3, 6, 9, 14, 18, 21]
+    .map(h => `<option value="${h}">${h} 点</option>`).join('');
+  const mmOpts = [0, 15, 30, 45]
+    .map(m => `<option value="${m}">${m} 分</option>`).join('');
+  const dowOpts = [
+    '<option value="mon">周一</option>', '<option value="tue">周二</option>',
+    '<option value="wed">周三</option>', '<option value="thu">周四</option>',
+    '<option value="fri">周五</option>', '<option value="sat">周六</option>',
+    '<option value="sun">周日</option>',
+    '<option value="1-5">工作日（周一至周五）</option>',
+    '<option value="0,6">周末（周六、周日）</option>',
+  ].join('');
+
+  let html = '';
+  if (type === 'hourly') {
+    html = '';
+  } else if (type === 'every_min') {
+    html = `<div class="field"><label>间隔（分钟，1-59）</label>`
+         + `<input type="number" id="job-int-val" min="1" max="59" value="15" class="input" onchange="updateCronPreview()"></div>`;
+  } else if (type === 'every_hour') {
+    html = `<div class="field"><label>间隔（小时，1-23）</label>`
+         + `<input type="number" id="job-int-val" min="1" max="23" value="6" class="input" onchange="updateCronPreview()"></div>`
+         + `<div class="field"><label>分钟</label><select id="job-mm" onchange="updateCronPreview()">${mmOpts}</select></div>`;
+  } else if (type === 'daily') {
+    html = `<div class="field"><label>小时</label><select id="job-hh" onchange="updateCronPreview()">${hhOpts}</select></div>`
+         + `<div class="field"><label>分钟</label><select id="job-mm" onchange="updateCronPreview()">${mmOpts}</select></div>`;
+  } else if (type === 'weekly') {
+    html = `<div class="field"><label>星期</label><select id="job-dow" onchange="updateCronPreview()">${dowOpts}</select></div>`
+         + `<div class="field"><label>小时</label><select id="job-hh" onchange="updateCronPreview()">${hhOpts}</select></div>`
+         + `<div class="field"><label>分钟</label><select id="job-mm" onchange="updateCronPreview()">${mmOpts}</select></div>`;
+  } else if (type === 'monthly') {
+    html = `<div class="field"><label>日期（1-28）</label>`
+         + `<input type="number" id="job-dom" min="1" max="28" value="1" class="input" onchange="updateCronPreview()"></div>`
+         + `<div class="field"><label>小时</label><select id="job-hh" onchange="updateCronPreview()">${hhOpts}</select></div>`
+         + `<div class="field"><label>分钟</label><select id="job-mm" onchange="updateCronPreview()">${mmOpts}</select></div>`;
+  } else if (type === 'custom') {
+    html = `<div class="field" style="grid-column:1/-1;"><label>CRON 表达式（分 时 日 月 周）</label>`
+         + `<input type="text" id="job-cron-expr" placeholder="0 2 * * *" class="input" oninput="updateCronPreview()"></div>`
+         + `<div class="field" style="grid-column:1/-1;font-size:12px;color:var(--text-muted)">`
+         + `示例：0 2 * * 1-5 = 工作日 02:00；*/15 * * * * = 每 15 分钟；0 0 1 * * = 每月 1 号 00:00</div>`;
   }
-  
-  let dayText = '';
-  if (day === '1-5') dayText = '（工作日）';
-  else if (day === '0,6') dayText = '（周末）';
-  
-  document.getElementById('job-cron-preview').textContent = timeText + dayText;
+  box.innerHTML = html;
+  updateCronPreview();
+}
+
+function onScheduleTypeChange() {
+  renderScheduleParams();
+}
+
+// 依据表单当前选择，组装后端可识别的 cron 对象
+function buildCronFromForm() {
+  const type = document.getElementById('job-schedule-type').value;
+  const val = (id, dflt) => {
+    const el = document.getElementById(id);
+    return el ? el.value : dflt;
+  };
+  if (type === 'hourly') return { hour: '*', minute: '0' };
+  if (type === 'every_min') {
+    const n = Math.min(59, Math.max(1, parseInt(val('job-int-val', '15')) || 15));
+    return { minute: '*/' + n, hour: '*' };
+  }
+  if (type === 'every_hour') {
+    const n = Math.min(23, Math.max(1, parseInt(val('job-int-val', '6')) || 6));
+    return { hour: '*/' + n, minute: val('job-mm', '0') };
+  }
+  if (type === 'daily') {
+    return { hour: val('job-hh', '2'), minute: val('job-mm', '0'), day: '*' };
+  }
+  if (type === 'weekly') {
+    return { day_of_week: val('job-dow', 'mon'), hour: val('job-hh', '2'), minute: val('job-mm', '0') };
+  }
+  if (type === 'monthly') {
+    const d = Math.min(28, Math.max(1, parseInt(val('job-dom', '1')) || 1));
+    return { day: String(d), hour: val('job-hh', '2'), minute: val('job-mm', '0') };
+  }
+  if (type === 'custom') {
+    return { expression: (val('job-cron-expr', '') || '').trim() };
+  }
+  return { hour: '2', minute: '0' };
 }
 
 function showAddJobForm() {
@@ -12197,10 +12263,8 @@ function showAddJobForm() {
   document.getElementById('job-password').value = '';
   document.getElementById('job-database').value = '';
   document.getElementById('job-notify').checked = true;
-  document.getElementById('job-cron-hour').value = '2';
-  document.getElementById('job-cron-minute').value = '0';
-  document.getElementById('job-cron-day').value = '*';
-  updateCronPreview();
+  document.getElementById('job-schedule-type').value = 'daily';
+  renderScheduleParams();
   onJobDbTypeChange();
 }
 
@@ -12224,11 +12288,7 @@ async function saveJob() {
       label: name,
       inspector_name: 'Jack',
       notify_on_done: document.getElementById('job-notify').checked,
-      cron: {
-        hour: document.getElementById('job-cron-hour').value,
-        minute: document.getElementById('job-cron-minute').value,
-        day: document.getElementById('job-cron-day').value
-      }
+      cron: buildCronFromForm()
     };
     const tmplId = document.getElementById('job-template')?.value;
     if (tmplId) jobData.template_id = parseInt(tmplId);
@@ -12260,11 +12320,7 @@ async function saveJob() {
     password: document.getElementById('job-password').value || '',
     database: document.getElementById('job-database').value || '',
     notify_on_done: document.getElementById('job-notify').checked,
-    cron: {
-      hour: document.getElementById('job-cron-hour').value,
-      minute: document.getElementById('job-cron-minute').value,
-      day: document.getElementById('job-cron-day').value
-    }
+    cron: buildCronFromForm()
   };
   const tmplId = document.getElementById('job-template')?.value;
   if (tmplId) jobData.template_id = parseInt(tmplId);

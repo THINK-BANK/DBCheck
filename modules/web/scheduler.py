@@ -35,6 +35,20 @@ _handler.setFormatter(logging.Formatter(
 ))
 logger.addHandler(_handler)
 
+# ── 并发巡检排除机制 ────────────────────────────────────────
+# 多个定时任务可能在同一次触发中并发执行（例如同一分钟命中多个 cron）。
+# 巡检过程涉及数据库连接、报告渲染（docx/docxtpl/openpyxl）、importlib 动态
+# 加载入口模块等共享资源，并发时可能产生竞态甚至死锁，表现为“只打印开始、
+# 既不完成也不失败、也不生成报告”的黑洞。
+#
+# 这里用信号量把同时执行的巡检数限制为 1（严格串行），并配备看门狗超时，
+# 确保任何情况下都不会出现静默挂起、无任何结果日志的情况。
+# 如需允许 N 个并发，把 _INSPECTION_MAX_CONCURRENT 调大即可。
+_INSPECTION_MAX_CONCURRENT = 1        # 同时执行的巡检数上限（1 = 严格串行）
+_INSPECTION_ACQUIRE_TIMEOUT = 1800    # 排队等待执行名额的最长时间（秒）
+_INSPECTION_WATCHDOG_TIMEOUT = 1800  # 单次巡检执行的最长时限（秒），超时强制释放名额
+_inspection_semaphore = threading.Semaphore(_INSPECTION_MAX_CONCURRENT)
+
 _scheduler = None  # 全局调度器实例（延迟初始化）
 
 
@@ -126,7 +140,66 @@ def _run_plugin_inspection(db_info, inspector_name, ssh_info):
     return report_file
 
 
+def _on_watchdog_timeout(job_id, db_info, state, guard):
+    """看门狗触发：单次巡检超过时限，强制释放执行名额并记录超时失败。
+
+    注意：线程无法被强制杀死，这里只负责把信号量名额释放出来，
+    让排队的其它巡检能够继续；当前卡住的线程会在其阻塞调用返回后自然结束
+    （daemon 线程，不会阻碍进程退出）。
+    """
+    db_type = db_info.get('db_type', 'unknown')
+    with guard:
+        if state['released']:
+            return
+        state['released'] = True
+    _inspection_semaphore.release()
+    logger.error('[%s] 巡检超时（超过 %ds，排除机制看门狗已强制释放执行名额）: %s',
+                 job_id, _INSPECTION_WATCHDOG_TIMEOUT, db_type)
+
+
 def _run_inspection(job_id, db_info, inspector_name, notify_on_done):
+    """
+    并发巡检排除机制入口（在独立线程中运行）。
+
+    通过信号量把同时执行的巡检数限制为 _INSPECTION_MAX_CONCURRENT（默认 1，
+    即严格串行），避免多个定时任务同分钟并发触发时因共享资源竞态/死锁而
+    出现“只打印开始、既不完成也不失败、也不生成报告”的黑洞。
+
+    若等待执行名额超过 _INSPECTION_ACQUIRE_TIMEOUT，则跳过本次巡检（不堆积）；
+    若单次巡检执行超过 _INSPECTION_WATCHDOG_TIMEOUT，看门狗会强制释放名额并
+    记录超时失败，保证任何情况下都有明确的结果日志，而不是静默挂起。
+    """
+    acquired = _inspection_semaphore.acquire(timeout=_INSPECTION_ACQUIRE_TIMEOUT)
+    if not acquired:
+        logger.warning(
+            '[%s] 巡检被跳过：并发排除机制，等待执行名额超时（%ds）',
+            job_id, _INSPECTION_ACQUIRE_TIMEOUT,
+        )
+        return
+
+    guard = threading.Lock()
+    state = {'released': False}
+
+    def _release():
+        with guard:
+            if not state['released']:
+                state['released'] = True
+                _inspection_semaphore.release()
+
+    timer = threading.Timer(
+        _INSPECTION_WATCHDOG_TIMEOUT,
+        _on_watchdog_timeout,
+        args=(job_id, db_info, state, guard),
+    )
+    timer.start()
+    try:
+        _run_inspection_core(job_id, db_info, inspector_name, notify_on_done)
+    finally:
+        timer.cancel()
+        _release()
+
+
+def _run_inspection_core(job_id, db_info, inspector_name, notify_on_done):
     """
     执行巡检并发送通知（在独立线程中运行）
 
@@ -354,7 +427,13 @@ class SchedulerManager:
             return False
         
         try:
-            trigger = CronTrigger(**trigger_kwargs)
+            expr = cron.get('expression')
+            if expr:
+                # 自定义 cron（标准 5 字段：分 时 日 月 周），后端校验合法性；
+                # 非法表达式会抛异常，被下方 except 捕获并返回 400
+                trigger = CronTrigger.from_crontab(expr)
+            else:
+                trigger = CronTrigger(**trigger_kwargs)
             self.scheduler.add_job(
                 func=self._job_func,
                 trigger=trigger,

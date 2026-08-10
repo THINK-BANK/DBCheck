@@ -21,7 +21,7 @@ Through automated inspection rules, system resource collection, AI-assisted diag
 > 
 > Email: sdfiyon@gmail.com
 > 
-语言切换（Language switch）: [English](./README.md) | [中文](./docs/README_zh.md)
+语言切换（Language switch）: [English](./README.md) | [中文](./README_zh.md)
 
 [![Version](https://img.shields.io/badge/Version-v26.8.7.1-blue.svg)]()
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)]()
@@ -763,6 +763,24 @@ A: For SYSDBA users, check the "SYSDBA" checkbox in Web UI, or enter `sys as sys
 
 **Q: Risk recommendations are for reference only?**
 A: Built-in thresholds are based on general best practices. Evaluate against your actual business requirements.
+
+---
+
+## On Reliability and Bugs
+
+**DBCheck is developed and maintained by one person in their spare time.** It is fully open source under Apache-2.0, and the Community Edition is free forever, with no charge of any kind.
+
+The project covers 21 database types and 330+ inspection rules, across a wide range of major versions, parameter configurations, and privilege models. There is no dedicated QA team and no test pipeline behind it, so **zero defects across all scenarios cannot be guaranteed**. Main workflows are self-tested before each release, but a single test environment cannot reproduce every real-world production setup.
+
+If you run into a problem, there are three reasonable paths:
+
+- **Open an issue** — include the database type and version, the error message, and reproduction steps. This is by far the most effective form of feedback, and it usually gets a response.
+- **Open a pull request** — the repository is open to everyone. Many of the databases and rules supported today started as contributions from users.
+- **Use something else** — if your scenario demands guaranteed reliability, commercial inspection products offer dedicated teams, SLAs, and paid support. That is an entirely legitimate choice.
+
+This is a free, open-source side project. It does not promise commercial-grade reliability guarantees — but any issue raised in good faith will be taken seriously.
+
+> Under Apache-2.0, this software is provided "AS IS", without warranties or conditions of any kind, either express or implied. Please assess its suitability for your production environment and validate independently in critical scenarios.
 
 ---
 
