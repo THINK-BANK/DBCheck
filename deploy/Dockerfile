@@ -128,9 +128,9 @@ ENV PYTHONUNBUFFERED=1
 ENV PYTHONMEMORYLIMIT=2g
 
 # Create VERSION.txt (without v prefix, matches Docker tag format)
-# DBCHECK_VERSION 可在构建时覆盖: --build-arg DBCHECK_VERSION=v26.8.10.1
-ARG DBCHECK_VERSION=26.8.10.1
-RUN echo 26.8.10.1 > /app/VERSION.txt
+# DBCHECK_VERSION 可在构建时覆盖: --build-arg DBCHECK_VERSION=v26.8.10.2
+ARG DBCHECK_VERSION=26.8.10.2
+RUN echo 26.8.10.2 > /app/VERSION.txt
 
 # Ensure data and pro_data directories exist for volume mounts
 RUN mkdir -p /app/data /app/data/pro_data /app/data/reports
