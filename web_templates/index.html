@@ -12151,8 +12151,7 @@ function updateCronPreview() {
 function renderScheduleParams() {
   const type = document.getElementById('job-schedule-type').value;
   const box = document.getElementById('job-schedule-params');
-  const hhOpts = [2, 3, 6, 9, 14, 18, 21]
-    .map(h => `<option value="${h}">${h} 点</option>`).join('');
+  const hhOpts = Array.from({length: 24}, (_, h) => `<option value="${h}">${h} 点</option>`).join('');
   const mmOpts = [0, 15, 30, 45]
     .map(m => `<option value="${m}">${m} 分</option>`).join('');
   const dowOpts = [
