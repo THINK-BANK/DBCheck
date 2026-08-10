@@ -34,7 +34,7 @@ if errorlevel 1 (
 
 :: --- Read version ---
 for /f "tokens=*" %%v in ('python -c "import json,sys; d=json.load(open('version.json','r',encoding='utf-8')); print(d['version'])"') do set VERSION=%%v
-if not defined VERSION set VERSION=v26.8.9.1
+if not defined VERSION set VERSION=v26.8.10.1
 echo [    ] DBCheck version: %VERSION%
 echo.
 

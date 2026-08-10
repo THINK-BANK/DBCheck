@@ -1,8 +1,15 @@
 # Changelog
 
+## v26.8.10.1 (2026-08-10)
+- **新增 DBCheck MCP Server（首发，Spike）**：新增 `modules/mcp_server/` 零第三方依赖包，以 JSON-RPC 2.0 over stdio 暴露 `dbcheck.list_instances` 与 `dbcheck.run_inspection` 两个 tool，可被 WorkBuddy / Codex / Claude Desktop 等 MCP 客户端直接调用；stdout 仅承载协议流（散落 print 全量重定向 stderr），响应统一 `ensure_ascii=True` 以规避 Windows 管道 cp936 解码导致的中文乱码；鉴权默认关闭，可用 `DBCHECK_MCP_REQUIRE_AUTH=1` + `DBCHECK_MCP_API_KEY` 开启。
+- **首页实例下拉框为空 + 图表「ECharts未加载」修复（f00d04a）**：`initMonitor()` 在 `echarts` 未定义时直接 `return`，致其后 `loadMonitorSummary()` 永不执行、实例列表被连带清空；改为仅降级图表区并继续加载实例列表。同时 ECharts 改为本地 `/static/js/echarts.min.js` 优先、失败回退 CDN（新增 5.5.1 离线包），`loadMonitorSummary()` 抽出 `_fetchMonitorInstances()` 支持 `metrics/summary` → `datasources` 双端点回退且不再静默吞异常，`ensureMonChart()` 补 echarts 守卫。
+- **`deploy/release.sh` 版本号校验修复**：正则 `^[0-9]+\.[0-9]+\.[0-9]+$` 仅接受三段版本，四段版本（如 `26.8.10.1`）会被误判为格式错误而直接退出；改为 `^[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$`，与 `release.ps1` 行为对齐。
+- **版本号更新**：各源文件版本标记 v26.8.9.1 → v26.8.10.1（version.py / version.json / Dockerfile / build 脚本 / CI / login.js / skill `dbcheck` `scripts/version.py` / deploy 脚本）。
+- **详情见**：`docs/release/v26.8.10.1-release-notes.md`（含 WorkBuddy / Codex / Claude Desktop 三种客户端的 MCP 接入配置）。
+
 ## v26.8.9.1 (2026-08-08)
 - **Web 启动控制台 Banner（cfc2d9d）**：复用 cli.py 的 DBCheck ASCII 图案（仅图案，不含菜单文字）注入 Web 启动流程，图案下方补充版本 / 版权 / 许可证信息；注入 `app.py:main()` 首行，`web_ui.py` 保持 63 行 shim 不变；含 Windows ANSI 兼容与 UnicodeEncodeError 兜底。
-- **Oracle 双模板遮蔽修复（dc13149）**：删除 `plugins/available/oracle_jdbc/sql_templates.json`（历史遗留 7 条裸 list），让 oracle 走 `template_data.json` 的 21 章 / 52 条完整模板。
+- **Oracle 双模板遮蔽修复（a16a29c）**：删除 `plugins/available/oracle_jdbc/sql_templates.json`（历史遗留 7 条裸 list），让 oracle 走 `template_data.json` 的 21 章 / 52 条完整模板。
 - **社区版「巡检编排」菜单 404 修复（dc13149）**：原 `pro_available` 被规则引擎探测误判为 True，致社区版显示 flow 菜单且 `/flow` 仅专业版注册而 404；改为 `pro_available=bool(is_pro())` 仅门控 flow，新增 `rules_available` 门控规则引擎，社区版规则引擎 UI 不受影响。
 - **版本号更新**：各源文件版本标记 v26.8.8.1 → v26.8.9.1（version.py / version.json / Dockerfile / build 脚本 / CI / login.js / skill `dbcheck` `scripts/version.py` / deploy 脚本）。
 
