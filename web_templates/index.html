@@ -3219,8 +3219,13 @@ async function executeFixSql(taskId, sql) {
   <script src="/static/js/xterm-addon-fit.js"></script>
   <script src="/static/js/xterm-addon-attach.js"></script>
   <script src="/static/js/socket.io.min.js"></script>
-  <!-- 健康态势大屏：ECharts (CDN) -->
-  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+  <!-- 健康态势大屏：ECharts 本地离线包（无网环境优先），本地失败再回退 CDN -->
+  <script src="/static/js/echarts.min.js"></script>
+  <script>
+    if (typeof echarts === 'undefined') {
+      document.write('<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"><\/script>');
+    }
+  </script>
   <style>
     /* ── 健康态势大屏 (ECharts) ── */
     .health-screen { margin-top: 24px; }
@@ -14203,6 +14208,7 @@ let monitorSummary = [];
 function ensureMonChart(key, id) {
   const el = document.getElementById(id);
   if (!el) return null;
+  if (typeof echarts === 'undefined') return null;
   let chart = monitorCharts[key];
   // 若实例不存在，或容器已被提示文字污染（无 canvas），则重建
   const polluted = el.querySelector('canvas') === null;
@@ -14226,9 +14232,10 @@ function initMonitor() {
   const section = document.getElementById('monitor-section');
   if (!section) return;
   section.style.display = '';
+  // 图表依赖 ECharts，但「实例下拉框」不依赖：ECharts 缺失只降级图表区，
+  // 不能中断后续的 loadMonitorSummary()，否则实例列表会被连带清空。
   if (typeof echarts === 'undefined') {
     monitorShowFallback(i18n('webui.home_monitor_echarts_missing'));
-    return;
   }
   try {
     if (typeof socket !== 'undefined') {
@@ -14242,14 +14249,52 @@ function initMonitor() {
   loadMonitorSummary();
 }
 
-async function loadMonitorSummary() {
+async function _fetchMonitorInstances() {
+  // 优先用 metrics/summary（带最新指标），失败或空则回退到 datasources（纯列表）
+  let errs = [];
   try {
     const r = await fetch('/api/pro/metrics/summary');
+    if (!r.ok) throw new Error('summary HTTP ' + r.status);
     const d = await r.json();
-    monitorSummary = d.instances || [];
+    if (!d.ok) throw new Error(d.msg || 'summary ok=false');
+    if ((d.instances || []).length) return { instances: d.instances || [], running: d.running, source: 'summary' };
+    errs.push('summary empty');
+  } catch (e) {
+    errs.push('summary: ' + e.message);
+  }
+  try {
+    const r = await fetch('/api/pro/datasources');
+    if (!r.ok) throw new Error('datasources HTTP ' + r.status);
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || 'datasources ok=false');
+    const list = (d.datasources || []).map(function (i) {
+      return {
+        instance_id: i.id || i.instance_id,
+        name: i.name,
+        db_type: i.db_type,
+        available: undefined,
+        latency_ms: undefined,
+        status: undefined,
+      };
+    });
+    if (list.length) return { instances: list, running: undefined, source: 'datasources' };
+    errs.push('datasources empty');
+  } catch (e) {
+    errs.push('datasources: ' + e.message);
+  }
+  throw new Error(errs.join(' / '));
+}
+
+async function loadMonitorSummary() {
+  const sel = document.getElementById('monitor-instance-select');
+  const statusEl = document.getElementById('monitor-status-text');
+  try {
+    const data = await _fetchMonitorInstances();
+    monitorSummary = data.instances || [];
     const pill = document.getElementById('monitor-running-pill');
-    if (pill) pill.textContent = i18n('webui.home_monitor_running_prefix') + (d.running ? i18n('webui.home_monitor_running_on') : i18n('webui.home_monitor_running_off'));
-    const sel = document.getElementById('monitor-instance-select');
+    if (pill && data.running !== undefined) {
+      pill.textContent = i18n('webui.home_monitor_running_prefix') + (data.running ? i18n('webui.home_monitor_running_on') : i18n('webui.home_monitor_running_off'));
+    }
     if (!sel) return;
     const cur = monitorCurrentId;
     sel.innerHTML = '<option value="">' + (i18n('webui.home_monitor_select_instance') || '请选择实例') + '</option>' +
@@ -14259,9 +14304,18 @@ async function loadMonitorSummary() {
     if (cur) sel.value = cur;
     else if (monitorSummary.length) { sel.value = monitorSummary[0].instance_id; monitorCurrentId = monitorSummary[0].instance_id; }
     if (monitorCurrentId) loadMonitorHistory(monitorCurrentId);
-    else monitorShowFallback(i18n('webui.home_monitor_no_instance'));
+    else monitorShowFallback(i18n('webui.home_monitor_no_instance') || '暂无实例，请先在“数据源管理”中配置数据源');
     prefillMonitorFilterSources();
-  } catch (e) { console.error('loadMonitorSummary failed:', e); }
+  } catch (e) {
+    console.error('loadMonitorSummary failed:', e);
+    if (sel) sel.innerHTML = '<option value="">' + (i18n('webui.home_monitor_select_instance') || '请选择实例') + '</option>';
+    monitorShowFallback((i18n('webui.home_monitor_load_failed') || '实例列表加载失败') + ': ' + e.message);
+    if (statusEl) statusEl.textContent = (i18n('webui.home_monitor_status_error') || '加载异常') + ': ' + e.message;
+  }
+}
+
+function refreshMonitorSummary() {
+  loadMonitorSummary();
 }
 
 function onMonitorInstanceChange() {
