@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2025-2026 fiyo (Jack Ge) <sdfiyon@gmail.com>
+# Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
+
 """DBCheck MCP Server (M1 Spike)。
 
 最小可用 MCP Server：以标准 JSON-RPC 2.0 over stdio 暴露 DBCheck 能力，

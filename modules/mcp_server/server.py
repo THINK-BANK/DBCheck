@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2025-2026 fiyo (Jack Ge) <sdfiyon@gmail.com>
+# Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
+
 """DBCheck MCP Server —— 协议合规的最小 stdio 实现。
 
 协议：JSON-RPC 2.0，行分隔（每行一条 JSON），stdin 收请求、stdout 发响应。

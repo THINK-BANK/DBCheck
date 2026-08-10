@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2025-2026 fiyo (Jack Ge) <sdfiyon@gmail.com>
+# Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
+
 """数据库类型元数据注册表（真插件化基础设施）。
 
 把"内置类型"与"插件类型"统一为 :class:`DBTypeMeta`，供 ``web_ui`` /
