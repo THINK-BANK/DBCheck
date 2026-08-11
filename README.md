@@ -38,6 +38,27 @@ Through automated inspection rules, system resource collection, AI-assisted diag
 
 ---
 
+## 🦝 Brand Story
+
+This platform was **originally named DBCheck**. We have completed a brand upgrade to **RaccoonX** — its Chinese name is **浣巡 (Huàn Xún)**, which stands for *"Raccoon Inspection"*: an intelligent inspection and health analysis platform.
+
+**Why a raccoon?**
+
+- **Raccoon (小浣熊)** has a natural instinct to *explore, rummage, and uncover hidden problems* — exactly what a database inspector does.
+- Raccoons are **nocturnal**, which fits DBAs who fight fires and inspect servers late at night.
+- Raccoons are **smart, curious, and tool-savvy**, matching the positioning of an AI operations assistant.
+- A raccoon feels **more friendly and approachable than a robot**, which suits open-source community spreading.
+
+**What does the X stand for?**
+
+- **eXplore** — 探索
+- **eXpert** — 专家
+- **eXtensible** — 可扩展
+
+> Note: During this transition, the project repository, Docker image, and website domains still use the original **DBCheck** identifiers, and the internal code name remains `dbcheck`.
+
+---
+
 # Why RaccoonX?
 
 
