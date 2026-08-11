@@ -38,6 +38,16 @@ Through automated inspection rules, system resource collection, AI-assisted diag
 
 ---
 
+## 💝 Support RaccoonX
+
+If RaccoonX helps with your database work, please consider supporting its continued development. Every contribution keeps this open-source project alive ❤️
+
+<img src="snapshot/pay-en.png" alt="Sponsor QR Code" width="600" />
+
+> Scan with WeChat / Alipay to sponsor · Please specify your name or nickname when sponsoring ❤️
+>
+> See the [full supporter list](#community-supporters) at the bottom of this page.
+
 ## 🦝 Brand Story
 
 This platform was **originally named DBCheck**. We have completed a brand upgrade to **RaccoonX** — its Chinese name is **浣巡 (Huàn Xún)**, which stands for *"Raccoon Inspection"*: an intelligent inspection and health analysis platform.
