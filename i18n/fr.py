@@ -2328,7 +2328,7 @@ FR.update({
     "webui.home_overview_title": "Aperçu du système",
     "webui.home_quick_inspect": "Démarrer l'inspection",
 
-    "webui.home_hero_subtitle": "Plateforme d'inspection de bases de données intelligente alimentée par l'IA",
+    "webui.home_hero_subtitle": "Comme un raton laveur nocturne, découvrez les problèmes cachés de vos bases de données",
     "webui.home_quick_diagnose": "Diagnostic intelligent",
     "webui.home_stat_datasources": "Sources de données connectées",
     "webui.home_stat_db_types": "Types de bases de données pris en charge",
@@ -2355,7 +2355,7 @@ FR.update({
     "webui.home_subtitle": "Bienvenue dans RaccoonX, l'outil d'inspection des bases de données",
     "webui.home_template_stats": "Statistiques de modèles",
     "webui.home_title": "Accueil",
-    "webui.home_welcome": "Bienvenue dans RaccoonX",
+    "webui.home_welcome": "Bienvenue dans Raccoon<span class=brand-x>X</span>",
     "webui.ind_cache_hit_ratio": "Taux de succès du cache (%)",
     "webui.ind_connections": "Connexions actuelles",
     "webui.ind_cpu_usage": "Utilisation CPU (%)",

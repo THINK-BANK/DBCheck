@@ -28,18 +28,30 @@ class HgdbConnectionConfig:
     database: str = "highgo"
     jdbc_url: str = ""
 
+    # 连接/登录/读取超时（秒）。PostgreSQL JDBC 驱动默认值为 0 = 永不超时，
+    # 主机不可达或被防火墙丢包时 getConnection 会挂到 OS 级 TCP 超时（分钟级），
+    # 表现为「点测试连接后长时间无响应」，故此处给出兜底上限。
+    connect_timeout_s: int = 15
+    socket_timeout_s: int = 30
+
     def build_jdbc_url(self) -> str:
         """构建 JDBC URL。
 
         - 若 jdbc_url 以 'jdbc:postgresql' 开头：原样透传（支持自定义属性）
-        - 否则按标准格式拼接： jdbc:postgresql://{host}:{port}/{database}
+        - 否则按标准格式拼接并附加超时参数：
+          ``jdbc:postgresql://{host}:{port}/{database}?connectTimeout=..&socketTimeout=..&loginTimeout=..``
 
         Returns:
             可用的 JDBC 连接 URL 字符串
         """
         if self.jdbc_url and str(self.jdbc_url).strip().lower().startswith("jdbc:postgresql"):
             return self.jdbc_url.strip()
-        return f"jdbc:postgresql://{self.host}:{self.port}/{self.database}"
+        _ct = max(1, int(self.connect_timeout_s or 15))
+        _st = max(1, int(self.socket_timeout_s or 30))
+        return (
+            f"jdbc:postgresql://{self.host}:{self.port}/{self.database}"
+            f"?connectTimeout={_ct}&loginTimeout={_ct}&socketTimeout={_st}"
+        )
 
     def build_properties(self):
         """构建 JDBC 连接属性（java.util.Properties，含 user / password）。

@@ -3032,56 +3032,45 @@ async function executeFixSql(taskId, sql) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 24px;
-  padding: 40px 175px 36px 36px; /* 右侧预留吉祥物空间，避免遮挡按钮 */
+  gap: 20px;
+  padding: 22px 130px 22px 28px; /* 右侧预留吉祥物空间 */
   margin-bottom: 20px;
   border-radius: 16px;
-  background:
-    radial-gradient(120% 140% at 0% 0%, rgba(10,42,110,.18) 0%, rgba(10,42,110,0) 55%),
-    linear-gradient(100deg, var(--surface2) 0%, var(--surface) 100%);
+  background: var(--surface2);
   border: 1px solid var(--border);
-  overflow: visible; /* 原为 hidden，会截断吉祥物头部 */
-  animation: heroFadeIn .45s ease both;
+  overflow: hidden;
+  animation: heroFadeIn .4s ease both;
 }
 @keyframes heroFadeIn {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 .hero-inner {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 24px;
+  gap: 20px;
   width: 100%;
   flex-wrap: wrap;
+  position: relative;
+  z-index: 2;
 }
-.hero-brand { display: flex; align-items: center; gap: 16px; }
-.hero-logo {
-  width: 56px;
-  height: 56px;
-  border-radius: 14px;
-  box-shadow: 0 4px 14px rgba(0,0,0,.18);
-}
-.hero-titles { display: flex; flex-direction: column; gap: 4px; }
-.hero-title {
+.hero-welcome { display: flex; flex-direction: column; gap: 3px; }
+.hero-heading {
   margin: 0;
-  font-size: 34px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  line-height: 1.1;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.25;
   color: var(--text);
-  background: linear-gradient(135deg, var(--text) 0%, var(--accent2) 120%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
 }
-.hero-subtitle { margin: 0; font-size: 14px; color: var(--text-muted); font-weight: 500; }
+.hero-heading .brand-x { color: #00b093; }
+.hero-lead { margin: 0; font-size: 13px; color: var(--text-muted); font-weight: 500; }
 .hero-actions { display: flex; gap: 12px; flex-wrap: wrap; }
 .hero-btn {
   cursor: pointer;
   border: 1px solid transparent;
   border-radius: 12px;
-  padding: 11px 22px;
+  padding: 10px 20px;
   font-size: 14px;
   font-weight: 700;
   transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
@@ -3099,14 +3088,15 @@ async function executeFixSql(taskId, sql) {
 }
 .hero-mascot {
   position: absolute;
-  top: 4px;          /* 原为 -28px，负值导致头部被父容器截断 */
-  right: 26px;       /* 原为 18px */
-  width: 130px;      /* 原为 240px，缩小避免遮挡按钮 */
+  right: 18px;
+  bottom: -8px;
+  width: 88px;
   height: auto;
   pointer-events: none;
-  filter: drop-shadow(0 8px 18px rgba(0,0,0,.22));
+  opacity: .92;
+  filter: drop-shadow(0 6px 14px rgba(0,0,0,.18));
   animation: breathe 3.6s ease-in-out infinite;
-  z-index: 1;        /* 原为 2，确保在交互按钮之下 */
+  z-index: 1;
 }
 @keyframes breathe {
   0%, 100% { transform: scale(1); }
@@ -3193,12 +3183,12 @@ async function executeFixSql(taskId, sql) {
 
 /* 响应式 */
 @media (max-width: 1100px) {
-  .home-hero { padding-right: 130px; }
+  .home-hero { padding-right: 110px; }
   .hero-stats { grid-template-columns: repeat(3, 1fr); }
-  .hero-mascot { width: 110px; top: 2px; right: 20px; }
+  .hero-mascot { width: 76px; right: 14px; }
 }
 @media (max-width: 640px) {
-  .home-hero { padding-right: 36px; } /* 取消桌面端吉祥物预留空间 */
+  .home-hero { padding-right: 22px; } /* 移动端取消吉祥物预留空间 */
   .hero-stats { grid-template-columns: repeat(2, 1fr); }
   .hero-mascot { display: none; }
 }
@@ -5288,7 +5278,7 @@ function formatBytes(bytes) {
     <div class="sidebar-logo">
       <img src="/dbcheck_logo_icon.png" alt="{{ product_name }}" class="sidebar-brand-logo">
       <span class="sidebar-vertical-text">{{ product_name }}</span>
-      <h1>{{ product_name }} {% if edition == 'professional' %}<span class="edition-badge pro" id="sidebar-edition-badge" data-i18n="webui.edition_badge">专业版</span>{% else %}<span class="edition-badge community" id="sidebar-edition-badge" data-i18n="webui.edition_community">社区版</span>{% endif %}</h1>
+      <h1>{{ product_name[:-1] }}<span style="color:#00b093;">{{ product_name[-1] }}</span> {% if edition == 'professional' %}<span class="edition-badge pro" id="sidebar-edition-badge" data-i18n="webui.edition_badge">专业版</span>{% else %}<span class="edition-badge community" id="sidebar-edition-badge" data-i18n="webui.edition_community">社区版</span>{% endif %}</h1>
       <p data-i18n="webui.logo_subtitle">基于 AI 的智能数据库巡检平台</p>
     </div>
 
@@ -5469,15 +5459,12 @@ function formatBytes(bytes) {
       <!-- ══ Page: Home ══ -->
       <div class="page active" id="page-home">
         <!-- 简化标题栏 -->
-        <!-- ══ Hero 品牌区 ══ -->
+        <!-- ══ Hero 快捷入口区 ══ -->
         <section class="home-hero" id="home-hero">
           <div class="hero-inner">
-            <div class="hero-brand">
-              <img class="hero-logo" src="/dbcheck_logo_icon.png" alt="{{ product_name }}">
-              <div class="hero-titles">
-                <h1 class="hero-title">{{ product_name }}</h1>
-                <p class="hero-subtitle" data-i18n="webui.home_hero_subtitle">基于 AI 的智能数据库巡检平台</p>
-              </div>
+            <div class="hero-welcome">
+              <h1 class="hero-heading" data-i18n-html="webui.home_welcome">欢迎使用 Raccoon<span class=brand-x>X</span></h1>
+              <p class="hero-lead" data-i18n="webui.home_hero_subtitle">像浣熊一样夜行探索，让隐藏的数据库问题无所遁形</p>
             </div>
             <div class="hero-actions">
               <button class="hero-btn hero-btn--primary" onclick="showPage('wizard')" data-i18n="webui.home_quick_inspect">立即巡检</button>

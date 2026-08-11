@@ -2495,7 +2495,7 @@ EN = {
     "webui.ds_operation_fail": "Operation failed: {}",
     "webui.ds_load_fail": "Failed to load datasources",
     # ── Home Overview ──
-    "webui.home_welcome": "Welcome to RaccoonX",
+    "webui.home_welcome": "Welcome to Raccoon<span class=brand-x>X</span>",
     "webui.home_instance_dist": "Instance Distribution",
     "webui.home_instance_dist_sub": "Database type counts",
     "webui.home_scheduler": "Scheduled Inspection",
@@ -2513,7 +2513,7 @@ EN = {
     "webui.home_section_desc": "One-stop Database Health Inspection Solution",
     "webui.home_quick_inspect": "Start Inspection",
 
-    "webui.home_hero_subtitle": "AI-powered intelligent database inspection platform",
+    "webui.home_hero_subtitle": "Prowl the night like a raccoon, uncover hidden database issues",
     "webui.home_quick_diagnose": "Smart Diagnosis",
     "webui.home_stat_datasources": "Connected Data Sources",
     "webui.home_stat_db_types": "Supported Database Types",

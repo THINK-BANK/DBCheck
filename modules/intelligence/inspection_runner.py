@@ -11,8 +11,11 @@
 
 from __future__ import annotations
 
+import json
 import os
+import signal
 import sys
+import time
 from typing import Any, Dict, List, Optional
 
 from modules.core import paths
@@ -267,21 +270,16 @@ def _run_plugin_inspection(
         }
 
 
-def run_target_inspection(
+def _run_target_inspection_inline(
     db_type: str,
     instance: Dict[str, Any],
     inspector_name: str = "Jack",
     template_id=None,
 ) -> Dict[str, Any]:
-    """为目标数据源实时运行巡检引擎，返回结构化结果。
+    """为目标数据源实时运行巡检引擎，返回结构化结果（进程内版本）。
 
-    返回字典包含:
-        ok            是否成功
-        auto_analyze  智能分析发现列表（每项含 col1/col2/col3 结构）
-        report_file / report_name  生成的报告路径
-        health_score / risk_count / risk_level / health_status  健康评估
-        ai_advice     AI 诊断建议
-        error         失败时的错误信息
+    仅由 ``run_target_inspection``（主进程委派子进程时）或隔离子进程 CLI 直接调用；
+    不要在 gevent 主进程里直接调用本函数处理 JVM 类型，否则会触发 hub 冻结。
     """
     if _SCRIPT_DIR not in sys.path:
         sys.path.insert(0, _SCRIPT_DIR)
@@ -388,3 +386,215 @@ def run_target_inspection(
 
     # ── 暂不支持兜底（保持原文案）──
     return {"ok": False, "error": f"暂不支持的数据库类型：{db_type}", "auto_analyze": []}
+
+
+# ══════════════════════════════════════════════════════════════════
+# 智能诊断中心 · 深度巡检子进程隔离
+# ══════════════════════════════════════════════════════════════════
+# 【问题】智能诊断中心「深度巡检分析专员」调用 run_target_inspection 实时跑巡检引擎，
+#        对于 HGDB / DB2 / SQL Server(JDBC) / oracle_jdbc 这类依赖 JPype 在**当前进程内**
+#        启动 JVM 的数据源，JVM 原生线程会把 gevent 协作式服务器的 hub 钉死，整个 Web
+#        界面冻结；前端表现为「深度巡检分析专员」一直卡在「工作中」。
+#        这与「测试连接卡死」「开始巡检卡死」是同根因，只是发生在智能诊断中心的另一路径。
+# 【解法】把 JVM 类型巡检彻底赶出主进程：
+#   - 主进程只负责 spawn 子进程（同一个 exe 加 --intelligence-inspection-cli）
+#     + 协作式轮询读取 stdout 结果行；
+#   - 等待期间用 gevent.sleep 让出执行权 → 界面全程可用；
+#   - 超时直接杀子进程树，JVM 随之消失，主进程不受任何残留影响。
+INTEL_JVM_DB_TYPES = ('hgdb', 'db2', 'sqlserver_jdbc', 'oracle_jdbc')
+INTEL_INSPECTION_TIMEOUT = 1800  # 智能诊断深度巡检整体硬超时（秒）
+_INTEL_RESULT_PREFIX = "__DBCHECK_INTEL_INSP_RESULT__"
+
+
+def _intel_cooperative_sleep(seconds):
+    """让出执行权且不冻结 gevent hub。
+
+    与 web/app.py 的 _cooperative_sleep 同义：gevent 模式下用 gevent.sleep
+    切回 hub 处理其它请求；其余模式退化为 time.sleep。本进程未 monkey-patch，
+    time.sleep 会真实阻塞 hub，故该分支判断不能省。
+    """
+    # 复用 app.py 的协作式睡眠（若已加载），避免两处实现漂移
+    try:
+        from modules.web.app import _cooperative_sleep as _app_sleep
+        _app_sleep(seconds)
+        return
+    except Exception:
+        pass
+    try:
+        import gevent as _gv
+        _gv.sleep(seconds)
+        return
+    except Exception:
+        pass
+    time.sleep(seconds)
+
+
+def _intel_kill_process_tree(proc):
+    """强杀子进程及其派生进程（JVM 可能另起子进程）。"""
+    import subprocess as _sp
+    try:
+        if os.name == 'nt':
+            _flags = getattr(_sp, 'CREATE_NO_WINDOW', 0x08000000)
+            _sp.run(['taskkill', '/F', '/T', '/PID', str(proc.pid)],
+                    stdout=_sp.DEVNULL, stderr=_sp.DEVNULL,
+                    creationflags=_flags, timeout=10)
+        else:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+    except Exception:
+        pass
+    try:
+        proc.kill()
+    except Exception:
+        pass
+
+
+def _intel_cli_command():
+    """返回启动智能诊断巡检隔离 CLI 的命令行。
+
+    冻结态：``<dbcheck.exe> --intelligence-inspection-cli``（web_ui.py 在单实例锁之前拦截）；
+    开发态：``<python> modules/intelligence/intel_inspection_cli.py``。
+    """
+    if getattr(sys, 'frozen', False):
+        return [sys.executable, '--intelligence-inspection-cli']
+    return [sys.executable,
+            os.path.join(str(paths.PROJECT_ROOT), 'modules', 'intelligence',
+                         'intel_inspection_cli.py')]
+
+
+def run_target_inspection(
+    db_type: str,
+    instance: Dict[str, Any],
+    inspector_name: str = "Jack",
+    template_id=None,
+) -> Dict[str, Any]:
+    """为目标数据源实时运行巡检引擎，返回结构化结果。
+
+    对外接口（被 inspection_expert / mcp_server 调用）。JVM 类型（hgdb / db2 /
+    sqlserver_jdbc / oracle_jdbc）在**未处于已隔离子进程**时，自动委派到干净子进程
+    执行，避免 JPype JVM 把 gevent 主进程 hub 钉死导致界面冻结。已隔离场景下
+    （由 intel_inspection_cli 调用，env 标记 ``DBCheck_INTEL_INSP_SUBPROCESS=1``）
+    直接走进程内版本，不递归再起子进程。
+
+    非 JVM 类型（mysql / pg / dm / 各类原生驱动插件等）保持原进程内行为不变。
+    """
+    if _SCRIPT_DIR not in sys.path:
+        sys.path.insert(0, _SCRIPT_DIR)
+
+    # JVM 类型且当前不在隔离子进程内 → 委派子进程
+    if (db_type in INTEL_JVM_DB_TYPES
+            and os.environ.get('DBCheck_INTEL_INSP_SUBPROCESS') != '1'):
+        return _run_target_inspection_subprocess(
+            db_type, instance, inspector_name, template_id)
+
+    return _run_target_inspection_inline(db_type, instance, inspector_name, template_id)
+
+
+def _run_target_inspection_subprocess(
+    db_type: str,
+    instance: Dict[str, Any],
+    inspector_name: str = "Jack",
+    template_id=None,
+    timeout: int = INTEL_INSPECTION_TIMEOUT,
+) -> Dict[str, Any]:
+    """在独立子进程中执行 JVM 类型的深度巡检，返回与内联版本同构的结果字典。
+
+    主进程只负责 spawn 子进程、协作式轮询 stdout 结果行；等待期间让出 gevent hub，
+    界面始终可响应。JVM 只活在子进程里，超时可直接杀进程树。
+    """
+    import subprocess as _sp
+    import tempfile as _tf
+
+    payload = {
+        'db_type': db_type,
+        'instance': instance,
+        'inspector_name': inspector_name,
+        'template_id': template_id,
+    }
+
+    _in_fd, _in_path = _tf.mkstemp(prefix='dbc_intel_in_', suffix='.json')
+    _out_fd, _out_path = _tf.mkstemp(prefix='dbc_intel_out_', suffix='.log')
+    os.close(_out_fd)
+    proc = None
+    try:
+        with os.fdopen(_in_fd, 'w', encoding='utf-8') as f:
+            json.dump(payload, f, ensure_ascii=True)
+
+        env = os.environ.copy()
+        env['DBCheck_NO_GEVENT_PATCH'] = '1'     # 子进程绝不能被 monkey-patch
+        env['DBCheck_INTEL_INSP_SUBPROCESS'] = '1'  # 防止子进程内部递归委派
+        env['PYTHONIOENCODING'] = 'utf-8'
+
+        _kw = {}
+        if os.name == 'nt':
+            _kw['creationflags'] = (getattr(_sp, 'CREATE_NO_WINDOW', 0x08000000)
+                                    | getattr(_sp, 'CREATE_NEW_PROCESS_GROUP', 0x00000200))
+        else:
+            _kw['start_new_session'] = True
+
+        with open(_in_path, 'r', encoding='utf-8') as fin, \
+                open(_out_path, 'w', encoding='utf-8', errors='replace') as fout:
+            proc = _sp.Popen(_intel_cli_command(), stdin=fin, stdout=fout,
+                             stderr=_sp.STDOUT, env=env,
+                             cwd=str(paths.PROJECT_ROOT), **_kw)
+
+        deadline = time.monotonic() + timeout
+        while True:
+            if proc.poll() is not None:
+                break
+            if time.monotonic() >= deadline:
+                _intel_kill_process_tree(proc)
+                return {
+                    "ok": False,
+                    "error": (f"实时巡检超时（已超过 {timeout} 秒），请检查目标数据库是否可连接，"
+                              f"或 JVM/JDBC 驱动环境是否正常。"),
+                    "auto_analyze": [],
+                    "db_type": db_type,
+                    "instance_name": instance.get("name") or instance.get("host") or "",
+                }
+            _intel_cooperative_sleep(0.1)
+
+        # 子进程已退出，输出文件此时已完整，读取并提取结果行
+        try:
+            with open(_out_path, 'r', encoding='utf-8', errors='replace') as f:
+                out = f.read()
+        except Exception:
+            out = ''
+
+        result = None
+        for line in reversed(out.splitlines()):
+            line = line.strip()
+            if line.startswith(_INTEL_RESULT_PREFIX):
+                try:
+                    result = json.loads(line[len(_INTEL_RESULT_PREFIX):])
+                except Exception:
+                    result = None
+                break
+
+        if result is None:
+            tail = (out or '').strip().splitlines()[-8:]
+            return {
+                "ok": False,
+                "error": ("实时巡检子进程未返回有效结果"
+                          + (f"：{' | '.join(tail)}" if tail
+                             else f"（退出码 {proc.returncode}）")),
+                "auto_analyze": [],
+                "db_type": db_type,
+                "instance_name": instance.get("name") or instance.get("host") or "",
+            }
+        return result
+    except Exception as e:  # noqa: BLE001
+        if proc is not None and proc.poll() is None:
+            _intel_kill_process_tree(proc)
+        return {
+            "ok": False,
+            "error": f"实时巡检子进程启动失败：{e}",
+            "auto_analyze": [],
+            "db_type": db_type,
+            "instance_name": instance.get("name") or instance.get("host") or "",
+        }
+    finally:
+        for _p in (_in_path, _out_path):
+            try:
+                os.remove(_p)
+            except Exception:
+                pass

@@ -1507,6 +1507,9 @@ def run_inspection_task(task_id, db_info, inspector_name, template_id=None, chap
             task['status'] = 'done'
             task['report_file'] = ofile
             task['report_name'] = file_name
+            # report_path 与 report_file 同源（子进程隔离路径的 DONE 行与主进程
+            # /api/task_status 都依赖 task['report_path']；此处与 Pro 记录保持一致）。
+            task['report_path'] = ofile
 
         # Pro巡检记录（失败不影响前端结果展示）
         try:
@@ -1889,7 +1892,8 @@ def test_oracle_connection(host, port, user, password, service_name='ORCL', sysd
             # 纯 TNS 描述符：oracledb 可直接作为 dsn 使用
             kw = dict(user=_user, password=password, dsn=_jdbc)
         else:
-            kw = dict(user=_user, password=password, host=host, port=int(port), service_name=service_name)
+            kw = dict(user=_user, password=password, host=host, port=int(port),
+                      service_name=service_name, connection_timeout=15)
         if _mode is not None:
             kw['mode'] = _mode
         try:
@@ -2309,7 +2313,8 @@ def _ct_oracle_pro(data):
         except Exception as te:
             return {'ok': False, 'error': f'SSH 隧道建立失败: {te}'}
     try:
-        params = {"user": data['user'], "password": data['password'], "dsn": dsn}
+        params = {"user": data['user'], "password": data['password'], "dsn": dsn,
+                  "connection_timeout": 15}
         if data.get('sysdba'):
             params["mode"] = oracledb.SYSDBA
         conn = oracledb.connect(**params)
@@ -2406,27 +2411,33 @@ def _ct_sqlserver_jdbc(data, flavor):
 
     缺省 / 空串 → 'jdbc'（本类型语义即 JDBC；旧实例无该字段时向后兼容）。
     """
-    _mode = (data.get('connection_mode') or 'jdbc')
-    _jdbc_opts = {
-        'connection_mode': _mode,
-        'jdbc_url': data.get('jdbc_url') or '',
-        'instance_name': data.get('instance_name') or '',
-        'encrypt': bool(data.get('encrypt', True)),
-        'trust_server_certificate': bool(data.get('trust_server_certificate', True)),
-    }
+    _mode = (data.get('connection_mode') or 'jdbc').strip().lower()
     _host = data['host']
     _port = int(data['port'])
-    _db = data.get('database', 'master')
-    if flavor == 'regular':
-        ok, msg = test_sqlserver_jdbc_connection(
-            _host, _port, data['user'], data['password'], _db, _jdbc_opts)
-        return {'ok': ok, 'msg': msg}
-    ok, msg = test_sqlserver_jdbc_connection(
-        _host, _port, data['user'], data['password'], _db, _jdbc_opts)
-    if ok:
-        return {'ok': True, 'message': msg}
-    return {'ok': False, 'error': msg} if msg else \
-        {'ok': False, 'error': 'SQL Server (JDBC) 连接测试失败'}
+    _db = data.get('database', 'master') or 'master'
+
+    def _odbc():
+        """ODBC 路径不涉及 JVM，可留在主进程（pyodbc 自带 timeout=10）。"""
+        return test_sqlserver_jdbc_connection(
+            _host, _port, data['user'], data['password'], _db,
+            {'connection_mode': 'odbc'})
+
+    if _mode == 'odbc':
+        ok, msg = _odbc()
+        return _jdbc_conn_result(ok, msg, flavor, 'SQL Server (JDBC)')
+
+    # jdbc / auto：JDBC 部分必须隔离到子进程，否则 JVM 会冻结整个 gevent 服务
+    _kwargs = dict(database=_db,
+                   jdbc_url=data.get('jdbc_url') or None,
+                   instance_name=data.get('instance_name') or '',
+                   encrypt=bool(data.get('encrypt', True)),
+                   trust_server_certificate=bool(data.get('trust_server_certificate', True)))
+    ok, msg = run_jdbc_test_subprocess('sqlserver_jdbc', data, _kwargs)
+    if not ok and _mode == 'auto':
+        ok2, msg2 = _odbc()
+        if ok2:
+            return _jdbc_conn_result(True, msg2, flavor, 'SQL Server (JDBC)')
+    return _jdbc_conn_result(ok, msg, flavor, 'SQL Server (JDBC)')
 
 
 def _ct_tidb(data, flavor):
@@ -2516,21 +2527,386 @@ def _ct_mongodb(data, flavor):
         {'ok': False, 'error': f"不支持的数据库类型: {data['db_type']}"}
 
 
-def _ct_db2(data, flavor):
-    _kwargs = dict(database=data.get('database', ''), jdbc_url=data.get('jdbc_url'),
-                   ssl=bool(data.get('ssl', False)))
+# ══════════════════════════════════════════════════════════════════
+# JDBC 连接测试：子进程隔离
+# ══════════════════════════════════════════════════════════════════
+# 【问题】点「测试连接」后整个 Web 界面卡死（HGDB / DB2 / SQL Server(JDBC)）。
+# 【根因】两层叠加：
+#   1) Web 服务默认跑在 gevent 协作式服务器上（_socketio_async_mode='gevent'，
+#      见本文件 _resolve_async_mode）。gevent 是单线程协程模型，且本进程**没有**
+#      执行 monkey.patch_all()，因此任何不主动让出执行权的调用都会把整个 hub
+#      钉死——不只是当前请求转圈，而是所有 HTTP/WebSocket 请求全部停摆，
+#      用户观感就是「整个界面卡死」。
+#   2) 这三类数据源都通过 JPype 在**当前进程内**启动 JVM 再调
+#      DriverManager.getConnection。JVM 启动本身要数秒，且跑在原生 OS 线程上，
+#      连接阶段完全在 C/Java 层阻塞，Python 层既无法让出也无法中断。
+#      IvorySQL 之所以不卡，是因为它走原生 psycopg2 且带 connect_timeout=10，
+#      正常几十毫秒就返回，用户感知不到。
+# 【解法】把 JVM 彻底赶出主进程：
+#   - 主进程只负责 spawn 子进程（同一个 exe 加 --jdbc-test-cli）+ 协作式轮询等待；
+#   - 等待期间用 gevent.sleep 让出执行权 → 界面全程可用；
+#   - 超时直接杀子进程树，JVM 随之消失，主进程不受任何残留影响。
+JDBC_SUBPROCESS_DB_TYPES = ('hgdb', 'db2', 'sqlserver_jdbc')
+JDBC_TEST_TIMEOUT = 30  # 秒；需覆盖 JVM 冷启动(3~10s) + JDBC 登录超时(10~15s)
+
+# 需要整条巡检任务隔离到子进程的数据库类型（均依赖进程内 JVM/JPype）
+JVM_INSPECTION_DB_TYPES = ('hgdb', 'db2', 'sqlserver_jdbc', 'oracle_jdbc')
+JDBC_INSPECTION_TIMEOUT = 3600  # 巡检任务整体硬超时（秒）
+
+
+def _cooperative_sleep(seconds):
+    """让出执行权且不冻结 gevent hub。
+
+    gevent 模式下用 gevent.sleep（会切回 hub 处理其它请求）；其余模式退化为
+    time.sleep。注意本进程未 monkey-patch，time.sleep 会真实阻塞 hub，
+    因此这个分支判断不能省。
+    """
+    if _socketio_async_mode == 'gevent':
+        try:
+            import gevent as _gv
+            _gv.sleep(seconds)
+            return
+        except Exception:
+            pass
+    time.sleep(seconds)
+
+
+def _kill_process_tree(proc):
+    """强杀子进程及其派生进程（JVM 可能另起子进程）。"""
+    import subprocess as _sp
+    try:
+        if os.name == 'nt':
+            _flags = getattr(_sp, 'CREATE_NO_WINDOW', 0x08000000)
+            _sp.run(['taskkill', '/F', '/T', '/PID', str(proc.pid)],
+                    stdout=_sp.DEVNULL, stderr=_sp.DEVNULL,
+                    creationflags=_flags, timeout=10)
+        else:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+    except Exception:
+        pass
+    try:
+        proc.kill()
+    except Exception:
+        pass
+
+
+def _jdbc_cli_command():
+    """返回启动隔离 CLI 的命令行。
+
+    冻结态：``<dbcheck.exe> --jdbc-test-cli``（web_ui.py 在单实例锁之前拦截）；
+    开发态：``<python> modules/jdbc_test_cli.py``。
+    """
+    if getattr(sys, 'frozen', False):
+        return [sys.executable, '--jdbc-test-cli']
+    return [sys.executable, os.path.join(str(PROJECT_ROOT), 'modules', 'jdbc_test_cli.py')]
+
+
+def run_jdbc_test_subprocess(db_type, data, extra_kwargs=None, timeout=JDBC_TEST_TIMEOUT):
+    """在独立进程中执行一次 JDBC 连接测试。
+
+    Args:
+        db_type: 'hgdb' | 'db2' | 'sqlserver_jdbc'
+        data: 前端提交的连接参数 dict（host/port/user/password ...）
+        extra_kwargs: 透传给插件 test_connection 的关键字参数
+        timeout: 硬超时（秒），超时即杀进程树
+
+    Returns:
+        (ok: bool, msg: str)
+    """
+    import subprocess as _sp
+    import tempfile as _tf
+    from modules.jdbc_test_cli import RESULT_PREFIX
+
+    payload = {
+        'db_type': db_type,
+        'host': data.get('host'),
+        'port': data.get('port'),
+        'user': data.get('user'),
+        'password': data.get('password'),
+        'kwargs': extra_kwargs or {},
+    }
+
+    # 参数走 stdin 临时文件而非命令行：避免密码出现在进程列表/任务管理器里；
+    # 输出走临时文件而非管道：管道满会阻塞子进程，且读管道会阻塞 gevent hub。
+    _in_fd, _in_path = _tf.mkstemp(prefix='dbc_jdbc_in_', suffix='.json')
+    _out_fd, _out_path = _tf.mkstemp(prefix='dbc_jdbc_out_', suffix='.log')
+    os.close(_out_fd)
+    proc = None
+    try:
+        with os.fdopen(_in_fd, 'w', encoding='utf-8') as f:
+            json.dump(payload, f, ensure_ascii=True)
+
+        env = os.environ.copy()
+        env['DBCheck_NO_GEVENT_PATCH'] = '1'   # 子进程绝不能被 monkey-patch
+        env['PYTHONIOENCODING'] = 'utf-8'
+
+        _kw = {}
+        if os.name == 'nt':
+            # CREATE_NO_WINDOW：冻结版是控制台程序，不加会闪黑框
+            _kw['creationflags'] = (getattr(_sp, 'CREATE_NO_WINDOW', 0x08000000)
+                                    | getattr(_sp, 'CREATE_NEW_PROCESS_GROUP', 0x00000200))
+        else:
+            _kw['start_new_session'] = True  # 独立进程组，便于整树 kill
+
+        with open(_in_path, 'r', encoding='utf-8') as fin, \
+                open(_out_path, 'w', encoding='utf-8', errors='replace') as fout:
+            proc = _sp.Popen(_jdbc_cli_command(), stdin=fin, stdout=fout,
+                             stderr=_sp.STDOUT, env=env, cwd=str(PROJECT_ROOT), **_kw)
+
+            deadline = time.monotonic() + timeout
+            while proc.poll() is None:
+                if time.monotonic() >= deadline:
+                    _kill_process_tree(proc)
+                    return False, (f'连接测试超时（已超过 {timeout} 秒）。'
+                                   f'请检查主机地址、端口与网络连通性，'
+                                   f'并确认 JDBC 驱动 jar 与 Java 运行环境已就绪。')
+                _cooperative_sleep(0.05)
+
+        # 子进程可能在写完结果后才退出，输出文件此时已完整
+        try:
+            with open(_out_path, 'r', encoding='utf-8', errors='replace') as f:
+                out = f.read()
+        except Exception:
+            out = ''
+
+        for line in reversed(out.splitlines()):
+            line = line.strip()
+            if line.startswith(RESULT_PREFIX):
+                try:
+                    r = json.loads(line[len(RESULT_PREFIX):])
+                    return bool(r.get('ok')), str(r.get('msg') or '')
+                except Exception as e:  # noqa: BLE001
+                    return False, f'连接测试结果解析失败: {e}'
+
+        tail = (out or '').strip().splitlines()[-5:]
+        return False, ('连接测试子进程未返回结果'
+                       + (f'：{" | ".join(tail)}' if tail else f'（退出码 {proc.returncode}）'))
+    except Exception as e:  # noqa: BLE001
+        if proc is not None and proc.poll() is None:
+            _kill_process_tree(proc)
+        return False, f'连接测试子进程启动失败: {e}'
+    finally:
+        for _p in (_in_path, _out_path):
+            try:
+                os.remove(_p)
+            except Exception:
+                pass
+
+
+def _insp_cli_command():
+    """返回启动隔离巡检 CLI 的命令行（复用与 JDBC 测试 CLI 相同模式）。"""
+    if getattr(sys, 'frozen', False):
+        return [sys.executable, '--jdbc-inspection-cli']
+    return [sys.executable, os.path.join(str(PROJECT_ROOT), 'modules', 'jdbc_inspection_cli.py')]
+
+
+def _run_inspection_subprocess(task_id, db_type, db_info, inspector_name,
+                               template_id=None, chapter_ids=None,
+                               timeout=JDBC_INSPECTION_TIMEOUT):
+    """在独立子进程中执行整条 JDBC 巡检任务。
+
+    主进程只负责 spawn 子进程、读取 stdout 事件行并通过 socketio 转发给前端；
+    等待期间用协作式睡眠让出 gevent hub，界面始终可响应。JVM 只活在子进程里，
+    即使原生线程死锁，主进程也不受影响，且可在超时时直接杀进程树。
+
+    Args:
+        task_id: 任务 UUID
+        db_type: 数据库类型，需在 JVM_INSPECTION_DB_TYPES 中
+        db_info: 连接信息 dict（同 api_start_inspection 构造）
+        inspector_name: 巡检人名称
+        template_id: 模板 ID
+        chapter_ids: 章节 ID 列表或 None
+        timeout: 硬超时秒数，默认 1 小时
+    """
+    import subprocess as _sp
+    import tempfile as _tf
+    from modules.jdbc_inspection_cli import RESULT_PREFIX, DONE_PREFIX
+
+    payload = {
+        'task_id': task_id,
+        'db_type': db_type,
+        'db_info': db_info,
+        'inspector_name': inspector_name,
+        'template_id': template_id,
+        'chapter_ids': chapter_ids,
+    }
+
+    _in_fd, _in_path = _tf.mkstemp(prefix='dbc_jdbc_insp_in_', suffix='.json')
+    _out_fd, _out_path = _tf.mkstemp(prefix='dbc_jdbc_insp_out_', suffix='.log')
+    os.close(_out_fd)
+    proc = None
+
+    def _forward_event(event, data):
+        """把子进程事件转发到前端并写入本地任务日志。"""
+        try:
+            socketio.emit(event, data, room=task_id)
+        except Exception:
+            pass
+        task = tasks.get(task_id)
+        if task is not None:
+            if event == 'log' and isinstance(data, dict):
+                msg = data.get('msg', '')
+                if msg:
+                    task.setdefault('log', []).append(msg)
+            elif event == 'done':
+                task['status'] = 'done'
+                task.setdefault('report_path', data.get('report_path'))
+                task.setdefault('ai_advice', data.get('ai_advice'))
+            elif event == 'error':
+                task['status'] = 'error'
+                task['error_msg'] = data.get('msg', '')
+
+    try:
+        with os.fdopen(_in_fd, 'w', encoding='utf-8') as f:
+            json.dump(payload, f, ensure_ascii=True)
+
+        env = os.environ.copy()
+        env['DBCheck_NO_GEVENT_PATCH'] = '1'
+        env['PYTHONIOENCODING'] = 'utf-8'
+
+        _kw = {}
+        if os.name == 'nt':
+            _kw['creationflags'] = (getattr(_sp, 'CREATE_NO_WINDOW', 0x08000000)
+                                    | getattr(_sp, 'CREATE_NEW_PROCESS_GROUP', 0x00000200))
+        else:
+            _kw['start_new_session'] = True
+
+        with open(_in_path, 'r', encoding='utf-8') as fin, \
+                open(_out_path, 'w', encoding='utf-8', errors='replace') as fout:
+            proc = _sp.Popen(_insp_cli_command(), stdin=fin, stdout=fout,
+                             stderr=_sp.STDOUT, env=env, cwd=str(PROJECT_ROOT), **_kw)
+
+        # ── 流式转发：轮询期间增量读取临时文件，实时把日志推给前端 ──
+        # 之前是「等子进程退出后整文件读取」，导致前端日志全部堆积到巡检结束才弹出。
+        # 子进程每行都 flush()，临时文件随巡检推进实时增长；这里每 0.1s 增量读取
+        # 新增行并转发，日志即可与后端执行同步显示，而非结束时一次性爆发。
+        done_seen = False
+        _processed_lines = 0
+
+        def _handle_line(_ln):
+            nonlocal done_seen
+            _ln = _ln.strip()
+            if not _ln:
+                return
+            if _ln.startswith(RESULT_PREFIX):
+                try:
+                    _ev = json.loads(_ln[len(RESULT_PREFIX):])
+                    _forward_event(_ev.get('event'), _ev.get('data'))
+                    if _ev.get('event') == 'done':
+                        done_seen = True
+                except Exception:
+                    pass
+            elif _ln.startswith(DONE_PREFIX):
+                try:
+                    _final = json.loads(_ln[len(DONE_PREFIX):])
+                    _t = tasks.get(task_id)
+                    if _t:
+                        _t['status'] = _final.get('status', _t.get('status', 'done'))
+                        _t['report_path'] = _final.get('report_path') or _t.get('report_path')
+                        _t['ai_advice'] = _final.get('ai_advice') or _t.get('ai_advice')
+                        _t['error_msg'] = _final.get('error_msg') or _t.get('error_msg')
+                        # 子进程内存独立，以下字段必须由结束行同步回主进程，
+                        # 否则 /api/task_status 返回空 result → 前端健康评分 0、结果不展示。
+                        if _final.get('result') is not None:
+                            _t['result'] = _final['result']
+                        if _final.get('auto_analyze') is not None:
+                            _t['auto_analyze'] = _final['auto_analyze']
+                        if _final.get('report_file'):
+                            _t['report_file'] = _final['report_file']
+                        if _final.get('report_name'):
+                            _t['report_name'] = _final['report_name']
+                except Exception:
+                    pass
+
+        def _drain_new():
+            nonlocal _processed_lines
+            try:
+                with open(_out_path, 'r', encoding='utf-8', errors='replace') as _f:
+                    _text = _f.read()
+            except Exception:
+                return  # 子进程仍持有文件写入句柄，偶发共享冲突时下一轮重试
+            # 始终丢弃末段元素：它要么是结尾空串（整文件以 \n 结束），
+            # 要么是尚未写完的半行；真正的完整行都在它之前，避免漏转发/重复。
+            _parts = _text.split('\n')[:-1]
+            for _ln in _parts[_processed_lines:]:
+                _handle_line(_ln)
+            _processed_lines = len(_parts)
+
+        deadline = time.monotonic() + timeout
+        while True:
+            _drain_new()
+            if done_seen:
+                break
+            if proc.poll() is not None:
+                _drain_new()  # 子进程已退出：再收尾读取一次确保不丢尾部日志
+                break
+            if time.monotonic() >= deadline:
+                _kill_process_tree(proc)
+                err_msg = (f'巡检任务超时（已超过 {timeout} 秒）。'
+                           f'请检查目标数据库是否可连接，或 JVM/JDBC 驱动环境是否正常。')
+                _forward_event('error', {'msg': err_msg})
+                _forward_event('done', {'msg': err_msg, 'task_id': task_id})
+                task = tasks.get(task_id)
+                if task:
+                    task['status'] = 'error'
+                    task['error_msg'] = err_msg
+                return
+            _cooperative_sleep(0.1)
+
+        if not done_seen:
+            err_msg = '巡检子进程未返回结束事件'
+            _forward_event('error', {'msg': err_msg})
+            _forward_event('done', {'msg': err_msg, 'task_id': task_id})
+            task = tasks.get(task_id)
+            if task:
+                task['status'] = 'error'
+                task['error_msg'] = err_msg
+
+    except Exception as e:
+        err_msg = f'巡检子进程启动失败: {e}'
+        _forward_event('error', {'msg': err_msg})
+        _forward_event('done', {'msg': err_msg, 'task_id': task_id})
+        task = tasks.get(task_id)
+        if task:
+            task['status'] = 'error'
+            task['error_msg'] = err_msg
+        if proc is not None and proc.poll() is None:
+            _kill_process_tree(proc)
+    finally:
+        for _p in (_in_path, _out_path):
+            try:
+                os.remove(_p)
+            except Exception:
+                pass
+
+
+def _jdbc_conn_result(ok, msg, flavor, db_type):
+    """把 (ok, msg) 归一为两种 flavor 各自的响应结构。"""
     if flavor == 'regular':
-        ok, msg = test_plugin_connection(data['db_type'], data['host'], data['port'], data['user'],
-                                         data['password'], **_kwargs)
-        if ok is not None:
-            return {'ok': ok, 'msg': msg}
-        return {'ok': False, 'msg': _t('webui.err_unknown_db_type')}
-    ok, msg = test_plugin_connection(data['db_type'], data['host'], data['port'], data['user'],
-                                     data['password'], **_kwargs)
+        return {'ok': bool(ok), 'msg': msg}
     if ok:
         return {'ok': True, 'message': msg}
-    return {'ok': False, 'error': msg} if msg else \
-        {'ok': False, 'error': f"不支持的数据库类型: {data['db_type']}"}
+    return {'ok': False, 'error': msg or f'{db_type} 连接测试失败'}
+
+
+def _ct_hgdb(data, flavor):
+    """HGDB（瀚高）JDBC 连接测试 —— 走子进程隔离。
+
+    此前 hgdb 未注册测试器，落到 _plugin_conn_fallback 在主进程内起 JVM，
+    是「点测试连接界面卡死」的直接来源之一。
+    """
+    _kwargs = dict(database=data.get('database', '') or '',
+                   jdbc_url=data.get('jdbc_url') or None)
+    ok, msg = run_jdbc_test_subprocess('hgdb', data, _kwargs)
+    return _jdbc_conn_result(ok, msg, flavor, 'hgdb')
+
+
+def _ct_db2(data, flavor):
+    _kwargs = dict(database=data.get('database', ''),
+                   jdbc_url=data.get('jdbc_url') or None,
+                   ssl=bool(data.get('ssl', False)))
+    ok, msg = run_jdbc_test_subprocess('db2', data, _kwargs)
+    return _jdbc_conn_result(ok, msg, flavor, 'db2')
 
 
 def _plugin_conn_fallback(data, flavor):
@@ -2570,6 +2946,52 @@ def _dispatch_conn_test(db_type, data, flavor):
     return _plugin_conn_fallback(data, flavor)
 
 
+def _conn_test_with_timeout(db_type, data, flavor, timeout=None):
+    """在独立 OS 线程中执行连接测试，规避 C 层 DB 驱动（oracledb / dmPython /
+    psycopg2 / pyodbc）在 gevent 模式下阻塞事件循环 hub，导致响应写不回、
+    前端报 `Failed to fetch` 的问题。
+
+    gevent 的 monkey-patch 拦截不到这些驱动的 C 层 socket 调用，故在其阻塞期间
+    hub 被钉死、当前请求的响应无法写回；浏览器侧等到自身超时即 `Failed to fetch`。
+    把测试放进真实 OS 线程后，hub 可正常让出，超时（或驱动自身无超时导致的长时间
+    挂起）都会被本函数兜底为明确的错误 JSON，而非让前端挂死。
+
+    Args:
+        timeout: 兜底超时秒数。缺省按类型自适应——JDBC 子进程类型需要覆盖
+            JVM 冷启动，故留出比 JDBC_TEST_TIMEOUT 更宽的余量，确保内层
+            子进程超时（可给出精确原因）先于外层线程超时触发。
+    """
+    if timeout is None:
+        timeout = (JDBC_TEST_TIMEOUT + 10) if db_type in JDBC_SUBPROCESS_DB_TYPES else 20
+    result = {}
+    done = threading.Event()
+
+    def _runner():
+        try:
+            r = _dispatch_conn_test(db_type, data, flavor)
+            result['value'] = r if r is not None else {
+                'ok': False, 'error': f'不支持的数据库类型: {db_type}'}
+        except Exception as e:  # noqa: BLE001 - 连接测试异常需转成前端可读错误
+            result['value'] = {'ok': False, 'error': str(e)}
+        finally:
+            done.set()
+
+    t = threading.Thread(target=_runner, daemon=True)
+    t.start()
+
+    # 协作式等待：本进程未执行 gevent monkey-patch，直接 done.wait(timeout) 是真实
+    # OS 级阻塞，会把 gevent hub 钉死整整 timeout 秒——期间所有请求（含其它页面、
+    # WebSocket 心跳）全部停摆，用户看到的就是「整个界面卡死」。
+    # 改为轮询 + 主动让出执行权后，等待期间界面保持可用。
+    _deadline = time.monotonic() + timeout
+    while not done.is_set():
+        if time.monotonic() >= _deadline:
+            return {'ok': False,
+                    'error': f'连接测试超时（已超过 {timeout} 秒），请检查主机地址、端口与网络连通性'}
+        _cooperative_sleep(0.05)
+    return result.get('value', {'ok': False, 'error': '连接测试未返回结果'})
+
+
 # 注册内置类型与已知特殊插件的连接测试处理器
 register_connection_tester('mysql', _ct_mysql)
 register_connection_tester('mariadb', _ct_mariadb)
@@ -2588,6 +3010,8 @@ register_connection_tester('redis-cluster', _ct_redis)
 register_connection_tester('mongodb', _ct_mongodb)
 register_connection_tester('db2', _ct_db2)
 register_connection_tester('sqlserver_jdbc', _ct_sqlserver_jdbc)
+# hgdb 此前未注册 → 落到 _plugin_conn_fallback 在主进程内起 JVM 导致界面卡死
+register_connection_tester('hgdb', _ct_hgdb)
 
 
 def test_ssh_connection(host, port=22, username='root', password=None, key_file=None):
@@ -2901,40 +3325,32 @@ def api_delete_report():
 
 @app.route('/api/history_instances', methods=['GET'])
 def api_history_instances():
-    """返回有报告文件的数据库实例列表"""
+    """返回历史趋势库中所有已记录（含快照）的数据库实例列表。
+
+    每次巡检完成都会通过 :class:`HistoryManager` 的 ``save_snapshot`` 把关键指标
+    写入 ``<base_dir>/data/history.db``（``history_instances`` + ``snapshots``
+    两张表），因此趋势实例列表以「历史表」为准即可。
+
+    旧实现曾额外用 ``_parse_report_filename`` 按一组**固定报告前缀**过滤
+     ``.docx`` 报告文件，导致 HGDB / DB2 / sqlserver_jdbc / oracle_jdbc 等
+    不在前缀表中的实例被整体过滤掉、列表永远为空。趋势分析依赖的是快照数据，
+    与 Word 报告文件是否存在无关，故移除该文件级过滤。
+    """
     try:
         from modules.inspection.analyzer import HistoryManager
-        script_dir = BASE_DIR
-        reports_dir = str(paths.REPORTS_DIR)
-        hm = HistoryManager(script_dir)
+        hm = HistoryManager(BASE_DIR)
         raw_instances = hm.list_instances()
-        instances = []
-
-        # 预构建：收集所有报告文件的 (db_type, host) 集合
-        keep = set()
-        if os.path.isdir(reports_dir):
-            for f in os.listdir(reports_dir):
-                if f.endswith('.docx') and not f.startswith('~$'):
-                    dt, h, _lb = _parse_report_filename(f)
-                    if dt and h:
-                        keep.add((dt, h))
-
-        for inst in raw_instances:
-            inst_db_type = inst.get('db_type', '')
-            inst_host = inst.get('host', '')
-            # 只保留有报告文件的实例
-            if (inst_db_type, inst_host) in keep:
-                instances.append({
-                    'key': inst.get('key', ''),
-                    'db_type': inst.get('db_type', ''),
-                    'host': inst.get('host', ''),
-                    'port': str(inst.get('port', '')),
-                    'label': inst.get('label', inst.get('key', '')),
-                    'snapshot_count': inst.get('snapshots_count', 0),
-                    'last_time': inst.get('last_time', ''),
-                    'last_health': inst.get('last_health', _t('webui.health_unknown')),
-                    'last_risk': inst.get('last_risk', 0),
-                })
+        instances = [{
+            'key': inst.get('key', ''),
+            'db_type': inst.get('db_type', ''),
+            'host': inst.get('host', ''),
+            'port': str(inst.get('port', '')),
+            'label': inst.get('label', inst.get('key', '')),
+            'snapshot_count': inst.get('snapshots_count', 0),
+            'last_time': inst.get('last_time', ''),
+            'last_health': inst.get('last_health', _t('webui.health_unknown')),
+            'last_risk': inst.get('last_risk', 0),
+        } for inst in raw_instances]
         return jsonify({'ok': True, 'instances': instances})
     except Exception as e:
         return jsonify({'ok': False, 'instances': [], 'error': str(e)})
@@ -3522,7 +3938,8 @@ def api_test_db():
     data = request.json
     db_type = data.get('db_type', 'mysql')
     # 统一连接测试分发：注册表 -> 插件 connect_test 复用 -> 兜底
-    return jsonify(_dispatch_conn_test(db_type, data, 'regular'))
+    # 经线程隔离 + 硬超时包装，避免 C 层驱动在 gevent 下钉死 hub 致前端 Failed to fetch
+    return jsonify(_conn_test_with_timeout(db_type, data, 'regular'))
 
 
 @app.route('/api/test_ollama', methods=['POST'])
@@ -3794,16 +4211,16 @@ def api_start_inspection():
             'started_at':    datetime.datetime.now().isoformat()
         }
         db_info['_db_type'] = db_type
-        t = threading.Thread(target={
-            'mysql':      run_inspection_task,
-            'pg':         run_inspection_task,
-            'oracle':run_inspection_task,
-            'dm':         run_inspection_task,
-            'sqlserver':  run_inspection_task,
-            'tidb':       run_inspection_task,
-            'ivorysql':   run_inspection_task,
-            'kingbase':   run_inspection_task,
-        }.get(db_type, run_inspection_task), args=(task_id, db_info, inspector_name, template_id, chapter_ids))
+        # JVM 类型（HGDB/DB2/SQL Server-JDBC/oracle_jdbc）必须隔离到子进程执行，
+        # 否则进程内 JVM 会钉死 gevent hub，导致「开始巡检」后界面/控制台均无输出。
+        if db_type in JVM_INSPECTION_DB_TYPES:
+            t = threading.Thread(
+                target=_run_inspection_subprocess,
+                args=(task_id, db_type, db_info, inspector_name, template_id, chapter_ids))
+        else:
+            t = threading.Thread(
+                target=run_inspection_task,
+                args=(task_id, db_info, inspector_name, template_id, chapter_ids))
         t.daemon = True
         t.start()
         return jsonify({'ok': True, 'task_id': task_id})
@@ -6055,7 +6472,7 @@ def api_pro_datasources_test_conn():
         if not host:
             return jsonify({'ok': False, 'error': '请输入主机地址'})
 
-        result = _dispatch_conn_test(db_type, data, 'pro')
+        result = _conn_test_with_timeout(db_type, data, 'pro')
         return jsonify(result)
     except ImportError as e:
         return jsonify({'ok': False, 'error': f'驱动未安装: {e}'})

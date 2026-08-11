@@ -2327,7 +2327,7 @@ JA.update({
     "webui.home_overview_title": "システム概要",
     "webui.home_quick_inspect": "検査を開始",
 
-    "webui.home_hero_subtitle": "AI を活用したインテリジェントなデータベース検査プラットフォーム",
+    "webui.home_hero_subtitle": "アライグマのように夜を徘徊し、隠れたデータベース問題を発見する",
     "webui.home_quick_diagnose": "スマート診断",
     "webui.home_stat_datasources": "接続済みデータソース",
     "webui.home_stat_db_types": "対応データベース種別",
@@ -2354,7 +2354,7 @@ JA.update({
     "webui.home_subtitle": "ようこそ RaccoonX データベース検査ツール",
     "webui.home_template_stats": "テンプレート統計",
     "webui.home_title": "ホーム",
-    "webui.home_welcome": "RaccoonX へようこそ",
+    "webui.home_welcome": "Raccoon<span class=brand-x>X</span> へようこそ",
     "webui.ind_cache_hit_ratio": "キャッシュ ヒット率 (%)",
     "webui.ind_connections": "現在の接続数",
     "webui.ind_cpu_usage": "CPU 使用率 (%)",

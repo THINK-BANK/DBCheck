@@ -12,7 +12,7 @@ DBCheck 定时调度模块
 - 巡检完成后触发邮件/钉钉/企业微信通知
 """
 from modules.core.paths import PROJECT_ROOT
-import os, sys, json, datetime, threading, logging
+import os, sys, json, datetime, threading, logging, time, signal
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.jobstores.memory import MemoryJobStore
@@ -161,6 +161,136 @@ def _run_plugin_inspection(db_info, inspector_name, ssh_info):
     return report_file
 
 
+def _kill_tree(proc):
+    """跨平台杀掉整个进程树（含 JVM 孙进程），避免子进程超时后 JVM 残留。"""
+    try:
+        pid = proc.pid
+    except Exception:
+        return
+    try:
+        if os.name == 'nt':
+            os.system('taskkill /F /T /PID %d' % pid)
+        else:
+            os.killpg(os.getpgid(pid), signal.SIGKILL)
+    except Exception:
+        try:
+            proc.kill()
+        except Exception:
+            pass
+
+
+def _run_plugin_inspection_subprocess(db_info, inspector_name):
+    """在干净子进程中执行 JVM 插件类型（hgdb / db2 / sqlserver_jdbc / oracle_jdbc）
+    的定时巡检，规避「进程内 JVM 与 gevent hub 死锁导致整个界面卡死」。
+
+    复用 ``modules/jdbc_inspection_cli.py``：该 CLI 在未被 gevent monkey-patch 的
+    子进程里调用 ``app.run_inspection_task``，主进程（调度器线程）只负责 spawn、
+    读取 stdout 结束行（__DBCHECK_INSP_DONE__）并取回 ``report_path`` 供通知使用。
+
+    本函数假定 ``db_info['db_type']`` 已在调用方确认属于 JVM 类型。
+    """
+    import subprocess as _sp
+    from modules.jdbc_inspection_cli import (
+        JVM_INSPECTION_DB_TYPES, RESULT_PREFIX, DONE_PREFIX,
+    )
+
+    db_type = db_info.get('db_type')
+    if db_type not in JVM_INSPECTION_DB_TYPES:
+        # 非 JVM 插件类型走原进程内路径
+        return _run_plugin_inspection(db_info, inspector_name, None)
+
+    # 构造 jdbc_inspection_cli 期望的 db_info 字段（ip/port/user/password/database/name）
+    mapped = {
+        'ip': db_info.get('host') or db_info.get('ip') or '',
+        'port': int(db_info.get('port') or 0),
+        'user': db_info.get('user') or '',
+        'password': db_info.get('password') or '',
+        'database': db_info.get('database') or '',
+        'name': db_info.get('label') or db_info.get('name') or db_type or 'unknown',
+        'inspector_name': inspector_name,
+    }
+    for _k in ('connection_mode', 'jdbc_url', 'instance_name',
+               'encrypt', 'trust_server_certificate',
+               'ssh_host', 'ssh_port', 'ssh_user', 'ssh_password', 'ssh_key_file'):
+        if _k in db_info and db_info[_k] is not None:
+            mapped[_k] = db_info[_k]
+
+    payload = {
+        'task_id': 'sched-%s-%s' % (db_type, datetime.datetime.now().strftime('%Y%m%d%H%M%S')),
+        'db_type': db_type,
+        'db_info': mapped,
+        'inspector_name': inspector_name,
+        'template_id': None,
+        'chapter_ids': None,
+    }
+    raw = json.dumps(payload, ensure_ascii=True)
+
+    if getattr(sys, 'frozen', False):
+        cmd = [sys.executable, '--jdbc-inspection-cli']
+    else:
+        cmd = [sys.executable,
+               os.path.join(str(PROJECT_ROOT), 'modules', 'jdbc_inspection_cli.py')]
+
+    env = os.environ.copy()
+    env['DBCheck_NO_GEVENT_PATCH'] = '1'
+    env['PYTHONIOENCODING'] = 'utf-8'
+
+    _kw = {}
+    if os.name == 'nt':
+        _kw['creationflags'] = (getattr(_sp, 'CREATE_NO_WINDOW', 0x08000000)
+                                | getattr(_sp, 'CREATE_NEW_PROCESS_GROUP', 0x00000200))
+    else:
+        _kw['start_new_session'] = True
+
+    _timeout = 1500  # 25 分钟硬上限，远长于正常巡检与看门狗时限
+    proc = None
+    final = None
+    try:
+        proc = _sp.Popen(cmd, stdin=_sp.PIPE, stdout=_sp.PIPE, stderr=_sp.STDOUT,
+                         env=env, cwd=str(PROJECT_ROOT), **_kw)
+        try:
+            proc.stdin.write(raw.encode('utf-8'))
+            proc.stdin.close()
+        except Exception:
+            pass
+
+        # 逐行读取 stdout，直到结束行（__DBCHECK_INSP_DONE__）或进程退出
+        try:
+            for _line in proc.stdout:
+                _s = _line.decode('utf-8', errors='replace') if isinstance(_line, bytes) else _line
+                _s = _s.strip()
+                if _s.startswith(DONE_PREFIX):
+                    try:
+                        final = json.loads(_s[len(DONE_PREFIX):])
+                    except Exception:
+                        final = None
+                    break
+        except Exception:
+            pass
+
+        _deadline = time.monotonic() + _timeout
+        _rc = None
+        try:
+            _rc = proc.wait(timeout=max(1, _deadline - time.monotonic()))
+        except Exception:
+            _rc = None
+        if _rc is None:
+            _kill_tree(proc)
+            raise RuntimeError('插件巡检子进程超时（>%ds），已终止' % _timeout)
+    finally:
+        if proc is not None and proc.poll() is None:
+            _kill_tree(proc)
+
+    if final is None:
+        _rc = proc.returncode if proc is not None else '????'
+        raise RuntimeError('插件巡检子进程未返回结束行（返回码 %s）' % _rc)
+
+    if final.get('status') != 'done':
+        raise RuntimeError(final.get('error_msg') or '插件巡检执行失败')
+
+    return final.get('report_path')
+
+
 def _on_watchdog_timeout(job_id, db_info, state, guard):
     """看门狗触发：单次巡检超过时限，强制释放执行名额并记录超时失败。
 
@@ -292,7 +422,14 @@ def _run_inspection_core(job_id, db_info, inspector_name, notify_on_done):
         if db_type in runner_map:
             report_file, *_ = runner_map[db_type](db_info, inspector_name, ssh_info)
         else:
-            report_file = _run_plugin_inspection(db_info, inspector_name, ssh_info)
+            # 插件类型：JVM 依赖型（hgdb / db2 / sqlserver_jdbc / oracle_jdbc）必须在
+            # 干净子进程中执行，否则进程内 JVM 与 gevent hub 死锁 -> 整个界面卡死
+            # （与 Web「开始巡检」同根因，修复方案亦一致：子进程隔离）。
+            from modules.jdbc_inspection_cli import JVM_INSPECTION_DB_TYPES
+            if db_type in JVM_INSPECTION_DB_TYPES:
+                report_file = _run_plugin_inspection_subprocess(db_info, inspector_name)
+            else:
+                report_file = _run_plugin_inspection(db_info, inspector_name, ssh_info)
 
         if not report_file:
             raise RuntimeError('Word 报告渲染失败')

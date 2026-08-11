@@ -2524,7 +2524,7 @@ ZI = {
     "webui.ds_operation_fail": "操作失败：{}",
     "webui.ds_load_fail": "加载数据源失败",
     # ── 首页概览 ──
-    "webui.home_welcome": "欢迎使用 RaccoonX",
+    "webui.home_welcome": "欢迎使用 Raccoon<span class=brand-x>X</span>",
     "webui.home_instance_dist": "实例分布",
     "webui.home_instance_dist_sub": "各类型数据库数量",
     "webui.home_scheduler": "定时巡检",
@@ -2542,7 +2542,7 @@ ZI = {
     "webui.home_section_desc": "一站式数据库健康巡检解决方案",
     "webui.home_quick_inspect": "立即巡检",
 
-    "webui.home_hero_subtitle": "基于 AI 的智能数据库巡检平台",
+    "webui.home_hero_subtitle": "像浣熊一样夜行探索，让隐藏的数据库问题无所遁形",
     "webui.home_quick_diagnose": "智能诊断",
     "webui.home_stat_datasources": "已接入数据源",
     "webui.home_stat_db_types": "支持数据库类型",

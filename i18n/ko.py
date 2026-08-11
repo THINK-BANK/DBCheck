@@ -2326,7 +2326,7 @@ KO.update({
     "webui.home_overview_title": "시스템 개요",
     "webui.home_quick_inspect": "점검 시작",
 
-    "webui.home_hero_subtitle": "AI 기반 지능형 데이터베이스 점검 플랫폼",
+    "webui.home_hero_subtitle": "너구리처럼 밤에 탐색하며 숨겨진 데이터베이스 문제를 찾아냅니다",
     "webui.home_quick_diagnose": "스마트 진단",
     "webui.home_stat_datasources": "연결된 데이터 소스",
     "webui.home_stat_db_types": "지원 데이터베이스 유형",
@@ -2353,7 +2353,7 @@ KO.update({
     "webui.home_subtitle": "RaccoonX 데이터베이스 점검 도구를 사용해 주세요",
     "webui.home_template_stats": "템플릿 통계",
     "webui.home_title": "홈",
-    "webui.home_welcome": "RaccoonX에 오신 것을 환영합니다",
+    "webui.home_welcome": "Raccoon<span class=brand-x>X</span>에 오신 것을 환영합니다",
     "webui.ind_cache_hit_ratio": "캐시 적중률 (%)",
     "webui.ind_connections": "현재 연결 수",
     "webui.ind_cpu_usage": "CPU 사용률 (%)",

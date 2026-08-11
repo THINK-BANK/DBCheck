@@ -2328,7 +2328,7 @@ RU.update({
     "webui.home_overview_title": "Обзор системы",
     "webui.home_quick_inspect": "Начать проверку",
 
-    "webui.home_hero_subtitle": "Интеллектуальная платформа проверки баз данных на базе ИИ",
+    "webui.home_hero_subtitle": "Как енот ночью на охоте — находим скрытые проблемы баз данных",
     "webui.home_quick_diagnose": "Интеллектуальная диагностика",
     "webui.home_stat_datasources": "Подключённые источники данных",
     "webui.home_stat_db_types": "Поддерживаемые типы БД",
@@ -2355,7 +2355,7 @@ RU.update({
     "webui.home_subtitle": "Добро пожаловать в RaccoonX — инструмент проверки баз данных",
     "webui.home_template_stats": "Статистика шаблонов",
     "webui.home_title": "Главная",
-    "webui.home_welcome": "Добро пожаловать в RaccoonX",
+    "webui.home_welcome": "Добро пожаловать в Raccoon<span class=brand-x>X</span>",
     "webui.ind_cache_hit_ratio": "Коэффициент попаданий в кэш (%)",
     "webui.ind_connections": "Текущее число подключений",
     "webui.ind_cpu_usage": "Использование CPU (%)",

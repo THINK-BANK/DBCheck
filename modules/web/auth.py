@@ -43,13 +43,10 @@ def _get_users_db():
 
 
 def _verify_password(stored_hash, plain_password):
-    """验证密码 (bcrypt)"""
+    """验证密码 (bcrypt)，兼容 bcrypt 4/5 与异常降级"""
     try:
-        import bcrypt
-        return bcrypt.checkpw(
-            plain_password.encode('utf-8'),
-            stored_hash.encode('utf-8')
-        )
+        from modules.user_management.utils.password import verify_password
+        return verify_password(plain_password, stored_hash)
     except Exception:
         return False
 
@@ -111,11 +108,8 @@ def init_default_user():
         existing = conn.execute('SELECT id FROM um_user WHERE username=?', ('admin',)).fetchone()
         if not existing:
             # 创建默认管理员
-            import bcrypt
-            password_hash = bcrypt.hashpw(
-                'admin123'.encode('utf-8'),
-                bcrypt.gensalt()
-            ).decode('utf-8')
+            from modules.user_management.utils.password import hash_password
+            password_hash = hash_password('admin123')
             now = datetime.now().isoformat()
             conn.execute(
                 """INSERT INTO um_user(username, password, nickname, email, status, created_at, updated_at)
@@ -405,11 +399,8 @@ def register_auth_routes(app):
                 return jsonify({'ok': False, 'error': '旧密码错误'}), 403
 
             # 更新密码
-            import bcrypt
-            new_hash = bcrypt.hashpw(
-                new_pw.encode('utf-8'),
-                bcrypt.gensalt()
-            ).decode('utf-8')
+            from modules.user_management.utils.password import hash_password
+            new_hash = hash_password(new_pw)
             conn.execute(
                 'UPDATE um_user SET password=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
                 (new_hash, uid)
