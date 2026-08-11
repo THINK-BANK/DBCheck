@@ -51,9 +51,9 @@ This platform was **originally named DBCheck**. We have completed a brand upgrad
 
 **What does the X stand for?**
 
-- **eXplore** — 探索
-- **eXpert** — 专家
-- **eXtensible** — 可扩展
+- **eXplore** — explore
+- **eXpert** — expert
+- **eXtensible** — extensible
 
 > Note: During this transition, the project repository, Docker image, and website domains still use the original **DBCheck** identifiers, and the internal code name remains `dbcheck`.
 
