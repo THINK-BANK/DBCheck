@@ -44,7 +44,7 @@ This platform was **originally named DBCheck**. We have completed a brand upgrad
 
 **Why a raccoon?**
 
-- **Raccoon (小浣熊)** has a natural instinct to *explore, rummage, and uncover hidden problems* — exactly what a database inspector does.
+- **Raccoon** has a natural instinct to *explore, rummage, and uncover hidden problems* — exactly what a database inspector does.
 - Raccoons are **nocturnal**, which fits DBAs who fight fires and inspect servers late at night.
 - Raccoons are **smart, curious, and tool-savvy**, matching the positioning of an AI operations assistant.
 - A raccoon feels **more friendly and approachable than a robot**, which suits open-source community spreading.
