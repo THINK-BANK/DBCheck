@@ -757,6 +757,14 @@ try:
 except Exception as e:
     print(f"  [WARN] 容灾备份模块加载失败: {e}")
 
+# ── SQL 审核（内置模块 MVP1：解析 + 规则 + 评分，不执行）──
+try:
+    from modules.sqlaudit import register_sql_audit
+    register_sql_audit(app)
+    print("  [OK] SQL 审核模块已加载")
+except Exception as e:
+    print(f"  [WARN] SQL 审核模块加载失败: {e}")
+
 # ── 工具函数 ───────────────────────────────────────────────
 def _ts():
     return datetime.datetime.now().strftime('%H:%M:%S')

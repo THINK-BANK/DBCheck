@@ -50,6 +50,7 @@ menus_data = [
     ('shares',           'menu.shares',          0, 57),
     ('intelligence',      'menu.intelligence',     0, 58),
     ('diag-history',      'menu.diag-history',     0, 59),
+    ('sql-audit',         'menu.sql-audit',        0, 60),
     ('data-management',  'menu.data-management', 0, 66),
     ('about',            'menu.about',           0, 67),
     ('disaster-recovery','menu.disaster-recovery',0, 65),

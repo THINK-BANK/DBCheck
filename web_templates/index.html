@@ -5316,6 +5316,12 @@ function formatBytes(bytes) {
       <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg></span> <span data-i18n="webui.nav_ai">AI 诊断设置</span>
     </div>
 
+    <!-- ── SQL 审核(MVP1) ── -->
+    <div class="nav-section">变更安全</div>
+    <div class="nav-item" onclick="showPage('sql-audit')" id="nav-sql-audit">
+      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.4 8.5 8 11 4.6-2.5 8-6 8-11V5l-8-3z"/><path d="M9 12l2 2 4-4"/></svg></span> <span>SQL 审核</span> <span style="margin-left:6px;background:#f59e0b;color:#1f2937;font-size:10px;font-weight:600;padding:1px 6px;border-radius:999px;vertical-align:middle">开发中</span>
+    </div>
+
     <!-- ── 巡检编排(Pro) ── -->
     {% if pro_available %}
     <div class="nav-section" data-i18n="webui.nav_section_orchestrate">巡检编排</div>
@@ -6125,6 +6131,58 @@ function formatBytes(bytes) {
           <div class="reports-list" id="reports-list">
             <div style="text-align:center;color:var(--text-muted);padding:32px" data-i18n="webui.reports_loading">正在加载...</div>
           </div>
+        </div>
+      </div>
+
+      <!-- ══ Page: SQL Audit (MVP1) ══ -->
+      <div class="page" id="page-sql-audit">
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-title"><span>🛡️</span> <span>SQL 审核</span>
+            <span class="badge" style="margin-left:8px;font-size:11px">MVP1 · 解析 + 规则 + 评分（不执行）</span>
+            <span style="margin-left:8px;background:#f59e0b;color:#1f2937;font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px">🚧 加紧开发中</span>
+          </div>
+          <div class="form-grid">
+            <div class="field">
+              <label>目标实例（可选）</label>
+              <select id="sa-instance-select" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px" onchange="var o=this.selectedOptions[0];if(o)document.getElementById('sa-db-type').value=o.dataset.db||'mysql'">
+                <option value="">-- 不指定实例 --</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>数据库类型</label>
+              <select id="sa-db-type" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">
+                <option value="mysql">MySQL</option>
+                <option value="postgresql">PostgreSQL</option>
+                <option value="oracle">Oracle</option>
+                <option value="sqlserver">SQL Server</option>
+                <option value="dameng">DM8</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>环境</label>
+              <select id="sa-env" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">
+                <option value="prod">生产 prod</option>
+                <option value="test">测试 test</option>
+                <option value="dev">开发 dev</option>
+              </select>
+            </div>
+          </div>
+          <label style="font-size:12px;color:var(--text-muted);display:block;margin:8px 0 4px">待审核 SQL（支持多条，以分号分隔）</label>
+          <textarea id="sa-sql" rows="8" style="width:100%;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:monospace;resize:vertical" placeholder="UPDATE orders SET status='shipped' WHERE id=1001;"></textarea>
+          <div style="margin-top:10px">
+            <button id="sa-submit-btn" class="btn btn-primary" style="padding:9px 24px" onclick="submitSqlAudit()">开始审核</button>
+            <span style="font-size:12px;color:var(--text-muted);margin-left:10px">MVP1 仅做只读分析，不会真实执行任何 SQL</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title"><span>📋</span> 审核任务列表
+            <button class="btn btn-ghost" style="margin-left:auto;padding:6px 12px;font-size:12px" onclick="loadSqlAudit()">↻ 刷新</button>
+          </div>
+          <div class="reports-list" id="sa-task-list">
+            <div style="text-align:center;color:var(--text-muted);padding:32px">加载中...</div>
+          </div>
+          <div id="sa-detail" style="display:none;margin-top:16px"></div>
         </div>
       </div>
 
@@ -8752,6 +8810,7 @@ function showPage(name) {
     'intelligence': [i18n('webui.nav_intelligence') || '智能诊断中心', i18n('intelligence.subtitle') || '多专业能力协同，主动发现、定位与处置数据库风险。'],
     'diag-history': [i18n('webui.nav_diag_history') || '诊断历史', i18n('diag_history.subtitle') || '回看历次协同诊断结果。'],
     'flow': [i18n('webui.flow_title') || '巡检编排', i18n('webui.flow_desc') || ''],
+    'sql-audit': ['SQL 审核', '提交 SQL 变更前的安全审计：解析、规则校验、风险评分（MVP1 仅只读分析，不执行）'],
   };
   const t = titles[name] || [name, ''];
   document.getElementById('topbar-title').textContent = t[0];
@@ -8797,6 +8856,7 @@ function showPage(name) {
     }
   if (name === 'intelligence') loadIntelligencePage();
   if (name === 'diag-history') loadDiagHistoryPage();
+  if (name === 'sql-audit') loadSqlAudit();
 
   if (name === 'sql-editor') {
     loadSqlTree();
@@ -10593,6 +10653,132 @@ function renderReports() {
       </div>`;
   }).join('');
   updateBatchBar();
+}
+
+// ── SQL 审核（MVP1）──────────────────────────────────────
+let saTasks = [];
+async function loadSqlAudit() {
+  // 实例下拉
+  try {
+    const ri = await fetch('/api/sql-audit/instances');
+    const di = await ri.json();
+    const sel = document.getElementById('sa-instance-select');
+    if (sel && di.instances) {
+      sel.innerHTML = '<option value="">-- 不指定实例 --</option>' + di.instances.map(i =>
+        `<option value="${escHtml(i.id)}" data-db="${escHtml(i.db_type||'')}">${escHtml(i.name || i.id)} (${escHtml(i.db_type||'')})</option>`
+      ).join('');
+    }
+  } catch(e) { /* 实例列表失败不影响提交 */ }
+  // 任务列表
+  try {
+    const rt = await fetch('/api/sql-audit/tasks');
+    const dt = await rt.json();
+    saTasks = dt.tasks || [];
+    renderSqlAuditTasks();
+  } catch(e) {
+    const list = document.getElementById('sa-task-list');
+    if (list) list.innerHTML = `<div class="status-banner err">加载失败: ${escHtml(e.message)}</div>`;
+  }
+}
+
+function renderSqlAuditTasks() {
+  const list = document.getElementById('sa-task-list');
+  if (!list) return;
+  if (!saTasks.length) {
+    list.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:32px">暂无 SQL 审核任务</div>';
+    return;
+  }
+  const levelBadge = (lv) => {
+    const map = {block:['severity-high','🔴 阻断'], high:['severity-high','🟠 高危'], mid:['severity-mid','🟡 中风险'], low:['severity-low','🟢 低风险']};
+    const m = map[lv] || map.low;
+    return `<span class="severity-tag ${m[0]}" style="font-size:11px;padding:2px 7px">${m[1]}</span>`;
+  };
+  list.innerHTML = saTasks.map(t => `
+    <div class="report-item" style="cursor:pointer" onclick="showSqlAuditDetail(${t.id})">
+      <div class="ri-icon">🛡️</div>
+      <div class="ri-info">
+        <div class="ri-name">${escHtml(t.task_no)} · ${escHtml(t.db_type||'')} · ${escHtml(t.env||'')} ${levelBadge(t.risk_level)}</div>
+        <div class="ri-meta">${escHtml(t.submitter||'')} · ${new Date((t.created_at||'').replace('Z','')).toLocaleString('zh-CN')} · ${t.sql_count} 条语句 · 风险分 ${t.risk_score}</div>
+      </div>
+      <div style="flex-shrink:0"><button class="btn btn-ghost" style="font-size:12px;padding:6px 12px" onclick="event.stopPropagation();showSqlAuditDetail(${t.id})">查看</button></div>
+    </div>`).join('');
+}
+
+async function submitSqlAudit() {
+  const sql = document.getElementById('sa-sql').value.trim();
+  if (!sql) { alert('请输入待审核 SQL'); return; }
+  const instSel = document.getElementById('sa-instance-select');
+  const instId = instSel ? instSel.value : '';
+  const dbType = document.getElementById('sa-db-type').value;
+  const env = document.getElementById('sa-env').value;
+  const btn = document.getElementById('sa-submit-btn');
+  btn.disabled = true; btn.textContent = '审核中...';
+  try {
+    const res = await fetch('/api/sql-audit/submit', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({instance_id: instId, db_type: dbType, env: env, sql_text: sql, plan_enabled: false, exec_enabled: false})
+    });
+    const data = await res.json();
+    if (!data.ok) { alert('审核失败: ' + (data.error||'未知错误')); return; }
+    saTasks = [data.task, ...saTasks];
+    renderSqlAuditTasks();
+    showSqlAuditDetail(data.task.id);
+  } catch(e) {
+    alert('提交失败: ' + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '开始审核';
+  }
+}
+
+async function showSqlAuditDetail(taskId) {
+  try {
+    const res = await fetch('/api/sql-audit/tasks/' + taskId);
+    const data = await res.json();
+    if (!data.ok) { alert(data.error); return; }
+    const t = data.task;
+    const levelColor = {block:'#ef4444',high:'#f97316',mid:'#eab308',low:'#22c55e'};
+    const cssLevel = (lv) => (lv === 'block' ? 'high' : lv);
+    const itemsHtml = (t.items||[]).map(it => {
+      const hits = it.rule_hits || [];
+      const hitsHtml = hits.length ? hits.map(h => {
+        const c = levelColor[h.severity] || '#888';
+        return `<div style="border-left:3px solid ${c};padding:6px 10px;margin:6px 0;background:var(--surface2);border-radius:6px">
+          <div style="font-size:12px;font-weight:600"><span style="color:${c}">[${h.severity.toUpperCase()}]</span> ${escHtml(h.name)}</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${escHtml(h.message||'')}</div>
+          ${h.suggestion ? `<div style="font-size:12px;margin-top:3px">💡 ${escHtml(h.suggestion)}</div>` : ''}
+        </div>`;
+      }).join('') : '<div style="font-size:12px;color:var(--text-muted)">✅ 未命中任何规则</div>';
+      const tables = (it.tables||[]).map(x=>escHtml(x)).join(', ') || '—';
+      return `<div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span class="tag" style="font-size:11px">#${it.seq}</span>
+          <span class="tag">${escHtml(it.op_type||'')}</span>
+          <span style="font-size:12px;color:var(--text-muted)">${escHtml(it.sql_type||'')}</span>
+          <span style="font-size:12px;color:var(--text-muted)">表: ${tables}</span>
+          <span class="severity-tag severity-${cssLevel(it.risk_level)}" style="margin-left:auto;font-size:11px;padding:2px 7px">风险 ${it.risk_score}</span>
+        </div>
+        <pre style="white-space:pre-wrap;word-break:break-all;background:var(--surface2);padding:8px;border-radius:6px;font-size:12px;margin:8px 0">${escHtml(it.sql_text)}</pre>
+        ${hitsHtml}
+      </div>`;
+    }).join('');
+    const panel = document.getElementById('sa-detail');
+    panel.style.display = 'block';
+    panel.innerHTML = `
+      <div class="card-title"><span>🛡️</span> 审核报告 ${escHtml(t.task_no)}
+        <button class="btn btn-ghost" style="margin-left:auto;font-size:12px;padding:4px 10px" onclick="document.getElementById('sa-detail').style.display='none'">收起</button>
+      </div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px;margin-bottom:12px">
+        <span>提交人: ${escHtml(t.submitter||'')}</span>
+        <span>实例: ${escHtml(t.instance_id||'未指定')}</span>
+        <span>库类型: ${escHtml(t.db_type||'')}</span>
+        <span>环境: ${escHtml(t.env||'')}</span>
+        <span>语句数: ${t.sql_count}</span>
+        <span>任务风险: <b style="color:${levelColor[t.risk_level]||'#888'}">${escHtml(t.risk_level)} (${t.risk_score})</b></span>
+      </div>
+      ${itemsHtml}`;
+  } catch(e) {
+    alert('加载详情失败: ' + e.message);
+  }
 }
 
 function filterReports(type) {
