@@ -23,7 +23,7 @@ Through automated inspection rules, system resource collection, AI-assisted diag
 > 
 语言切换（Language switch）: [English](./README.md) | [中文](./README_zh.md)
 
-[![Version](https://img.shields.io/badge/Version-v26.8.7.1-blue.svg)]()
+[![Version](https://img.shields.io/badge/Version-v26.8.11.0-blue.svg)]()
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)]()
 [![Open Source](https://img.shields.io/badge/Open%20Source-Yes-green.svg)]()
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)]()

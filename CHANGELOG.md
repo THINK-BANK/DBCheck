@@ -1,5 +1,9 @@
 # Changelog
 
+## v26.8.11.0 (2026-08-11)
+- **修复 GitHub Issue #46：MariaDB 10.3 巡检报语法错误**：MariaDB 10.3/10.4 不支持 `SHOW BINLOG STATUS`（该命令 10.5.2+ 才引入），`modules/entrypoints/main_mariadb.py` 在 `log_bin=ON` 时把 `master_status` 替换为该语句，导致执行巡检报 1064 语法错误；统一改为 `SHOW MASTER STATUS`（所有 MariaDB 版本可用，且为 `SHOW BINLOG STATUS` 的别名）。（详见 commit 87b499c）
+- **版本统一**：各源文件版本标记 v26.8.10.x → v26.8.11.0（version.py / version.json / Dockerfile `VERSION.txt` / build 脚本 / login.js / skill `dbcheck` `scripts/version.py` / README + README_zh 徽章），消除此前 `version.py`(v26.8.10.2) 与 `version.json`(v26.8.10.3) 的版本漂移。
+
 ## v26.8.10.1 (2026-08-10)
 - **新增 DBCheck MCP Server（首发，Spike）**：新增 `modules/mcp_server/` 零第三方依赖包，以 JSON-RPC 2.0 over stdio 暴露 `dbcheck.list_instances` 与 `dbcheck.run_inspection` 两个 tool，可被 WorkBuddy / Codex / Claude Desktop 等 MCP 客户端直接调用；stdout 仅承载协议流（散落 print 全量重定向 stderr），响应统一 `ensure_ascii=True` 以规避 Windows 管道 cp936 解码导致的中文乱码；鉴权默认关闭，可用 `DBCHECK_MCP_REQUIRE_AUTH=1` + `DBCHECK_MCP_API_KEY` 开启。
 - **首页实例下拉框为空 + 图表「ECharts未加载」修复（f00d04a）**：`initMonitor()` 在 `echarts` 未定义时直接 `return`，致其后 `loadMonitorSummary()` 永不执行、实例列表被连带清空；改为仅降级图表区并继续加载实例列表。同时 ECharts 改为本地 `/static/js/echarts.min.js` 优先、失败回退 CDN（新增 5.5.1 离线包），`loadMonitorSummary()` 抽出 `_fetchMonitorInstances()` 支持 `metrics/summary` → `datasources` 双端点回退且不再静默吞异常，`ensureMonChart()` 补 echarts 守卫。
