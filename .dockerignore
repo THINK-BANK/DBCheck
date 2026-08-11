@@ -30,11 +30,12 @@ ai_config.json
 notifier_config.json
 instances.json
 
-# 驱动目录：build 阶段从 GitHub Releases 下载 drivers.zip，本地仓库 drivers/ 不进构建上下文
-# 例外：Oracle JDBC 驱动不允许公开下载，必须打包进镜像，故保留 ojdbc 两个 jar
-drivers/
-!drivers/ojdbc6.jar
-!drivers/ojdbc8.jar
+# 驱动目录：本地仓库 drivers/ 随构建上下文全部打进镜像（含各 JDBC 驱动 jar / yashandb /
+# sqlserver / oracle_client 等）。oracle_client 体积较大，但为支持 Oracle 全功能选择一并打包，
+# 接受镜像体积随之增大。
+# 注：Docker 镜像仅运行于 Linux，剔除 Oracle instant client 的 windows_x64 平台文件以减小体积。
+drivers/oracle_client/windows_x64
+
 
 # OS 噪声
 .DS_Store

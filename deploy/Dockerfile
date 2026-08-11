@@ -69,7 +69,7 @@ RUN /opt/venv/bin/pip install --no-cache-dir dmpython>=1.0.0 \
     || echo "WARNING: dmpython installation failed (DM8 support disabled)."
 
 # Download and extract drivers.zip from GitHub Releases (fatal if failed)
-# Provides: Oracle client libs, YashanDB wheel, etc.
+# Provides: YashanDB wheel, Oracle client libs, etc. (all kept in the image)
 # NOTE: drivers.zip is hosted on GitHub Releases, ensure the URL is accessible during build.
 # If download fails, the build will error out intentionally (no silent skip).
 RUN curl -fSL "https://atomgit.com/wfgyj/DBCheck/releases/download/drivers/drivers.zip" \
@@ -87,6 +87,10 @@ RUN if [ -f /build/drivers/yashandb/yasdb-1.2.0-py3-none-any.whl ]; then \
 
 # Copy application code
 COPY . .
+
+# Docker 镜像仅运行于 Linux：剔除 Oracle instant client 的 windows_x64 平台文件
+# （远程 drivers.zip 解压会带入，本地 COPY 经 .dockerignore 已排除，此处再清一次双保险）
+RUN rm -rf /build/drivers/oracle_client/windows_x64
 
 # Pre-compile .pyc for faster startup
 RUN /opt/venv/bin/python -m compileall /build 2>/dev/null || true
