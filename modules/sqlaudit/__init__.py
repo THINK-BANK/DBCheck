@@ -1,3 +1,8 @@
+# -*- coding: utf-8 -*-
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2025-2026 fiyo (Jack Ge) <sdfiyon@gmail.com>
+# Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
+
 """SQL 审核内置模块（MVP1）。
 
 形态：内置可开关模块（与 modules/inspection、modules/web 同级），非 plugins/ 驱动型插件，

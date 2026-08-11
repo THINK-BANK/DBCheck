@@ -1,3 +1,8 @@
+# -*- coding: utf-8 -*-
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2025-2026 fiyo (Jack Ge) <sdfiyon@gmail.com>
+# Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
+
 """SQL 审核 API 路由（蓝图 sqlaudit_bp）。
 
 路由前缀 /api/sql-audit：

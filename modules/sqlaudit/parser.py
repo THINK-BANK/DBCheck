@@ -1,3 +1,8 @@
+# -*- coding: utf-8 -*-
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2025-2026 fiyo (Jack Ge) <sdfiyon@gmail.com>
+# Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
+
 """SQL 解析工具（方言无关的轻量实现，不依赖第三方 SQL parser）。
 
 MVP1 聚焦 MySQL；解析结果（语句类型 / 操作类型 / 涉及表 / 是否含 WHERE 等）

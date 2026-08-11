@@ -1,3 +1,8 @@
+# -*- coding: utf-8 -*-
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2025-2026 fiyo (Jack Ge) <sdfiyon@gmail.com>
+# Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
+
 """SQL 审核数据模型（SQLite，库位于 data/sql_audit.db）。
 
 不依赖 ORM，使用标准 sqlite3，与项目其余数据层保持一致；路径使用
