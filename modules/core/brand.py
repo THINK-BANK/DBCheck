@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2025-2026 fiyo (Jack Ge) <sdfiyon@gmail.com>
+# Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
+
 """品牌常量（L1 展示层）。
 
 品牌升级原则：对外展示名 RaccoonX / 浣巡；内部代号 dbcheck 保持不变。

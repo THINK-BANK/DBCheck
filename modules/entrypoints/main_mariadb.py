@@ -220,11 +220,12 @@ class MariaDBInspector(BaseInspectionEngine):
             sql_dict['slave_io_running'] = "SHOW SLAVE STATUS;"
         if 'slave_status' in sql_dict:
             sql_dict['slave_status'] = "SHOW SLAVE STATUS;"
-        # 7.1 主库 Binlog 位置：MariaDB 10.5.2+ 起 SHOW MASTER STATUS 改名 SHOW BINLOG STATUS（旧名为别名）。
-        # binlog 未启用时该命令本就返回空；此时给出友好提示而非「数据缺失」，避免误判为 bug。
+        # 7.1 主库 Binlog 位置：MariaDB 10.5.2+ 才引入 SHOW BINLOG STATUS，
+        # 旧命令 SHOW MASTER STATUS 作为别名在所有 MariaDB 版本均可用（含 10.3）。
+        # 统一使用 SHOW MASTER STATUS，避免 10.3/10.4 等版本报 1064 语法错误。
         if 'master_status' in sql_dict:
             if self._resolve_binlog_enabled():
-                sql_dict['master_status'] = "SHOW BINLOG STATUS;"
+                sql_dict['master_status'] = "SHOW MASTER STATUS;"
             else:
                 sql_dict['master_status'] = (
                     "SELECT '二进制日志未启用（log_bin=OFF），无 Binlog 位点可展示' AS 说明;"
