@@ -156,7 +156,8 @@ def _run_plan_analysis(items, db_type, instance_id, plan_enabled):
                     "engine": norm_db,
                     "applicable": False,
                     "unsupported": True,
-                    "note": f"暂不支持 {db_type} 的执行计划分析（当前支持 MySQL / PostgreSQL / Oracle）",
+                    "note": f"暂不支持 {db_type} 的执行计划分析"
+                           f"（当前支持 MySQL / PostgreSQL / Oracle / SQL Server / 达梦(DM)）",
                 }
             else:
                 it["plan_json"] = dict(ddl_note)

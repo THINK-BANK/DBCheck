@@ -6186,7 +6186,7 @@ function formatBytes(bytes) {
           <div class="form-grid">
             <div class="field">
               <label>目标实例（可选）</label>
-              <select id="sa-instance-select" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px" onchange="var o=this.selectedOptions[0];if(o)document.getElementById('sa-db-type').value=o.dataset.db||'mysql'">
+              <select id="sa-instance-select" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px" onchange="saInstanceChanged(this)">
                 <option value="">-- 不指定实例 --</option>
               </select>
             </div>
@@ -6197,7 +6197,7 @@ function formatBytes(bytes) {
                 <option value="postgresql">PostgreSQL</option>
                 <option value="oracle">Oracle</option>
                 <option value="sqlserver">SQL Server</option>
-                <option value="dameng">DM8</option>
+                <option value="dm">达梦 DM8</option>
               </select>
             </div>
             <div class="field">
@@ -10727,6 +10727,28 @@ function renderReports() {
 
 // ── SQL 审核（MVP2：多库方言 + 执行计划）─────────────────
 let saTasks = [];
+function saInstanceChanged(sel) {
+  // 用户选择数据源后，将实例原始 db_type 归一化到「数据库类型」下拉框的可选项，
+  // 自动选中对应项（如 sqlserver_jdbc→sqlserver、dameng/dm8→dm、hgdb/kingbase→postgresql）。
+  const o = sel.selectedOptions[0];
+  const raw = o ? (o.dataset.db || '') : '';
+  const map = {
+    'pg': 'postgresql', 'postgres': 'postgresql', 'ivorysql': 'postgresql',
+    'kingbase': 'postgresql', 'hgdb': 'postgresql',
+    'mariadb': 'mysql', 'tidb': 'mysql', 'oceanbase': 'mysql', 'gbase': 'mysql',
+    'sqlserver_jdbc': 'sqlserver', 'sqlserver': 'sqlserver', 'mssql': 'sqlserver',
+    'dameng': 'dm', 'dm8': 'dm', 'dm': 'dm',
+    'mysql': 'mysql', 'postgresql': 'postgresql', 'oracle': 'oracle'
+  };
+  const v = map[(raw || '').toLowerCase()];
+  const dtSel = document.getElementById('sa-db-type');
+  if (dtSel) {
+    // 仅当归一化结果命中下拉项时才赋值，未命中则保持用户当前手动选择
+    if (v && Array.from(dtSel.options).some(opt => opt.value === v)) {
+      dtSel.value = v;
+    }
+  }
+}
 async function loadSqlAudit() {
   // 实例下拉
   try {

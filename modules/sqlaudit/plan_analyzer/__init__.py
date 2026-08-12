@@ -6,7 +6,7 @@
 """SQL 审核执行计划适配器包（MVP2）。
 
 提供：
-- normalize_db_type(db_type): 库型别名归并（pg→postgresql、kingbase/ivorysql/hgdb→postgresql、tidb→mysql ...）
+- normalize_db_type(db_type): 库型别名归并（pg→postgresql、kingbase/ivorysql/hgdb→postgresql、tidb→mysql、sqlserver_jdbc→sqlserver、dameng→dm ...）
 - get_analyzer(db_type): 按库型返回对应的 BasePlanAnalyzer 实例；不支持的库型返回 None
 - connect_instance(instance): 依据实例信息惰性 import 驱动并建立 DB-API 连接
 
@@ -20,15 +20,23 @@ from .base import BasePlanAnalyzer
 from .mysql import MySQLPlanAnalyzer
 from .postgres import PostgresPlanAnalyzer
 from .oracle import OraclePlanAnalyzer
+from .sqlserver import SqlServerPlanAnalyzer
+from .dm import DamengPlanAnalyzer
+
+
+# 当前已支持执行计划分析的规范族（服务层不支持提示文案复用）
+SUPPORTED_ENGINES = ("mysql", "postgresql", "oracle", "sqlserver", "dm")
 
 
 def normalize_db_type(db_type):
-    """将库型别名归并到规范族（mysql / postgresql / oracle / sqlserver）。"""
+    """将库型别名归并到规范族（mysql / postgresql / oracle / sqlserver / dm）。"""
     db_type = (db_type or "mysql").lower()
     alias = {
         "pg": "postgresql", "postgres": "postgresql",
         "ivorysql": "postgresql", "kingbase": "postgresql", "hgdb": "postgresql",
         "mariadb": "mysql", "tidb": "mysql", "oceanbase": "mysql", "gbase": "mysql",
+        "sqlserver_jdbc": "sqlserver", "sqlserver": "sqlserver", "mssql": "sqlserver",
+        "dameng": "dm", "dm8": "dm", "dm": "dm",
     }
     return alias.get(db_type, db_type)
 
@@ -42,6 +50,10 @@ def get_analyzer(db_type):
         return PostgresPlanAnalyzer()
     if dt == "oracle":
         return OraclePlanAnalyzer()
+    if dt == "sqlserver":
+        return SqlServerPlanAnalyzer()
+    if dt == "dm":
+        return DamengPlanAnalyzer()
     return None
 
 
@@ -108,4 +120,20 @@ def connect_instance(instance: dict):
                 if _ok:
                     return oracledb.connect(user=user, password=password, dsn=dsn, mode=mode)
             raise
+    if dt == "sqlserver":
+        import pyodbc
+        conn_str = (
+            f"DRIVER={{ODBC Driver 17 for SQL Server}};"
+            f"SERVER={host},{port};"
+            f"UID={user};PWD={password};"
+            f"TrustServerCertificate=yes;Encrypt=yes;"
+            f"Connect Timeout=10;"
+        )
+        if instance.get("database"):
+            conn_str += f"Database={instance['database']};"
+        return pyodbc.connect(conn_str)
+    if dt == "dm":
+        import dmPython
+        dsn = f"{host}:{port}"
+        return dmPython.connect(user=user, password=password, server=dsn)
     raise ValueError(f"不支持的执行计划分析数据库类型: {dt}")
