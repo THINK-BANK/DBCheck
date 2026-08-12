@@ -7567,7 +7567,7 @@ curl -H "X-API-Key: YOUR_API_KEY" http://localhost:5003/api/v1/inspect/{task_id}
               <button class="btn btn-ghost btn-sm" onclick="clearSql()">
                 <span data-i18n="sql_editor.clear">清空</span>
               </button>
-              <span class="sql-hint" data-i18n="sql_editor.readonly_hint">只读模式：仅允许 SELECT / SHOW / EXPLAIN</span>
+              <span class="sql-hint" data-i18n="sql_editor.readonly_hint">只读模式（后端强制）：仅允许查询类命令 SELECT / SHOW / EXPLAIN；Redis 仅 GET / KEYS / SCAN / TYPE 等只读</span>
             </div>
             <div class="sql-toolbar-right">
               <span id="sql-status" class="sql-status"></span>

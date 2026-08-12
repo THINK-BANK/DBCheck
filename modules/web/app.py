@@ -7151,6 +7151,131 @@ def _cleanup_expired_cursors():
         del _sql_cursors[k]
 
 
+import re as _re
+
+# ── SQL 编辑器只读白名单（仅允许查询类命令）────────────────────
+_SQL_READONLY_ALLOW = frozenset({
+    'SELECT', 'SHOW', 'EXPLAIN', 'WITH', 'DESCRIBE', 'DESC', 'VALUES',
+})
+
+
+def _strip_sql_comments_and_literals(sql):
+    """去掉注释与字符串字面量，便于安全切分语句（仅用于静态白名单检查，不改变语义）。"""
+    out = []
+    i, n = 0, len(sql)
+    in_str = None
+    while i < n:
+        c = sql[i]
+        if in_str:
+            if c == in_str:
+                if i + 1 < n and sql[i + 1] == in_str:  # 转义引号 '' / ""
+                    i += 2; continue
+                in_str = None
+            i += 1; continue
+        if c in ("'", '"', '`'):
+            in_str = c; out.append(c); i += 1; continue
+        if c == '-' and i + 1 < n and sql[i + 1] == '-':  # 行注释 --
+            j = sql.find('\n', i); i = n if j == -1 else j; continue
+        if c == '#':  # MySQL 行注释 #
+            j = sql.find('\n', i); i = n if j == -1 else j; continue
+        if c == '/' and i + 1 < n and sql[i + 1] == '*':  # 块注释 /* */
+            j = sql.find('*/', i + 2); i = n if j == -1 else j + 2; continue
+        out.append(c); i += 1
+    return ''.join(out)
+
+
+def _assert_readonly_sql(sql):
+    """校验 SQL 仅含只读查询命令；否则抛出 ValueError（含拒绝原因）。
+
+    静态白名单：剥离注释/字符串后按分号切分，每条语句首关键词必须命中白名单。
+    任意一条非只读语句（含注入的第二条 DROP/DELETE 等）都会被整体拒绝。
+    """
+    cleaned = _strip_sql_comments_and_literals(sql)
+    stmts = [s.strip() for s in cleaned.split(';') if s.strip()]
+    if not stmts:
+        raise ValueError('未检测到有效 SQL 语句')
+    for idx, st in enumerate(stmts, 1):
+        m = _re.match(r'\w+', st)
+        if not m:
+            raise ValueError(f'第 {idx} 条语句无法识别，已拒绝执行（只读模式）')
+        lead = m.group(0).upper()
+        if lead not in _SQL_READONLY_ALLOW:
+            raise ValueError(
+                f'只读模式：不允许执行「{lead}」类命令（仅允许 '
+                f'SELECT / SHOW / EXPLAIN / WITH / DESCRIBE / VALUES 等查询命令）'
+            )
+    return True
+
+
+# ── Redis 只读命令管控（仅允许查询类，禁止写/删除/管理类）──────
+_REDIS_WRITE_COMMANDS = frozenset({
+    # 键/删除
+    'DEL', 'UNLINK', 'FLUSHALL', 'FLUSHDB', 'SWAPDB', 'MOVE', 'COPY', 'RESTORE', 'MIGRATE',
+    # 字符串写
+    'SET', 'SETEX', 'SETNX', 'PSETEX', 'GETSET', 'GETEX', 'GETDEL', 'MSET', 'MSETNX',
+    'APPEND', 'INCR', 'INCRBY', 'INCRBYFLOAT', 'DECR', 'DECRBY', 'SETBIT', 'SETRANGE',
+    'BITFIELD', 'BITOP',
+    # 过期
+    'EXPIRE', 'EXPIREAT', 'PEXPIRE', 'PEXPIREAT', 'PERSIST',
+    # 重命名
+    'RENAME', 'RENAMENX',
+    # List
+    'LPUSH', 'LPUSHX', 'RPUSH', 'RPUSHX', 'LPOP', 'RPOP', 'RPOPLPUSH', 'LINSERT',
+    'LSET', 'LTRIM', 'LMOVE', 'BLMOVE', 'BLPOP', 'BRPOP', 'BRPOPLPUSH',
+    # Set
+    'SADD', 'SREM', 'SPOP', 'SMOVE', 'SDIFFSTORE', 'SINTERSTORE', 'SUNIONSTORE',
+    # Sorted Set
+    'ZADD', 'ZREM', 'ZINCRBY', 'ZPOPMIN', 'ZPOPMAX', 'ZINTERSTORE', 'ZUNIONSTORE',
+    'ZDIFFSTORE', 'ZRANGESTORE',
+    # Hash
+    'HSET', 'HSETNX', 'HMSET', 'HDEL', 'HINCRBY', 'HINCRBYFLOAT',
+    # Stream
+    'XADD', 'XDEL', 'XTRIM', 'XGROUP', 'XACK', 'XCLAIM', 'XAUTOCLAIM', 'XSETID',
+    # 脚本/函数（可写）
+    'EVAL', 'EVALSHA', 'FCALL', 'FUNCTION', 'SCRIPT',
+    # 地理/聚合写
+    'GEOADD', 'GEORADIUS', 'GEORADIUSBYMEMBER', 'GEOSEARCHSTORE',
+    'PFADD', 'PFMERGE', 'SORT',
+    # 管理/危险
+    'CLIENT', 'CONFIG', 'DEBUG', 'SHUTDOWN', 'SAVE', 'BGSAVE', 'BGREWRITEAOF',
+    'REPLICAOF', 'SLAVEOF', 'FAILOVER', 'RESET', 'ACL', 'MODULE', 'CLUSTER',
+})
+
+
+def _split_redis_command(sql):
+    """将单行 Redis 命令切分为参数列表（兼容引号）。"""
+    import shlex
+    try:
+        return shlex.split(sql)
+    except ValueError:
+        return sql.split()
+
+
+def _format_redis_value(v, _depth=0):
+    """将 redis-py 返回（多为 bytes/嵌套）转为可展示字符串。"""
+    if isinstance(v, bytes):
+        try:
+            return v.decode('utf-8', 'replace')
+        except Exception:
+            return repr(v)
+    if isinstance(v, (list, tuple)):
+        if _depth > 4:
+            return '[...]'
+        return '[' + ', '.join(_format_redis_value(x, _depth + 1) for x in v) + ']'
+    if isinstance(v, dict):
+        if _depth > 4:
+            return '{...}'
+        return '{' + ', '.join(
+            f'{_format_redis_value(k, _depth + 1)}: {_format_redis_value(val, _depth + 1)}'
+            for k, val in v.items()
+        ) + '}'
+    if v is None:
+        return '(nil)'
+    if isinstance(v, bool):
+        return 'true' if v else 'false'
+    return str(v)
+
+
 @app.route('/api/execute_sql', methods=['POST'])
 def api_execute_sql():
     """
@@ -7224,6 +7349,53 @@ def api_execute_sql():
     try:
         conn = None
         cursor = None
+        if db_type in ('redis', 'redis-cluster'):
+            # ── Redis：仅允许只读命令 ────────────────────────────────
+            _tokens = _split_redis_command(sql)
+            if not _tokens:
+                return jsonify({'error': '命令不能为空'}), 400
+            _cmd = _tokens[0].upper()
+            if _cmd in _REDIS_WRITE_COMMANDS:
+                return jsonify({
+                    'error': f'只读模式：不允许执行「{_cmd}」写/删除/管理类命令'
+                }), 403
+            _db_raw = str(db_info.get('database') or '0')
+            _db_idx = int(_db_raw) if _db_raw.isdigit() else 0
+            _kw = dict(
+                host=host, port=int(port) or 6379, password=pwd or None,
+                db=_db_idx, socket_timeout=10, socket_connect_timeout=10,
+                decode_responses=False, encoding_errors='replace', protocol=2,
+            )
+            if user:
+                _kw['username'] = user
+            if db_type == 'redis-cluster':
+                from redis.cluster import RedisCluster
+                _r = RedisCluster(**_kw)
+            else:
+                import redis
+                _r = redis.Redis(**_kw)
+            try:
+                _raw = _r.execute_command(*_tokens)
+            finally:
+                try:
+                    _r.close()
+                except Exception:
+                    pass
+            _val = _format_redis_value(_raw)
+            if len(_val) > 20000:
+                _val = _val[:20000] + ' ...(结果已截断)'
+            return jsonify({
+                'columns': ['command', 'result'],
+                'rows': [[sql, _val]],
+                'row_count': 1, 'has_more': False,
+            })
+
+        # ── 关系型数据库：强制只读模式，禁止 DELETE/UPDATE/INSERT/DROP/ALTER 等写与 DDL ──
+        try:
+            _assert_readonly_sql(sql)
+        except ValueError as e:
+            return jsonify({'error': str(e)}), 403
+
         if db_type in ('mysql', 'tidb', 'mariadb', 'oceanbase', 'tdsqlc_mysql'):
             import pymysql
             db_name = database or 'INFORMATION_SCHEMA'
