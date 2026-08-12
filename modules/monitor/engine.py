@@ -380,7 +380,7 @@ class MonitorEngine:
         elif db_type == 'oracle':
             import oracledb
             dsn = inst.get('service_name') or f"{host}:{port}/orcl"
-            mode = oracledb.SYSDBA if inst.get('sysdba') else oracledb.DEFAULT_MODE
+            mode = oracledb.SYSDBA if inst.get('sysdba') else oracledb.AUTH_MODE_DEFAULT
             return oracledb.connect(user=user, password=password, dsn=dsn, mode=mode)
 
         elif db_type == 'sqlserver':

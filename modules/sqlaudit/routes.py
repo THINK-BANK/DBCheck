@@ -64,6 +64,17 @@ def task_detail(task_id):
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+@bp.route("/tasks/<int:task_id>", methods=["DELETE"])
+def delete_task(task_id):
+    try:
+        n = service.delete_task(task_id)
+        if n == 0:
+            return jsonify({"ok": False, "error": "任务不存在或已删除"}), 404
+        return jsonify({"ok": True, "deleted": n})
+    except Exception as e:  # noqa: BLE001
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @bp.route("/rules", methods=["GET"])
 def rules():
     try:

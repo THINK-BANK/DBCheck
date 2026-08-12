@@ -306,7 +306,7 @@ class MssqlJdbcInspector(BaseInspectionEngine):
 
     def __init__(self, host, port, user, password, database=None,
                  ssh_info=None, template_id=None, jdbc_url=None,
-                 instance_name="", encrypt=True, trust_server_certificate=True,
+                 instance_name="", encrypt=False, trust_server_certificate=True,
                  chapter_ids=None):
         super().__init__(host, int(port), user, password, database=database,
                          ssh_info=ssh_info, template_id=template_id,
@@ -995,7 +995,7 @@ class MssqlJdbcInspector(BaseInspectionEngine):
 
 # ── 测试连接函数（供 web_ui / 自测调用）────────────────────────────
 def test_connection(host, port, user, password, database='', jdbc_url=None,
-                    instance_name=None, encrypt=True, trust_server_certificate=True, **kwargs):
+                    instance_name=None, encrypt=False, trust_server_certificate=True, **kwargs):
     """测试 SQL Server JDBC 连接。
 
     Args:
@@ -1006,7 +1006,7 @@ def test_connection(host, port, user, password, database='', jdbc_url=None,
         database: 目标数据库（默认 master）
         jdbc_url: 完整 JDBC URL（可选，以 jdbc:sqlserver:// 开头则透传）
         instance_name: 命名实例名（可选；非空时 URL 用 instanceName 替代端口）
-        encrypt: 启用 TLS 加密（默认 true）
+        encrypt: 启用 TLS 加密（默认 false；内网/旧版 SQL Server 建议关闭，有 CA 证书环境可显式设为 true）
         trust_server_certificate: 信任自签证书（默认 true）
     Returns:
         (ok, msg)
@@ -1029,7 +1029,7 @@ def test_connection(host, port, user, password, database='', jdbc_url=None,
 
 # ── 实时监控连接工厂（供 pro/metrics_collector.py 使用）─────────────
 def get_connection(host, port, user, password, database='', jdbc_url=None,
-                   instance_name=None, encrypt=True, trust_server_certificate=True):
+                   instance_name=None, encrypt=False, trust_server_certificate=True):
     """返回 DB-API 2.0 兼容的 JDBC 连接包装（JdbcConnectionWrapper）。
 
     Raises:
@@ -1063,7 +1063,7 @@ def getData(ip, port, user, password, ssh_info=None, template_id=None):
     database = ssh_info.get('database', '')
     jdbc_url = ssh_info.get('jdbc_url')
     instance_name = ssh_info.get('instance_name', '')
-    encrypt = bool(ssh_info.get('encrypt', True))
+    encrypt = bool(ssh_info.get('encrypt', False))
     trust_server_certificate = bool(ssh_info.get('trust_server_certificate', True))
 
     inspector = MssqlJdbcInspector(
@@ -1114,7 +1114,7 @@ def _plugin_test_connection(info: dict):
         database=info.get('database', ''),
         jdbc_url=info.get('jdbc_url'),
         instance_name=info.get('instance_name', ''),
-        encrypt=bool(info.get('encrypt', True)),
+        encrypt=bool(info.get('encrypt', False)),
         trust_server_certificate=bool(info.get('trust_server_certificate', True)),
     )
 
@@ -1152,7 +1152,7 @@ def get_task_config():
                  'database': info.get('database', ''),
                  'jdbc_url': info.get('jdbc_url', ''),
                  'instance_name': info.get('instance_name', ''),
-                 'encrypt': bool(info.get('encrypt', True)),
+                 'encrypt': bool(info.get('encrypt', False)),
                  'trust_server_certificate': bool(info.get('trust_server_certificate', True)),
              }, 'template_id': info.get('template_id')}
         ),

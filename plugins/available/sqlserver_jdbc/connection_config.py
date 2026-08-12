@@ -16,8 +16,8 @@ SQL Server 连接配置数据类 + JDBC URL / Properties 构建器。
     java.util.Properties 后交给 DriverManager.getConnection(url, props)）
   - 命名实例（host\\instance）通过 instance_name 字段表达，URL 中
     `instanceName=xxx` 替代 `port=1433`
-  - 默认 encrypt=true + trustServerCertificate=true（MS JDBC 13.x 要求
-    encrypt=true 才能成功握手；trustServerCertificate=true 便于本地开发）
+  - 默认 encrypt=false + trustServerCertificate=true（兼容多数内网/旧版 SQL
+    Server，避免无 CA 证书时握手失败；有合法 CA 环境可显式传入 encrypt=true）
 """
 
 from dataclasses import dataclass
@@ -36,7 +36,7 @@ class MssqlJdbcConnectionConfig:
         database: 目标数据库名（默认 master）
         instance_name: 命名实例名（默认实例留空；非空时 URL 用 instanceName=xxx 替代端口）
         jdbc_url: 完整 JDBC URL（可选；以 jdbc:sqlserver:// 开头则直接透传）
-        encrypt: 启用 TLS 加密（MS JDBC 13.x 默认 true，否则连接被拒）
+        encrypt: 启用 TLS 加密（默认 false，兼容多数内网/旧版 SQL Server；有 CA 证书环境可设为 true）
         trust_server_certificate: 信任自签证书（dev 友好，prod 应配置 CA）
         login_timeout_s: 登录超时（秒）
         application_name: 应用标识（DMV sys.dm_exec_sessions.program_name 可见）
@@ -49,7 +49,7 @@ class MssqlJdbcConnectionConfig:
     database: str = "master"
     instance_name: str = ""
     jdbc_url: str = ""
-    encrypt: bool = True
+    encrypt: bool = False
     trust_server_certificate: bool = True
     login_timeout_s: int = 10
     application_name: str = "DBCheck"
@@ -138,7 +138,7 @@ class MssqlJdbcConnectionConfig:
             database=_get_str("database", "master") or "master",
             instance_name=_get_str("instance_name", ""),
             jdbc_url=_get_str("jdbc_url", ""),
-            encrypt=_get_bool("encrypt", True),
+            encrypt=_get_bool("encrypt", False),
             trust_server_certificate=_get_bool("trust_server_certificate", True),
             login_timeout_s=_get_int("login_timeout_s", 10),
             application_name=_get_str("application_name", "DBCheck") or "DBCheck",

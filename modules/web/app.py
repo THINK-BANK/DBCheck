@@ -1084,7 +1084,7 @@ def run_inspection_task(task_id, db_info, inspector_name, template_id=None, chap
                     'connection_mode': info.get('connection_mode') or 'jdbc',
                     'jdbc_url': info.get('jdbc_url', '') or '',
                     'instance_name': info.get('instance_name', '') or '',
-                    'encrypt': bool(info.get('encrypt', True)),
+                    'encrypt': bool(info.get('encrypt', False)),
                     'trust_server_certificate': bool(info.get('trust_server_certificate', True)),
                 },
             ],
@@ -1095,7 +1095,7 @@ def run_inspection_task(task_id, db_info, inspector_name, template_id=None, chap
                                                'connection_mode': info.get('connection_mode') or 'jdbc',
                                                'jdbc_url': info.get('jdbc_url', '') or '',
                                                'instance_name': info.get('instance_name', '') or '',
-                                               'encrypt': bool(info.get('encrypt', True)),
+                                               'encrypt': bool(info.get('encrypt', False)),
                                                'trust_server_certificate': bool(info.get('trust_server_certificate', True)),
                                            },
                                            'template_id': template_id,
@@ -2085,7 +2085,7 @@ def test_sqlserver_jdbc_connection(host, port, user, password, database='master'
                         'database': database,
                         'jdbc_url': opts.get('jdbc_url', '') or '',
                         'instance_name': opts.get('instance_name', '') or '',
-                        'encrypt': bool(opts.get('encrypt', True)),
+                        'encrypt': bool(opts.get('encrypt', False)),
                         'trust_server_certificate': bool(opts.get('trust_server_certificate', True)),
                     },
                 )
@@ -2438,7 +2438,7 @@ def _ct_sqlserver_jdbc(data, flavor):
     _kwargs = dict(database=_db,
                    jdbc_url=data.get('jdbc_url') or None,
                    instance_name=data.get('instance_name') or '',
-                   encrypt=bool(data.get('encrypt', True)),
+                   encrypt=bool(data.get('encrypt', False)),
                    trust_server_certificate=bool(data.get('trust_server_certificate', True)))
     ok, msg = run_jdbc_test_subprocess('sqlserver_jdbc', data, _kwargs)
     if not ok and _mode == 'auto':
@@ -6345,6 +6345,8 @@ def api_pro_datasource_add():
             seed_nodes=data.get('seed_nodes', ''),
             # SQL Server (JDBC) 类型缺省走 jdbc；其它类型保持 odbc（向后兼容）
             connection_mode=data.get('connection_mode') or ('jdbc' if _db_type == 'sqlserver_jdbc' else 'odbc'),
+            encrypt=bool(data.get('encrypt', False)) if _db_type == 'sqlserver_jdbc' else False,
+            trust_server_certificate=bool(data.get('trust_server_certificate', True)) if _db_type == 'sqlserver_jdbc' else True,
             tags=data.get('tags', []),
             group=data.get('group', 'default'),
             description=data.get('description', ''),
@@ -8992,6 +8994,8 @@ def _stream_inspection_response(data, message, session_id, chat_context):
         # 旧实例缺失该字段时缺省走 jdbc（显式配置的 odbc/auto 仍保留）
         db_info['connection_mode'] = ds.get('connection_mode') or 'jdbc'
         db_info['jdbc_url'] = ds.get('jdbc_url') or ''
+        db_info['encrypt'] = bool(ds.get('encrypt', False))
+        db_info['trust_server_certificate'] = bool(ds.get('trust_server_certificate', True))
 
     inspector_name = data.get('inspector_name', 'Jack')
     tasks[task_id] = {
@@ -9381,6 +9385,8 @@ def api_chat():
                 # 旧实例缺失该字段时缺省走 jdbc（显式配置的 odbc/auto 仍保留）
                 db_info['connection_mode'] = ds.get('connection_mode') or 'jdbc'
                 db_info['jdbc_url'] = ds.get('jdbc_url') or ''
+                db_info['encrypt'] = bool(ds.get('encrypt', False))
+                db_info['trust_server_certificate'] = bool(ds.get('trust_server_certificate', True))
 
             inspector_name = data.get('inspector_name', 'Jack')
 

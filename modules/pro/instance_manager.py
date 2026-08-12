@@ -236,6 +236,8 @@ class DatabaseInstance:
     seed_nodes: str = ""    # 集群种子节点（逗号分隔 host:port，或 JSON 数组）
     # SQL Server (JDBC) 专用
     connection_mode: str = "odbc"  # 'odbc' / 'jdbc' / 'auto'，控制 SQL Server JDBC 双轨路由，默认 odbc 向后兼容
+    encrypt: bool = False  # JDBC 是否启用 TLS 加密（mssql-jdbc 13.x 默认 true，DBCheck 默认 false 兼容内网）
+    trust_server_certificate: bool = True  # 是否信任服务器证书
 
     def __post_init__(self):
         if self.tags is None:
@@ -319,8 +321,8 @@ class InstanceManager:
                             d['tags'] = json.loads(d['tags'])
                         except Exception:
                             d['tags'] = []
-                    # sysdba / ssh_enabled / enabled 从 INTEGER 还原为 bool
-                    for bool_field in ('sysdba', 'ssh_enabled', 'enabled'):
+                    # sysdba / ssh_enabled / enabled / encrypt / trust_server_certificate 从 INTEGER 还原为 bool
+                    for bool_field in ('sysdba', 'ssh_enabled', 'enabled', 'encrypt', 'trust_server_certificate'):
                         d[bool_field] = bool(d.get(bool_field, False))
                     # 存量行 connection_mode 可能为 NULL/''，归一化为 'odbc'（向后兼容）
                     if not d.get('connection_mode'):
@@ -430,6 +432,15 @@ class InstanceManager:
                 c.execute('ALTER TABLE instances ADD COLUMN "connection_mode" TEXT DEFAULT \'odbc\'')
             except Exception:
                 pass
+            # 迁移：为旧表添加 SQL Server JDBC TLS 参数列
+            try:
+                c.execute('ALTER TABLE instances ADD COLUMN "encrypt" INTEGER DEFAULT 0')
+            except Exception:
+                pass
+            try:
+                c.execute('ALTER TABLE instances ADD COLUMN "trust_server_certificate" INTEGER DEFAULT 1')
+            except Exception:
+                pass
             # 确保表存在
             c.execute("""
                 CREATE TABLE IF NOT EXISTS instances (
@@ -446,7 +457,9 @@ class InstanceManager:
                     tags TEXT DEFAULT '[]', "group" TEXT DEFAULT 'default',
                     enabled INTEGER DEFAULT 1, description TEXT DEFAULT '',
                     created_at TEXT DEFAULT '', updated_at TEXT DEFAULT '',
-                    connection_mode TEXT DEFAULT 'odbc'
+                    connection_mode TEXT DEFAULT 'odbc',
+                    encrypt INTEGER DEFAULT 0,
+                    trust_server_certificate INTEGER DEFAULT 1
                 )
             """)
             c.execute("DELETE FROM instances")
@@ -457,8 +470,9 @@ class InstanceManager:
                     (id, name, db_type, host, port, "user", password, "database", service_name, gbase_server_name, tenant, sysdba,
                      connect_mode, auth_source, auth_mechanism, replica_set, tls, tls_ca_file, tls_cert_key_file, tls_allow_invalid_certs,
                      ssh_host, ssh_port, ssh_user, ssh_password, ssh_key_file, ssh_enabled,
-                     tags, "group", enabled, description, created_at, updated_at, connection_mode)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     tags, "group", enabled, description, created_at, updated_at, connection_mode,
+                     encrypt, trust_server_certificate)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     d.get("id", ""), d.get("name", ""), d.get("db_type", ""),
                     d.get("host", ""), d.get("port", 0), d.get("user", ""),
@@ -483,7 +497,9 @@ class InstanceManager:
                     # sqlserver_jdbc 类型语义即 JDBC，缺省必须归一为 'jdbc'，
                     # 否则会被固化成 'odbc'，测试连接时错误走到 pyodbc 报错。
                     (d.get("connection_mode")
-                     or ("jdbc" if d.get("db_type") == "sqlserver_jdbc" else "odbc"))
+                     or ("jdbc" if d.get("db_type") == "sqlserver_jdbc" else "odbc")),
+                    1 if d.get("encrypt") else 0,
+                    1 if d.get("trust_server_certificate") else 0,
                 ))
             conn.commit()
         except Exception as e:
@@ -651,7 +667,7 @@ class InstanceManager:
             elif db_type == 'oracle':
                 import oracledb
                 dsn = inst.service_name or '%s:%d/orcl' % (inst.host, inst.port)
-                mode = oracledb.SYSDBA if inst.sysdba else oracledb.DEFAULT_MODE
+                mode = oracledb.SYSDBA if inst.sysdba else oracledb.AUTH_MODE_DEFAULT
                 try:
                     conn = oracledb.connect(user=inst.user, password=password, dsn=dsn, mode=mode)
                 except Exception as e:

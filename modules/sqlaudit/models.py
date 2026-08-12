@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS sql_audit_items (
     risk_level   TEXT    NOT NULL DEFAULT 'low',
     risk_score   INTEGER NOT NULL DEFAULT 0,
     rule_hits    TEXT,
+    plan_json    TEXT,                            -- JSON: 执行计划分析结果(MVP2)
     created_at   TEXT    NOT NULL,
     FOREIGN KEY (task_id) REFERENCES sql_audit_tasks(id) ON DELETE CASCADE
 );
@@ -117,13 +118,31 @@ def get_conn() -> sqlite3.Connection:
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
+    # SQLite 默认关闭外键约束，必须每连接显式开启，sql_audit_items 的
+    # ON DELETE CASCADE（任务删除级联清明细）才会真正生效。
+    conn.execute("PRAGMA foreign_keys = ON")
     return conn
+
+
+def _ensure_column(conn: sqlite3.Connection, table: str, column: str, coltype: str) -> None:
+    """幂等补齐缺失列（老库升级用）。
+
+    通过 PRAGMA table_info 探测列是否存在，不存在才 ALTER，避免重复加列报错。
+    """
+    cur = conn.cursor()
+    cur.execute(f"PRAGMA table_info({table})")
+    existing = {row[1] for row in cur.fetchall()}
+    if column not in existing:
+        cur.execute(f"ALTER TABLE {table} ADD COLUMN {column} {coltype}")
+        conn.commit()
 
 
 def init_db() -> None:
     """初始化库表并写入内置规则种子（仅当规则表为空时）。"""
     conn = get_conn()
     conn.executescript(SCHEMA)
+    # MVP2 幂等补齐：老库可能缺 plan_json 列，这里按需 ALTER（PRAGMA 探测避免重复加列）。
+    _ensure_column(conn, "sql_audit_items", "plan_json", "TEXT")
     cur = conn.cursor()
     cur.execute("SELECT COUNT(*) FROM sql_audit_rules")
     if cur.fetchone()[0] == 0:
@@ -153,6 +172,20 @@ def gen_task_no() -> str:
     cnt = cur.fetchone()[0] + 1
     conn.close()
     return f"SA-{datepart}-{cnt:04d}"
+
+
+def delete_task(task_id: int) -> int:
+    """删除单个审核任务；其明细通过 ON DELETE CASCADE 级联删除。
+
+    返回被删除的任务行数（0 表示任务不存在）。
+    """
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM sql_audit_tasks WHERE id=?", (task_id,))
+    n = cur.rowcount
+    conn.commit()
+    conn.close()
+    return n
 
 
 def get_enabled_rules(db_type: str) -> list:

@@ -4748,6 +4748,13 @@ function formatBytes(bytes) {
                   '<option value="odbc">odbc（pyodbc）</option>' +
                   '<option value="auto">auto（优先 JDBC，失败回退 ODBC）</option>' +
                 '</select></div>' +
+              '<div id="ds-encrypt-wrap" style="display:none;margin-top:6px"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:4px 0">' +
+                '<input type="checkbox" id="ds-encrypt" style="width:16px;height:16px;accent-color:var(--accent)" />' +
+                '<span style="font-size:13px;color:var(--text-muted)">启用 TLS 加密 (encrypt)</span></label>' +
+                '<div style="font-size:11px;color:var(--text-muted);padding-left:24px">关闭时兼容无证书内网环境；开启需服务器提供受信任证书</div></div>' +
+              '<div id="ds-trust-server-cert-wrap" style="display:none"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:4px 0">' +
+                '<input type="checkbox" id="ds-trust-server-cert" style="width:16px;height:16px;accent-color:var(--accent)" checked />' +
+                '<span style="font-size:13px;color:var(--text-muted)">信任服务器证书 (trustServerCertificate)</span></label></div>' +
               '<div id="ds-mongo-wrap" style="display:none">' +
                 '<div style="font-size:12px;color:var(--text-muted);margin:8px 0 4px">MongoDB 连接参数 <span style="color:#43a047">NoSQL</span></div>' +
                 '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
@@ -4899,6 +4906,10 @@ function formatBytes(bytes) {
         // SQL Server (JDBC) 双轨驱动：仅 sqlserver_jdbc 显示连接模式选择（纯 sqlserver 为 pyodbc 单轨）
         var _connModeWrap = document.getElementById('ds-connection-mode-wrap');
         if (_connModeWrap) _connModeWrap.style.display = (dbType === 'sqlserver_jdbc') ? 'block' : 'none';
+        var _encryptWrap = document.getElementById('ds-encrypt-wrap');
+        if (_encryptWrap) _encryptWrap.style.display = (dbType === 'sqlserver_jdbc') ? 'block' : 'none';
+        var _trustWrap = document.getElementById('ds-trust-server-cert-wrap');
+        if (_trustWrap) _trustWrap.style.display = (dbType === 'sqlserver_jdbc') ? 'block' : 'none';
         // 选择 SQL Server (JDBC) 类型时连接模式默认 jdbc（编辑已有实例时由后续回填逻辑覆盖为原值）
         if (dbType === 'sqlserver_jdbc') {
           var _cm = document.getElementById('ds-connection-mode');
@@ -4957,6 +4968,8 @@ function formatBytes(bytes) {
         if (!dbName && dbType === 'clickhouse') dbName = 'default';
         const tenant = (document.getElementById('ds-tenant')?.value || '').trim();
         const sysdba = document.getElementById('ds-sysdba')?.checked || false;
+        const encrypt = document.getElementById('ds-encrypt')?.checked || false;
+        const trustServerCertificate = document.getElementById('ds-trust-server-cert')?.checked || false;
         const gbaseServer = document.getElementById('ds-gbase-server')?.value.trim() || '';
         const jdbcUrl = (document.getElementById('ds-jdbc-url')?.value || '').trim();
         const connectionMode = document.getElementById('ds-connection-mode')?.value || 'odbc';
@@ -4983,7 +4996,7 @@ function formatBytes(bytes) {
           const res = await fetch('/api/pro/datasources/test-connection', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ db_type: dbType, host, port: parseInt(port), user, password, service_name: svcName, database: dbName, tenant: tenant, sysdba, jdbc_url: jdbcUrl, connection_mode: connectionMode, gbase_server_name: gbaseServer, ssh_host: sshHost, ssh_port: parseInt(sshPort), ssh_user: sshUser, ssh_password: sshPass, connect_mode: mongoConnectMode, auth_source: mongoAuthSource, auth_mechanism: mongoAuthMechanism, replica_set: mongoReplicaSet, tls: mongoTls, tls_ca_file: mongoTlsCaFile, tls_cert_key_file: mongoTlsCertKeyFile, tls_allow_invalid_certs: mongoTlsAllowInvalid, seed_nodes: redisSeedNodes })
+            body: JSON.stringify({ db_type: dbType, host, port: parseInt(port), user, password, service_name: svcName, database: dbName, tenant: tenant, sysdba, jdbc_url: jdbcUrl, connection_mode: connectionMode, encrypt, trust_server_certificate: trustServerCertificate, gbase_server_name: gbaseServer, ssh_host: sshHost, ssh_port: parseInt(sshPort), ssh_user: sshUser, ssh_password: sshPass, connect_mode: mongoConnectMode, auth_source: mongoAuthSource, auth_mechanism: mongoAuthMechanism, replica_set: mongoReplicaSet, tls: mongoTls, tls_ca_file: mongoTlsCaFile, tls_cert_key_file: mongoTlsCertKeyFile, tls_allow_invalid_certs: mongoTlsAllowInvalid, seed_nodes: redisSeedNodes })
           });
           const data = await res.json();
           msgEl.style.color = data.ok ? 'var(--success)' : 'var(--danger)';
@@ -5023,6 +5036,8 @@ function formatBytes(bytes) {
         if (payload.db_type === 'sqlserver_jdbc') {
           const cm = document.getElementById('ds-connection-mode')?.value || 'odbc';
           payload.connection_mode = cm;
+          payload.encrypt = document.getElementById('ds-encrypt')?.checked ? 1 : 0;
+          payload.trust_server_certificate = document.getElementById('ds-trust-server-cert')?.checked ? 1 : 0;
         }
         if (payload.db_type === 'gbase') {
           payload.gbase_server_name = document.getElementById('ds-gbase-server').value.trim();
@@ -5137,6 +5152,8 @@ function formatBytes(bytes) {
               }
               if (ds.db_type === 'sqlserver_jdbc') {
                 if (ds.connection_mode) document.getElementById('ds-connection-mode').value = ds.connection_mode;
+                document.getElementById('ds-encrypt').checked = ds.encrypt === true || ds.encrypt === 1 || ds.encrypt === '1';
+                document.getElementById('ds-trust-server-cert').checked = ds.trust_server_certificate !== false && ds.trust_server_certificate !== 0 && ds.trust_server_certificate !== '0';
               }
               if (ds.db_type === 'mongodb') {
                 document.getElementById('ds-database').value = ds.database || 'admin';
@@ -5211,6 +5228,9 @@ function formatBytes(bytes) {
               database: ds.database || '',
               sysdba: ds.sysdba || false,
               jdbc_url: ds.jdbc_url || '',
+              connection_mode: ds.connection_mode || 'jdbc',
+              encrypt: ds.encrypt === true || ds.encrypt === 1 || ds.encrypt === '1',
+              trust_server_certificate: ds.trust_server_certificate !== false && ds.trust_server_certificate !== 0 && ds.trust_server_certificate !== '0',
               ssh_host: ds.ssh_host || '',
               ssh_port: ds.ssh_port || 22,
               ssh_user: ds.ssh_user || '',
@@ -5892,6 +5912,28 @@ function formatBytes(bytes) {
               <label><span id="f-jdbc-url-label">JDBC URL</span> <span id="f-jdbc-url-hint" class="opt" style="font-weight:normal;color:var(--text-muted)">可选，留空则使用上方主机/端口/服务名</span></label>
               <input type="text" id="f-jdbc-url" placeholder="jdbc:oracle:thin:@//host:1521/ORCLCDB 或 @host:1521:ORCL" />
             </div>
+            <div class="field full" id="f-sqlserver-jdbc-wrap" style="display:none">
+              <label><span>SQL Server (JDBC) 连接参数</span> <span class="opt">JDBC</span></label>
+              <div style="margin-top:6px">
+                <label style="font-size:12px;color:var(--text-muted)">连接模式 (connection_mode)</label>
+                <select id="f-connection-mode" style="width:100%;margin-top:4px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">
+                  <option value="jdbc">jdbc（JPype1 + mssql-jdbc.jar，默认）</option>
+                  <option value="odbc">odbc（pyodbc）</option>
+                  <option value="auto">auto（优先 JDBC，失败回退 ODBC）</option>
+                </select>
+              </div>
+              <div style="display:flex;gap:18px;margin-top:10px;flex-wrap:wrap">
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                  <input type="checkbox" id="f-encrypt" style="width:16px;height:16px;accent-color:var(--accent)" />
+                  <span style="font-size:13px;color:var(--text-muted)">启用 TLS 加密 (encrypt)</span>
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                  <input type="checkbox" id="f-trust-server-cert" style="width:16px;height:16px;accent-color:var(--accent)" checked />
+                  <span style="font-size:13px;color:var(--text-muted)">信任服务器证书 (trustServerCertificate)</span>
+                </label>
+              </div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:6px">关闭 encrypt 可兼容无证书内网环境；开启 encrypt 后建议取消勾选「信任服务器证书」并配置 CA</div>
+            </div>
             <div class="field full" id="f-mongo-wrap" style="display:none">
               <label><span>MongoDB 连接参数</span> <span class="opt">NoSQL</span></label>
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px">
@@ -6138,7 +6180,7 @@ function formatBytes(bytes) {
       <div class="page" id="page-sql-audit">
         <div class="card" style="margin-bottom:16px">
           <div class="card-title"><span>🛡️</span> <span>SQL 审核</span>
-            <span class="badge" style="margin-left:8px;font-size:11px">MVP1 · 解析 + 规则 + 评分（不执行）</span>
+            <span class="badge" style="margin-left:8px;font-size:11px">MVP2 · 多库方言 + 执行计划分析</span>
             <span style="margin-left:8px;background:#f59e0b;color:#1f2937;font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px">🚧 加紧开发中</span>
           </div>
           <div class="form-grid">
@@ -6169,9 +6211,13 @@ function formatBytes(bytes) {
           </div>
           <label style="font-size:12px;color:var(--text-muted);display:block;margin:8px 0 4px">待审核 SQL（支持多条，以分号分隔）</label>
           <textarea id="sa-sql" rows="8" style="width:100%;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:monospace;resize:vertical" placeholder="UPDATE orders SET status='shipped' WHERE id=1001;"></textarea>
-          <div style="margin-top:10px">
+          <div style="margin-top:10px;display:flex;align-items:center;flex-wrap:wrap;gap:14px">
+            <label style="font-size:12px;color:var(--text-muted);display:inline-flex;align-items:center;gap:6px;cursor:pointer">
+              <input type="checkbox" id="sa-plan-enabled" style="width:15px;height:15px" />
+              执行计划分析（连接目标实例执行 EXPLAIN，只读不执行）
+            </label>
             <button id="sa-submit-btn" class="btn btn-primary" style="padding:9px 24px" onclick="submitSqlAudit()">开始审核</button>
-            <span style="font-size:12px;color:var(--text-muted);margin-left:10px">MVP1 仅做只读分析，不会真实执行任何 SQL</span>
+            <span style="font-size:12px;color:var(--text-muted)">MVP2 仅做只读分析：规则评分 + 可选执行计划（EXPLAIN 只读不执行）</span>
           </div>
         </div>
 
@@ -9329,6 +9375,11 @@ async function onDatasourceChange() {
       if (ds.db_type === 'clickhouse') {
         document.getElementById('f-database').value = ds.database || 'default';
       }
+      if (ds.db_type === 'sqlserver_jdbc') {
+        document.getElementById('f-connection-mode').value = ds.connection_mode || 'jdbc';
+        document.getElementById('f-encrypt').checked = ds.encrypt === true || ds.encrypt === 1 || ds.encrypt === '1';
+        document.getElementById('f-trust-server-cert').checked = ds.trust_server_certificate !== false && ds.trust_server_certificate !== 0 && ds.trust_server_certificate !== '0';
+      }
       if (ds.db_type === 'oracle' || ds.db_type === 'oracle_jdbc') {
         console.log('[Oracle模板] onDatasourceChange: oracle branch entered, ds:', ds);
         document.getElementById('f-service-name').value = ds.service_name || '';
@@ -9386,6 +9437,8 @@ function resetFormFromDatasource() {
     if (el) el.value = '';
   });
   document.getElementById('f-password').placeholder = '数据库密码';
+  document.getElementById('f-encrypt').checked = false;
+  document.getElementById('f-trust-server-cert').checked = true;
   if (sshEnabled) toggleSsh();
 }
 
@@ -9466,6 +9519,17 @@ async function selectDbType(type, skipReload) {
   // MongoDB：显示专用连接参数
   var mongoWrap = document.getElementById('f-mongo-wrap');
   if (mongoWrap) mongoWrap.style.display = (type === 'mongodb') ? '' : 'none';
+  // SQL Server (JDBC)：显示专用连接参数
+  var sqlserverWrap = document.getElementById('f-sqlserver-jdbc-wrap');
+  if (sqlserverWrap) sqlserverWrap.style.display = (type === 'sqlserver_jdbc') ? '' : 'none';
+  if (type === 'sqlserver_jdbc') {
+    const cmEl = document.getElementById('f-connection-mode');
+    if (cmEl && !cmEl.value) cmEl.value = 'jdbc';
+    const encEl = document.getElementById('f-encrypt');
+    if (encEl) encEl.checked = false;
+    const tcEl = document.getElementById('f-trust-server-cert');
+    if (tcEl) tcEl.checked = true;
+  }
   // 更新数据库名称输入框的 placeholder 并自动填写默认值
   const defaultDbMap = window.DEFAULT_DB_MAP;
   const dbPlaceholderMap = Object.assign({}, defaultDbMap, { oceanbase: 'oceanbase' });
@@ -9580,6 +9644,9 @@ async function testDb() {
         tls_ca_file: document.getElementById('f-tls-ca-file')?.value.trim() || '',
         tls_cert_key_file: document.getElementById('f-tls-cert-key-file')?.value.trim() || '',
         tls_allow_invalid_certs: document.getElementById('f-tls-allow-invalid')?.checked || false,
+        connection_mode: document.getElementById('f-connection-mode')?.value || 'jdbc',
+        encrypt: document.getElementById('f-encrypt')?.checked || false,
+        trust_server_certificate: document.getElementById('f-trust-server-cert')?.checked || false,
       })
     });
     const data = await res.json();
@@ -10145,7 +10212,10 @@ async function startInspection() {
         tls: document.getElementById('f-tls')?.checked || false,
         tls_ca_file: document.getElementById('f-tls-ca-file')?.value.trim() || '',
         tls_cert_key_file: document.getElementById('f-tls-cert-key-file')?.value.trim() || '',
-        tls_allow_invalid_certs: document.getElementById('f-tls-allow-invalid')?.checked || false };
+        tls_allow_invalid_certs: document.getElementById('f-tls-allow-invalid')?.checked || false,
+        connection_mode: document.getElementById('f-connection-mode')?.value || 'jdbc',
+        encrypt: document.getElementById('f-encrypt')?.checked || false,
+        trust_server_certificate: document.getElementById('f-trust-server-cert')?.checked || false };
   if (sshEnabled) {
     payload.ssh_host     = document.getElementById('f-ssh-host').value.trim() || host;
     payload.ssh_port     = parseInt(document.getElementById('f-ssh-port').value) || 22;
@@ -10655,7 +10725,7 @@ function renderReports() {
   updateBatchBar();
 }
 
-// ── SQL 审核（MVP1）──────────────────────────────────────
+// ── SQL 审核（MVP2：多库方言 + 执行计划）─────────────────
 let saTasks = [];
 async function loadSqlAudit() {
   // 实例下拉
@@ -10700,7 +10770,10 @@ function renderSqlAuditTasks() {
         <div class="ri-name">${escHtml(t.task_no)} · ${escHtml(t.db_type||'')} · ${escHtml(t.env||'')} ${levelBadge(t.risk_level)}</div>
         <div class="ri-meta">${escHtml(t.submitter||'')} · ${new Date((t.created_at||'').replace('Z','')).toLocaleString('zh-CN')} · ${t.sql_count} 条语句 · 风险分 ${t.risk_score}</div>
       </div>
-      <div style="flex-shrink:0"><button class="btn btn-ghost" style="font-size:12px;padding:6px 12px" onclick="event.stopPropagation();showSqlAuditDetail(${t.id})">查看</button></div>
+      <div style="flex-shrink:0;display:flex;gap:6px">
+        <button class="btn btn-ghost" style="font-size:12px;padding:6px 12px" onclick="event.stopPropagation();showSqlAuditDetail(${t.id})">查看</button>
+        <button class="btn btn-ghost" style="font-size:12px;padding:6px 12px;color:#ef4444" onclick="event.stopPropagation();deleteSqlAuditTask(${t.id})">删除</button>
+      </div>
     </div>`).join('');
 }
 
@@ -10716,7 +10789,9 @@ async function submitSqlAudit() {
   try {
     const res = await fetch('/api/sql-audit/submit', {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({instance_id: instId, db_type: dbType, env: env, sql_text: sql, plan_enabled: false, exec_enabled: false})
+      body: JSON.stringify({instance_id: instId, db_type: dbType, env: env, sql_text: sql,
+        plan_enabled: document.getElementById('sa-plan-enabled') ? document.getElementById('sa-plan-enabled').checked : false,
+        exec_enabled: false})
     });
     const data = await res.json();
     if (!data.ok) { alert('审核失败: ' + (data.error||'未知错误')); return; }
@@ -10730,6 +10805,22 @@ async function submitSqlAudit() {
   }
 }
 
+async function deleteSqlAuditTask(taskId) {
+  const confirmed = await showConfirmDialog('删除审核任务', '确定删除该审核任务及其全部明细吗？此操作不可恢复。');
+  if (!confirmed) return;
+  try {
+    const res = await fetch('/api/sql-audit/tasks/' + taskId, {method: 'DELETE'});
+    const data = await res.json();
+    if (!data.ok) { toastError('删除失败: ' + (data.error || '未知错误')); return; }
+    saTasks = saTasks.filter(t => t.id !== taskId);
+    renderSqlAuditTasks();
+    const panel = document.getElementById('sa-detail');
+    if (panel) panel.style.display = 'none';
+  } catch(e) {
+    toastError('删除失败: ' + e.message);
+  }
+}
+
 async function showSqlAuditDetail(taskId) {
   try {
     const res = await fetch('/api/sql-audit/tasks/' + taskId);
@@ -10738,6 +10829,31 @@ async function showSqlAuditDetail(taskId) {
     const t = data.task;
     const levelColor = {block:'#ef4444',high:'#f97316',mid:'#eab308',low:'#22c55e'};
     const cssLevel = (lv) => (lv === 'block' ? 'high' : lv);
+    const planBlock = (p) => {
+      if (!p) return '';
+      if (p.applicable === false) {
+        const msg = p.error ? ('⚠️ ' + p.error) : (p.note || '未分析');
+        const color = p.error ? '#ef4444' : (p.unsupported ? '#f59e0b' : 'var(--text-muted)');
+        return `<div style="font-size:12px;color:${color};margin:6px 0;background:var(--surface2);border-radius:6px;padding:6px 10px">📊 执行计划: ${escHtml(msg)}</div>`;
+      }
+      const fts = p.full_table_scan
+        ? '<span style="color:#ef4444;font-weight:600">🔴 全表扫描</span>'
+        : '<span style="color:#22c55e;font-weight:600">🟢 命中索引/非全表扫描</span>';
+      const idx = (p.index_used && p.index_used.length) ? p.index_used.map(x=>escHtml(x)).join(', ') : '无';
+      const erows = (p.estimated_rows != null) ? p.estimated_rows : '—';
+      const costMap = {high:['#ef4444','高'], mid:['#eab308','中'], low:['#22c55e','低']};
+      const cm = costMap[p.cost_hint] || costMap.low;
+      const adv = p.advice ? `<div style="font-size:12px;margin-top:4px">💡 ${escHtml(p.advice)}</div>` : '';
+      return `<div style="font-size:12px;margin:6px 0;background:var(--surface2);border-radius:6px;padding:8px 10px">
+        <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center">
+          <span>📊 执行计划(${escHtml(p.engine||'')}):</span> ${fts}
+          <span>索引: <b>${idx}</b></span>
+          <span>预估行数: <b>${erows}</b></span>
+          <span>成本: <b style="color:${cm[0]}">${cm[1]}</b></span>
+        </div>
+        ${adv}
+      </div>`;
+    };
     const itemsHtml = (t.items||[]).map(it => {
       const hits = it.rule_hits || [];
       const hitsHtml = hits.length ? hits.map(h => {
@@ -10759,6 +10875,7 @@ async function showSqlAuditDetail(taskId) {
         </div>
         <pre style="white-space:pre-wrap;word-break:break-all;background:var(--surface2);padding:8px;border-radius:6px;font-size:12px;margin:8px 0">${escHtml(it.sql_text)}</pre>
         ${hitsHtml}
+        ${planBlock(it.plan_json)}
       </div>`;
     }).join('');
     const panel = document.getElementById('sa-detail');
@@ -10773,6 +10890,7 @@ async function showSqlAuditDetail(taskId) {
         <span>库类型: ${escHtml(t.db_type||'')}</span>
         <span>环境: ${escHtml(t.env||'')}</span>
         <span>语句数: ${t.sql_count}</span>
+        <span>执行计划分析: <b style="color:${t.plan_enabled ? '#22c55e' : 'var(--text-muted)'}">${t.plan_enabled ? '✅ 已开启' : '关闭'}</b></span>
         <span>任务风险: <b style="color:${levelColor[t.risk_level]||'#888'}">${escHtml(t.risk_level)} (${t.risk_score})</b></span>
       </div>
       ${itemsHtml}`;
@@ -19430,6 +19548,14 @@ async function deleteBackupHistory(recordId) {
         <span class="about-db-chip"><img src="/ivorysql.png" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='inline'" style="width:16px;height:16px;object-fit:contain"><span class="db-emoji" style="display:none;">🦣</span> IvorySQL</span>
         <span class="about-db-chip"><img src="/yashandb.png" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='inline'" style="width:16px;height:16px;object-fit:contain"><span class="db-emoji" style="display:none;">🗻</span> YashanDB</span>
         <span class="about-db-chip"><img src="/oceanbase.png" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='inline'" style="width:16px;height:16px;object-fit:contain"><span class="db-emoji" style="display:none;">🐋</span> OceanBase <span style="font-size:10px;background:#00C8A0;color:#fff;padding:1px 5px;border-radius:3px;font-weight:600">MySQL</span></span>
+      </div>
+
+      <!-- 赞助 / 捐赠 -->
+      <div style="display:none;margin-top:18px;padding:16px;border:1px dashed var(--border);border-radius:12px;background:var(--surface2);text-align:center">
+        <div style="font-size:14px;font-weight:600;margin-bottom:4px">💝 支持 RaccoonX 持续开发</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">如果这个项目对你有帮助，欢迎扫码赞助，你的支持是开源动力 ❤️</div>
+        <img src="/pay-about.png" alt="赞助二维码" style="width:200px;max-width:60%;border-radius:8px;background:#fff;padding:8px" onerror="this.style.display='none'">
+        <div style="font-size:11px;color:var(--text-muted);margin-top:8px">微信 / 支付宝扫码 · 赞助时请备注昵称 ❤️</div>
       </div>
 
       <!-- Apache License 2.0 开源协议（Base64 encoded to prevent static search） -->

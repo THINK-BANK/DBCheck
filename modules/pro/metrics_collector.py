@@ -345,7 +345,7 @@ class MetricsCollector:
                       else ('%s:%d:%s' % (ohost, oport, oservice))
             else:
                 dsn = '%s:%d/orcl' % (ohost or host, oport or port)
-            mode = oracledb.SYSDBA if inst.get('sysdba') else oracledb.DEFAULT_MODE
+            mode = oracledb.SYSDBA if inst.get('sysdba') else oracledb.AUTH_MODE_DEFAULT
             kw = dict(user=user, password=password, dsn=dsn, mode=mode)
             # TCPS / SSL：从 jdbc_url 解析到 tcps 时尝试 SSL 连接
             if oproto == 'tcps':

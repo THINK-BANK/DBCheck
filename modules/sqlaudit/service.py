@@ -5,19 +5,22 @@
 
 """SQL 审核编排层（service）。
 
-串联 parser → rules → models，完成一次审核任务的：
-  1. 切分并解析 SQL 为多条语句
-  2. 对每条语句运行启用规则，收集命中与单句风险
-  3. 聚合任务级风险
-  4. 落库（sql_audit_tasks / sql_audit_items）并返回完整报告
+串联 parser → plan_analyzer → rules → models，完成一次审核任务的：
+  1. 切分并解析 SQL 为多条语句（方言感知）
+  2. 可选：连接目标实例运行 EXPLAIN，做执行计划分析（MVP2，只读不执行）
+  3. 对每条语句运行启用规则，收集命中与单句风险（含执行计划触发的 full_scan_risk）
+  4. 聚合任务级风险
+  5. 落库（sql_audit_tasks / sql_audit_items）并返回完整报告
 
-MVP1：只读分析，不连接目标库、不执行、不做执行计划分析。
+MVP2：支持多库方言（MySQL/PostgreSQL/Oracle 兼容）+ 可选执行计划分析。
+执行计划分析失败仅降级标记，绝不阻断审核本身。
 """
 import json
 
 from . import models
 from .parser import split_statements, analyze_statement
 from .rules import SEVERITY_RANK, score_hits
+from . import plan_analyzer
 
 
 def submit_audit(
@@ -37,15 +40,23 @@ def submit_audit(
         raise ValueError("未解析到有效 SQL 语句")
 
     rules = models.get_enabled_rules(db_type)
+
+    # 1) 切分并解析为结构化条目（含方言信息）；plan_json 暂置 None
     items = []
+    for seq, stmt in enumerate(stmts, 1):
+        parsed = analyze_statement(stmt, db_type)
+        items.append({**parsed, "seq": seq, "plan_json": None})
+
+    # 2) 可选：执行计划分析（在规则匹配之前，使 full_scan_risk 规则可触发）
+    _run_plan_analysis(items, db_type, instance_id, plan_enabled)
+
+    # 3) 规则匹配 + 单句风险聚合
     task_score = 0
     task_level = "low"
-
-    for seq, stmt in enumerate(stmts, 1):
-        parsed = analyze_statement(stmt)
+    for it in items:
         hits = []
         for r in rules:
-            if _applies(r, parsed, db_type):
+            if _applies(r, it, db_type):
                 hits.append({
                     "rule_id": r["rule_id"],
                     "name": r["name"],
@@ -59,8 +70,11 @@ def submit_audit(
             task_level = level
         if score > task_score:
             task_score = score
-        items.append({**parsed, "seq": seq, "risk_score": score, "risk_level": level, "rule_hits": hits})
+        it["risk_score"] = score
+        it["risk_level"] = level
+        it["rule_hits"] = hits
 
+    # 4) 落库
     conn = models.get_conn()
     cur = conn.cursor()
     now = models._now()
@@ -81,13 +95,15 @@ def submit_audit(
     for it in items:
         cur.execute(
             "INSERT INTO sql_audit_items "
-            "(task_id, seq, sql_text, sql_type, op_type, tables_json, risk_level, risk_score, rule_hits, created_at) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?)",
+            "(task_id, seq, sql_text, sql_type, op_type, tables_json, risk_level, risk_score, rule_hits, plan_json, created_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             (
                 task_id, it["seq"], it["sql_text"], it["sql_type"], it["op_type"],
                 json.dumps(it["tables"], ensure_ascii=False),
                 it["risk_level"], it["risk_score"],
-                json.dumps(it["rule_hits"], ensure_ascii=False), now,
+                json.dumps(it["rule_hits"], ensure_ascii=False),
+                json.dumps(it.get("plan_json"), ensure_ascii=False),
+                now,
             ),
         )
     conn.commit()
@@ -99,6 +115,92 @@ def _applies(rule: dict, parsed: dict, db_type: str) -> bool:
     # 复用 rules.py 的匹配逻辑；此处转发，便于后续扩展（如缓存/调试）。
     from .rules import _rule_applies
     return _rule_applies(rule, parsed, db_type)
+
+
+def _run_plan_analysis(items, db_type, instance_id, plan_enabled):
+    """逐条对「适用」语句做执行计划分析，填充 plan_json。
+
+    - plan_enabled 关闭：不处理（plan_json 保持 None，规则层 full_scan_risk 不会误触发）。
+    - 未提供实例 / 库型不支持 / 连接失败：逐条降级标记，绝不阻断审核。
+    - DDL/DCL 等非适用语句：标记 note，不连接。
+    EXPLAIN 为只读操作，不会执行原 SQL（符合「默认只读 / 不执行」原则）。
+    """
+    if not plan_enabled:
+        return
+
+    norm_db = plan_analyzer.normalize_db_type(db_type)
+    ddl_note = {
+        "engine": norm_db,
+        "applicable": False,
+        "note": "DDL/DCL 语句无需执行计划分析",
+    }
+
+    # 未提供实例：无法连接目标库，仅对适用语句给出提示；非适用语句标注 DDL/DCL
+    if not instance_id:
+        for it in items:
+            if it.get("plan_applicable"):
+                it["plan_json"] = {
+                    "engine": norm_db,
+                    "applicable": False,
+                    "note": "未提供目标实例，无法执行执行计划分析（请在表单选择实例并开启执行计划）",
+                }
+            else:
+                it["plan_json"] = dict(ddl_note)
+        return
+
+    analyzer = plan_analyzer.get_analyzer(db_type)
+    if analyzer is None:
+        for it in items:
+            if it.get("plan_applicable"):
+                it["plan_json"] = {
+                    "engine": norm_db,
+                    "applicable": False,
+                    "unsupported": True,
+                    "note": f"暂不支持 {db_type} 的执行计划分析（当前支持 MySQL / PostgreSQL / Oracle）",
+                }
+            else:
+                it["plan_json"] = dict(ddl_note)
+        return
+
+    ddl_note["engine"] = analyzer.engine
+
+    # 获取实例解密信息并建立连接
+    try:
+        from modules.pro.instance_manager import get_instance_manager
+        inst = get_instance_manager().get_instance_decrypted(instance_id)
+        if not inst:
+            raise ValueError("实例不存在或无权访问")
+        conn = plan_analyzer.connect_instance(inst)
+    except Exception as e:  # noqa: BLE001
+        for it in items:
+            if it.get("plan_applicable"):
+                it["plan_json"] = {
+                    "engine": analyzer.engine,
+                    "applicable": False,
+                    "error": f"连接实例失败: {e}",
+                }
+            else:
+                it["plan_json"] = dict(ddl_note)
+        return
+
+    try:
+        for it in items:
+            if not it.get("plan_applicable"):
+                it["plan_json"] = dict(ddl_note)
+                continue
+            try:
+                it["plan_json"] = analyzer.analyze(conn, it["sql_text"], it)
+            except Exception as e:  # noqa: BLE001
+                it["plan_json"] = {
+                    "engine": analyzer.engine,
+                    "applicable": False,
+                    "error": f"执行计划分析失败: {e}",
+                }
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 
 def get_task(task_id: int) -> dict:
@@ -130,6 +232,14 @@ def get_task(task_id: int) -> dict:
                 it["tables"] = []
         elif not it.get("tables_json"):
             it["tables"] = []
+        # MVP2: 执行计划分析结果（可能为空或 unsupported/error 标记）
+        if isinstance(it.get("plan_json"), str) and it["plan_json"]:
+            try:
+                it["plan_json"] = json.loads(it["plan_json"])
+            except Exception:
+                it["plan_json"] = None
+        else:
+            it["plan_json"] = None
         items.append(it)
     task["items"] = items
     conn.close()
@@ -157,6 +267,12 @@ def list_tasks(submitter: str = None, status: str = None, limit: int = 100) -> l
     rows = [dict(r) for r in cur.fetchall()]
     conn.close()
     return rows
+
+
+def delete_task(task_id: int) -> int:
+    """删除审核任务（含明细，明细由数据库级联删除）。返回被删除行数。"""
+    models.init_db()
+    return models.delete_task(task_id)
 
 
 def list_rules() -> list:

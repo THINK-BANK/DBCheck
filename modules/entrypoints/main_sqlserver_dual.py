@@ -180,7 +180,7 @@ class SQLServerDualInspector:
             cls = _get_jdbc_inspector_class()
             jdbc_url = self.ssh_info.get('jdbc_url')
             instance_name = self.ssh_info.get('instance_name', '')
-            encrypt = bool(self.ssh_info.get('encrypt', True))
+            encrypt = bool(self.ssh_info.get('encrypt', False))
             trust_sc = bool(self.ssh_info.get('trust_server_certificate', True))
             self._inner = cls(
                 self.host, self.port, self.user, self.password,

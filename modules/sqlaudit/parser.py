@@ -3,10 +3,12 @@
 # Copyright 2025-2026 fiyo (Jack Ge) <sdfiyon@gmail.com>
 # Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
 
-"""SQL 解析工具（方言无关的轻量实现，不依赖第三方 SQL parser）。
+"""SQL 解析工具（方言感知的轻量实现，不依赖第三方 SQL parser）。
 
-MVP1 聚焦 MySQL；解析结果（语句类型 / 操作类型 / 涉及表 / 是否含 WHERE 等）
-供审核规则匹配使用。后续多库方言扩展时，可在此增加方言特化解析分支。
+MVP1 聚焦 MySQL；MVP2 起支持 PostgreSQL / Oracle 等主流程库型的方言感知解析：
+- 识别 Oracle ROWNUM / SQL Server TOP 作为「有边界」(has_limit)
+- 透传 db_type 供规则匹配与执行计划适配器使用
+- 标记 plan_applicable（DQL/DML 适用执行计划，DDL/DCL 不适用）
 """
 import re
 
@@ -15,11 +17,34 @@ _COMMENT_LINE = re.compile(r"(--[^\n]*|#[^\n]*)")
 
 _LEAD = re.compile(r"^\s*(?:LOCK\s+TABLES\s+)?([A-Za-z]+)", re.I)
 
+# 各库型「有边界 / 有行数限制」的方言写法（按 db_type 归一化后匹配，避免跨库误判）：
+#   MySQL/MariaDB/TiDB/OceanBase/PG 系 → LIMIT
+#   SQL Server                       → TOP N
+#   Oracle                           → ROWNUM 比较
+_LIMIT_PATTERNS = {
+    "mysql": [re.compile(r"\bLIMIT\b", re.I)],
+    "mariadb": [re.compile(r"\bLIMIT\b", re.I)],
+    "tidb": [re.compile(r"\bLIMIT\b", re.I)],
+    "oceanbase": [re.compile(r"\bLIMIT\b", re.I)],
+    "gbase": [re.compile(r"\bLIMIT\b", re.I)],
+    "postgresql": [re.compile(r"\bLIMIT\b", re.I)],
+    "pg": [re.compile(r"\bLIMIT\b", re.I)],
+    "kingbase": [re.compile(r"\bLIMIT\b", re.I)],
+    "ivorysql": [re.compile(r"\bLIMIT\b", re.I)],
+    "yashandb": [re.compile(r"\bLIMIT\b", re.I)],
+    "sqlserver": [re.compile(r"\bTOP\s+\d+", re.I), re.compile(r"\bTOP\s*\(", re.I)],
+    "oracle": [re.compile(r"\bROWNUM\s*(?:<=|<|>=|>|=|<>|!=|between)\s*\d+", re.I)],
+    "dm": [re.compile(r"\bLIMIT\b", re.I), re.compile(r"\bROWNUM\b", re.I)],
+}
+
 # 识别的语句大类与操作类型
 _DDL = {"CREATE", "ALTER", "DROP", "TRUNCATE", "RENAME"}
 _DML = {"INSERT", "UPDATE", "DELETE", "REPLACE", "MERGE"}
 _DQL = {"SELECT", "SHOW", "WITH", "DESC", "DESCRIBE", "EXPLAIN"}
 _DCL = {"GRANT", "REVOKE"}
+
+# 适用执行计划分析的操作（EXPLAIN 可作用于 SELECT/WITH 与 DML；SHOW/DESC/EXPLAIN 等元数据命令不适用）。
+_PLAN_APPLICABLE_OPS = {"SELECT", "WITH", "INSERT", "UPDATE", "DELETE", "REPLACE", "MERGE"}
 
 _IDENT = r"(?:`[^`]+`|[\w$]+)(?:\.(?:`[^`]+`|[\w$]+))?"
 _TABLE_PATTERNS = [
@@ -109,18 +134,27 @@ def extract_tables(stmt: str) -> list:
     return out
 
 
-def analyze_statement(stmt: str) -> dict:
-    """将单条语句解析为供规则匹配使用的结构化字典。"""
+def analyze_statement(stmt: str, db_type: str = "mysql") -> dict:
+    """将单条语句解析为供规则匹配 / 执行计划分析使用的结构化字典。
+
+    db_type 透传至解析结果，供规则匹配（rules._rule_applies）与执行计划适配器
+    （plan_analyzer.get_analyzer）按库型正确判定。
+    """
     sql_type, op_type = classify_statement(stmt)
     tables = extract_tables(stmt)
     is_select = sql_type == "DQL" and op_type == "SELECT"
+    norm_db = (db_type or "mysql").lower()
+    limit_patterns = _LIMIT_PATTERNS.get(norm_db, [re.compile(r"\bLIMIT\b", re.I)])
+    has_limit = any(p.search(stmt) for p in limit_patterns)
     return {
         "sql_text": stmt,
         "sql_type": sql_type,
         "op_type": op_type,
+        "db_type": norm_db,
         "tables": tables,
         "has_where": bool(re.search(r"\bWHERE\b", stmt, re.I)),
-        "has_limit": bool(re.search(r"\bLIMIT\b", stmt, re.I)),
+        "has_limit": has_limit,
         "is_select_star": bool(re.search(r"\bSELECT\s+\*", stmt, re.I)) if is_select else False,
-        "plan_json": None,  # MVP1 执行计划分析关闭；MVP2 起填充
+        "plan_applicable": op_type in _PLAN_APPLICABLE_OPS,
+        "plan_json": None,  # 由 service 在 plan_enabled 时在规则匹配前填充
     }
