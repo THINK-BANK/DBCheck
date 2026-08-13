@@ -1,4 +1,4 @@
-# DBCheck Release Script (simplified)
+﻿# DBCheck Release Script (simplified)
 # Usage: .\release.ps1 -Version "26.8.13.0"  (or date-based "26.7.8.1")
 # GitHub Actions will handle Docker build/push and GitHub Release automatically.
 
@@ -10,6 +10,29 @@ param(
 $ErrorActionPreference = "Stop"
 $VersionWithV = "v$Version"
 $ProjectRoot = Split-Path $MyInvocation.MyCommand.Path
+
+# 健壮的 git 网络封装：先走本地代理（127.0.0.1:9999），失败后自动回退直连 SSH。
+# 同时规避 $ErrorActionPreference='Stop' 下原生 git 写 stderr 抛 NativeCommandError 导致脚本中断。
+function Invoke-GitNet {
+    param([Parameter(Mandatory=$true)][string[]]$ArgumentList)
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        & git @ArgumentList 2>&1 | Out-Null
+        if ($LASTEXITCODE -eq 0) { return 0 }
+        Write-Host "  WARN: git $($ArgumentList -join ' ') 经代理失败 (exit $LASTEXITCODE)，回退直连 SSH 重试..." -ForegroundColor Yellow
+        $oldSsh = $env:GIT_SSH_COMMAND
+        $env:GIT_SSH_COMMAND = "ssh -o ProxyCommand=none -o ConnectTimeout=15"
+        try {
+            & git @ArgumentList 2>&1 | Out-Null
+        } finally {
+            if ($null -eq $oldSsh) { Remove-Item Env:GIT_SSH_COMMAND -ErrorAction SilentlyContinue } else { $env:GIT_SSH_COMMAND = $oldSsh }
+        }
+        return $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $prev
+    }
+}
 
 # Validate version format (supports x.y.z and x.y.z.n, e.g. 2.5.6 or 26.7.8.1)
 if ($Version -notmatch '^\d+\.\d+\.\d+(\.\d+)?$') {
@@ -45,8 +68,8 @@ if ($LASTEXITCODE -ne 0) {
     git stash --include-untracked 2>&1 | Out-Null
     $stashed = $true
 }
-git pull --rebase --quiet 2>$null | Out-Null
-if ($LASTEXITCODE -ne 0) {
+$pullCode = Invoke-GitNet -ArgumentList @('pull','--rebase','--quiet')
+if ($pullCode -ne 0) {
     Write-Host "ERROR: git pull failed" -ForegroundColor Red
     if ($stashed) { git stash pop 2>&1 | Out-Null }
     exit 1
@@ -61,7 +84,7 @@ Write-Host "  OK: Pulled latest code" -ForegroundColor Green
 Write-Host "[3/4] Updating version files..." -ForegroundColor Yellow
 
 # Update version.py
-$VersionPy = Join-Path $ProjectRoot "..\config\version.py"
+$VersionPy = Join-Path $ProjectRoot "..\modules\config\version.py"
 if (Test-Path $VersionPy) {
     $lines = Get-Content $VersionPy -Encoding UTF8
     $newLines = @()
@@ -100,14 +123,14 @@ if (Test-Path $Dockerfile) {
 Write-Host "[4/4] Committing, pushing, and creating tag..." -ForegroundColor Yellow
 
 # Commit and push (only version files, avoid staging runtime data/ or untracked files)
-git add config/version.py deploy/Dockerfile
+git add modules/config/version.py deploy/Dockerfile
 git diff --cached --quiet 2>$null
 if ($LASTEXITCODE -eq 0) {
     Write-Host "  WARN: Nothing to commit, skipping commit" -ForegroundColor Yellow
 } else {
     git commit -m "Release $VersionWithV"
-    git push origin main
-    if ($LASTEXITCODE -ne 0) {
+    $pushCode = Invoke-GitNet -ArgumentList @('push','origin','main')
+    if ($pushCode -ne 0) {
         Write-Host "ERROR: git push failed" -ForegroundColor Red
         exit 1
     }
@@ -122,8 +145,8 @@ Write-Host "  (cleaned remote tag if existed)" -ForegroundColor Gray
 
 # Create and push tag (triggers GitHub Actions)
 git tag $VersionWithV
-git push origin $VersionWithV
-if ($LASTEXITCODE -eq 0) {
+$tagPushCode = Invoke-GitNet -ArgumentList @('push','origin',$VersionWithV)
+if ($tagPushCode -eq 0) {
     Write-Host ""
     Write-Host "============================================" -ForegroundColor Green
     Write-Host "  Release $VersionWithV tagged successfully!" -ForegroundColor Green
@@ -136,3 +159,4 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "ERROR: Failed to push tag" -ForegroundColor Red
     exit 1
 }
+
