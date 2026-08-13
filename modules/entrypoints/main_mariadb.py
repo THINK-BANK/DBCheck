@@ -91,6 +91,41 @@ class MariaDBInspector(BaseInspectionEngine):
             pass
         return 10.4
 
+    def _mariadb_use_global_priv(self):
+        """权威判定：mysql.user 是否含有 global_priv 列（MariaDB 10.4+ 才引入）。
+
+        修复旧逻辑仅按主版本号（>=10.4）分支、在自定义/老版本 MariaDB 上
+        global_priv 列不存在时直接报 1054 的问题。改为**运行时 schema 探测**
+        作为权威决策，版本号仅作为无连接时的兜底快速判定。结果按实例缓存，
+        避免 mysql_users / user_list 两处重复探测。
+
+        :return: True 表示可安全引用 mysql.user.global_priv；False 表示应回退
+                 到仅使用 authentication_string 的兼容写法
+        """
+        cached = getattr(self, "_use_global_priv_cache", None)
+        if cached is not None:
+            return cached
+        conn = getattr(self, "conn", None)
+        if conn is not None:
+            try:
+                cur = conn.cursor()
+                cur.execute("SHOW COLUMNS FROM mysql.user LIKE 'global_priv'")
+                rows = cur.fetchall()
+                cur.close()
+                use = len(rows) > 0
+            except Exception:
+                try:
+                    cur.close()
+                except Exception:
+                    pass
+                # 探测失败时保守回退到版本号兜底
+                use = self._mariadb_major_version() >= 10.4
+        else:
+            # 无连接无法探测：用版本号兜底
+            use = self._mariadb_major_version() >= 10.4
+        self._use_global_priv_cache = use
+        return use
+
     def _customize_queries(self, sql_dict):
         """覆盖 MySQL 不兼容的 SQL 查询（MariaDB 专用）
 
@@ -104,10 +139,10 @@ class MariaDBInspector(BaseInspectionEngine):
         """
         # 安全信息 - 用户章节（去掉 MySQL 专有列；col7 = 是否设置密码）
         if 'mysql_users' in sql_dict:
-            major = self._mariadb_major_version()
-            if major >= 10.4:
+            if self._mariadb_use_global_priv():
                 # 10.4+ 密码存于 mysql.global_priv JSON；authentication_string 仅对部分插件有效，
                 # 需同时解析 global_priv 中的 authentication_string 才能可靠判定是否设置密码。
+                # 若实际实例未引入 global_priv（老版本/自定义构建），已由上方的运行时探测回退。
                 col7 = (
                     "(CASE "
                     "WHEN COALESCE(authentication_string, '') <> '' THEN 1 "
@@ -132,8 +167,7 @@ class MariaDBInspector(BaseInspectionEngine):
                 "WHERE password_expired='Y';"
             )
         if 'user_list' in sql_dict:
-            major = self._mariadb_major_version()
-            if major >= 10.4:
+            if self._mariadb_use_global_priv():
                 # 10.4+ 密码存于 mysql.global_priv JSON，需解析其中 authentication_string 才能可靠判定
                 has_pwd = (
                     "(CASE "

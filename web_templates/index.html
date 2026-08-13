@@ -6027,6 +6027,11 @@ function formatBytes(bytes) {
               <label data-i18n="webui.ssh_key">私钥文件路径</label>
               <input type="text" id="f-ssh-key" data-i18n="webui.placeholder_ssh_key" placeholder="/root/.ssh/id_rsa" />
             </div>
+            <div class="toggle-row" onclick="toggleEbpf()" style="margin-top:14px;">
+              <span class="toggle-label" style="color:var(--text)" data-i18n="webui.ssh_ebpf_enable">启用内核级 eBPF 指标</span>
+              <span class="toggle-sub" id="ebpf-toggle-sub" data-i18n="webui.ssh_ebpf_state_on">当前：启用（目标机需 Python3 + bcc + root）</span>
+              <div class="toggle on" id="ebpf-toggle"></div>
+            </div>
           </div>
           <div class="ssh-ebpf-hint" style="margin-top:12px;padding:10px 14px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.25);border-radius:10px;font-size:12px;color:var(--text-muted);line-height:1.6;">
             <span style="color:#0A2A6E;font-weight:600;">ℹ️ eBPF 内核级指标说明：</span>
@@ -8306,6 +8311,7 @@ if (_ADMIN_TOKEN) sessionStorage.setItem('dbcheck_admin', _ADMIN_TOKEN);
 // ─── State ───
 let dbType = 'oracle';
 let sshEnabled = false;
+let ebpfEnabled = true;
 let _inspSshPassword = '';  // 缓存数据源SSH密码，供testSsh使用
 let currentTaskId = null;
 let pollTimer = null;
@@ -9171,6 +9177,10 @@ function startWizard() {
   document.getElementById('ssh-toggle-sub').textContent = i18n('webui.ssh_enable_state_off');
   document.getElementById('ssh-fields').className = 'ssh-fields form-grid';
   document.getElementById('btn-test-ssh').style.display = 'none';
+  // 重置 eBPF 开关（默认启用）
+  ebpfEnabled = true;
+  document.getElementById('ebpf-toggle').className = 'toggle on';
+  document.getElementById('ebpf-toggle-sub').textContent = i18n('webui.ssh_ebpf_state_on');
   document.getElementById('f-ssh-auth').value = 'password';
   document.getElementById('f-ssh-password-wrap').style.display = '';
   document.getElementById('f-ssh-key-wrap').style.display = 'none';
@@ -9867,6 +9877,13 @@ function toggleSsh() {
   }
 }
 
+function toggleEbpf() {
+  ebpfEnabled = !ebpfEnabled;
+  document.getElementById('ebpf-toggle').className = 'toggle' + (ebpfEnabled ? ' on' : '');
+  document.getElementById('ebpf-toggle-sub').textContent = ebpfEnabled
+    ? i18n('webui.ssh_ebpf_state_on') : i18n('webui.ssh_ebpf_state_off');
+}
+
 // ─── 一键修复建议功能 ───────────────────────────────────────
 
 function copyFixSql(sql) {
@@ -10222,6 +10239,7 @@ async function startInspection() {
     payload.ssh_user     = document.getElementById('f-ssh-user').value.trim() || 'root';
     payload.ssh_password = document.getElementById('f-ssh-password').value;
     payload.ssh_key_file = document.getElementById('f-ssh-key').value.trim();
+    payload.ssh_ebpf = ebpfEnabled;
   }
   // 附加巡检模板 ID
   const templateId = document.getElementById('f-template')?.value;

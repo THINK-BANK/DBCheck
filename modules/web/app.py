@@ -1285,7 +1285,7 @@ def run_inspection_task(task_id, db_info, inspector_name, template_id=None, chap
         # SSH
         ssh_info = {}
         if db_info.get('ssh_host'):
-            ssh_info = {k: db_info[k] for k in ('ssh_host', 'ssh_port', 'ssh_user', 'ssh_password', 'ssh_key_file') if k in db_info}
+            ssh_info = {k: db_info[k] for k in ('ssh_host', 'ssh_port', 'ssh_user', 'ssh_password', 'ssh_key_file', 'ssh_ebpf') if k in db_info}
 
         # MongoDB 专用参数透传到 ssh_info（供插件 getData → MongoConnectionConfig 使用）
         if db_type == 'mongodb':
@@ -4203,6 +4203,7 @@ def api_start_inspection():
                 'ssh_user':     data.get('ssh_user', 'root'),
                 'ssh_password': data.get('ssh_password', ''),
                 'ssh_key_file': data.get('ssh_key_file', ''),
+                'ssh_ebpf':     data.get('ssh_ebpf', True),
             })
 
         task_id = str(uuid.uuid4())

@@ -22,6 +22,7 @@
 
 import argparse
 import json
+import os
 import shutil
 import sys
 from datetime import datetime
@@ -99,12 +100,44 @@ def _write_manifest(manifest: dict) -> None:
         json.dump(manifest, fh, ensure_ascii=False, indent=2)
 
 
+def _is_mount_point(path) -> bool:
+    """判断 path 是否为挂载点（如 Docker volume 挂载的 /app/reports）。
+
+    挂载点目录不能被 rmtree 删除，否则抛 [Errno 16] Device or resource busy。
+    - 优先用 os.path.ismount（POSIX 下能正确识别 volume 挂载）。
+    - 兜底：比较 path 与父目录的 st_dev，分属不同设备即视为挂载点。
+    """
+    path = Path(path)
+    if not path.exists():
+        return False
+    try:
+        if os.path.ismount(str(path)):
+            return True
+    except OSError:
+        pass
+    try:
+        src_dev = path.stat().st_dev
+        parent = path.parent
+        if parent.exists():
+            parent_dev = parent.stat().st_dev
+            if src_dev != parent_dev:
+                return True
+    except OSError:
+        pass
+    return False
+
+
 def _merge_into(src: Path, dst: Path):
     """把 src 的内容归并进 dst（覆盖同名），然后删除 src。
 
     用于「目标已存在」场景：将旧目录内容归并到已存在的新目录，避免 shutil.move
     把旧目录嵌套进新目录。src 为文件时直接 rename 到 dst；src 为目录时逐个子项
     归并，冲突时以 src 为准覆盖，最后删除 src 根目录。
+
+    注意：若 src 本身是挂载点（Docker volume 挂载的 /app/reports 等），
+    内容归并完毕**后不删除 src 根目录**（rmtree 挂载点会抛
+    [Errno 16] Device or resource busy），仅保留挂载点；调用方仍会写 manifest，
+    避免每次启动重试迁移而刷屏日志。
     """
     import shutil
 
@@ -126,6 +159,11 @@ def _merge_into(src: Path, dst: Path):
                 else:
                     target.unlink()
             shutil.move(str(child), str(target))
+    # src 为挂载点时禁止 rmtree（避免 Device or resource busy）；内容已归并至 dst，
+    # 保留挂载点即可，调用方仍会将此项写入 manifest 标记为已完成。
+    if _is_mount_point(src):
+        print(f"[migration] 源 {src} 为挂载点，已归并内容但保留挂载点（跳过删除）")
+        return
     shutil.rmtree(str(src))
 
 

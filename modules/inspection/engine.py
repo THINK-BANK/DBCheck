@@ -68,13 +68,15 @@ IGNORE_MOUNTS = {'/mnt/iso', '/media', '/run/media', '/iso', '/cdrom'}
 class RemoteSystemInfoCollector:
     """远程系统信息收集器 - 通过SSH连接获取远程主机信息"""
     
-    def __init__(self, host, port=22, username='root', password=None, key_file=None):
+    def __init__(self, host, port=22, username='root', password=None, key_file=None, enable_ebpf=False):
         self.host = host
         self.port = port
         self.username = username
         self.password = password
         self.key_file = key_file
+        self.enable_ebpf = bool(enable_ebpf)
         self.ssh_client = None
+        self._ebpf_src = None
     
     def connect(self):
         if paramiko is None:
@@ -102,7 +104,87 @@ class RemoteSystemInfoCollector:
     def _run(self, cmd):
         stdin, stdout, stderr = self.ssh_client.exec_command(cmd, timeout=20)
         return stdout.read().decode('utf-8', errors='ignore'), stderr.read().decode('utf-8', errors='ignore')
-    
+
+    def _ebpf_script_src(self):
+        """读取专业版 eBPF 远端采集脚本源码（缓存），用于 SSH 内联执行。"""
+        if self._ebpf_src is None:
+            p = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                             'pro', 'remote_host_collector.py')
+            try:
+                with open(p, 'r', encoding='utf-8') as f:
+                    self._ebpf_src = f.read()
+            except Exception:
+                self._ebpf_src = ''
+        return self._ebpf_src
+
+    def _run_ebpf(self, window=0.5, max_time=8.0):
+        """经 SSH 在目标机内联执行 eBPF 采集脚本（--ebpf-only），返回内核级指标 dict。
+
+        仅当目标机具备 Python3 + bcc + root 时生效；任一环节失败/超时/无 Python/bcc
+        均返回空字典并安全降级（绝不影响基础 Shell(/proc) 指标）。脚本整份经 stdin 喂给
+        远端解释器，避免目标机落地文件；远端有硬超时看门狗，不会因 eBPF 卡死挂起 SSH。
+        """
+        if not self.ssh_client:
+            return {}
+        src = self._ebpf_script_src()
+        if not src:
+            return {}
+        bootstrap = (
+            "PYBIN=$(command -v python3 2>/dev/null || command -v python 2>/dev/null || true); "
+            "if [ -n \"$PYBIN\" ]; then "
+            "  \"$PYBIN\" - --window " + str(window) + " --max-time " + str(max_time) + " --ebpf-only; "
+            "else "
+            "  echo 'DBCheck_EBPF_NO_PYTHON'; exit 0; "
+            "fi"
+        )
+        try:
+            stdin, stdout, stderr = self.ssh_client.exec_command(bootstrap, timeout=20)
+            try:
+                stdin.write(src)
+            except Exception:
+                pass
+            try:
+                stdin.channel.shutdown_write()
+            except Exception:
+                pass
+            raw = b''
+            ch = stdout.channel
+            try:
+                ch.settimeout(12)
+            except Exception:
+                pass
+            try:
+                while True:
+                    chunk = ch.recv(4096)
+                    if not chunk:
+                        break
+                    raw += chunk
+            except Exception:
+                pass
+            text = raw.decode('utf-8', errors='ignore').strip()
+            if not text or text == 'DBCheck_EBPF_NO_PYTHON':
+                return {}
+            # 取首个以 '{' 开头的 JSON 行（远端可能混出其他诊断行）
+            first_line = ''
+            for _ln in text.splitlines():
+                _ln = _ln.strip()
+                if _ln.startswith('{'):
+                    first_line = _ln
+                    break
+            if not first_line:
+                return {}
+            import json
+            data = json.loads(first_line)
+            if not isinstance(data, dict):
+                return {}
+            ebpf_keys = ('host_disk_latency_us_p50', 'host_disk_latency_us_p95',
+                         'host_disk_latency_us_p99', 'host_disk_iops',
+                         'host_disk_top_io_procs', 'host_cpu_top_procs')
+            return {k: data[k] for k in ebpf_keys if k in data}
+        except Exception as e:
+            print(f"[inspect] eBPF 采集跳过 {self.host}: {e}")
+            return {}
+
     def get_cpu_info(self):
         out, _ = self._run("cat /proc/cpuinfo | grep 'model name' | head -1 && top -bn1 | grep 'Cpu' | awk '{print $2}'")
         info = {'Model name': '', 'usage_percent': 0.0}
@@ -165,14 +247,29 @@ class RemoteSystemInfoCollector:
                 # fallback：使用 uname -a 前3个字段
                 parts = os_release_out.strip().split(maxsplit=3)
                 platform_text = ' '.join(parts[:3]) if len(parts) >= 3 else os_release_out.strip()
-        return {
+        info = {
             'platform': platform_out.strip() if platform_out.strip() else 'Linux',
             'platform_text': platform_text,
             'boot_time': boot_out.strip() if boot_out.strip() else '未知',
             'cpu': self.get_cpu_info(),
             'memory': self.get_memory_info(),
-            'disk': self.get_disk_info()
+            'disk': self.get_disk_info(),
+            'host_collector_source': 'shell'
         }
+        # eBPF 内核级指标（可选）：仅当启用且目标机具备 Python3 + bcc + root 时叠加。
+        # 任一环节失败 / 无 Python / 无 bcc 均安全降级为 None，不影响上面的基础 Shell(/proc) 指标；
+        # 报告据此渲染「内核级 eBPF 指标：不可用」，而非凭空缺失。
+        info['ebpf_enabled'] = bool(self.enable_ebpf)
+        info['ebpf'] = None
+        if self.enable_ebpf:
+            try:
+                em = self._run_ebpf()
+                if em:
+                    info['ebpf'] = em
+                    info['host_collector_source'] = 'ebpf'
+            except Exception:
+                pass
+        return info
 
 
 # ============================================================
@@ -397,6 +494,90 @@ def render_system_resource_chapter(doc, context, lang, chapter_prefix=''):
                     run.font.size = Pt(9); run.font.name = '微软雅黑'; run.bold = True
                     run.font.color.rgb = RGBColor(255, 255, 255)
 
+    def _render_ebpf_section():
+        """eBPF 内核级指标子章节：仅当启用 eBPF 采集时渲染。
+
+        - 目标机具备 Python3 + bcc + root 且采集成功 → 展示磁盘 p99 时延 / IOPS / 按进程 Top 归因；
+        - 启用但目标机不满足（无 Python / bcc / root）→ 展示「不可用」说明，绝不报错或缺失。
+        """
+        if not system_info.get('ebpf_enabled'):
+            return
+        _add_heading(_t('report.system_resource_ebpf', default='内核级 eBPF 指标'), 2)
+        ebpf = system_info.get('ebpf')
+        if not ebpf or not isinstance(ebpf, dict):
+            doc.add_paragraph(_t('report.system_resource_ebpf_unavail',
+                                 default='目标机未安装 Python3 + bcc 或缺少 root 权限，内核级 eBPF 指标不可用（基础宿主指标不受影响）。'))
+            doc.add_paragraph()
+            return
+        # 表5a：磁盘 IO 时延与 IOPS
+        _add_heading(_t('report.system_resource_ebpf_disk', default='磁盘 IO'), 3)
+        _fmt_kv_table([
+            (_t('report.system_resource_ebpf_lat_p50', default='读/写时延 p50 (µs)'),
+             ebpf.get('host_disk_latency_us_p50', '未知')),
+            (_t('report.system_resource_ebpf_lat_p95', default='读/写时延 p95 (µs)'),
+             ebpf.get('host_disk_latency_us_p95', '未知')),
+            (_t('report.system_resource_ebpf_lat_p99', default='读/写时延 p99 (µs)'),
+             ebpf.get('host_disk_latency_us_p99', '未知')),
+            (_t('report.system_resource_ebpf_iops', default='IOPS'),
+             ebpf.get('host_disk_iops', '未知')),
+        ])
+        # 表5b：按进程 Top IO 归因
+        top_io = ebpf.get('host_disk_top_io_procs') or []
+        if top_io:
+            _add_heading(_t('report.system_resource_ebpf_topio', default='磁盘 IO 占用 Top 进程'), 3)
+            headers = [_t('report.system_resource_col_pid', default='PID'),
+                       _t('report.system_resource_col_proc', default='进程'),
+                       _t('report.system_resource_col_ios', default='IO 次数'),
+                       _t('report.system_resource_col_ms', default='耗时(ms)')]
+            tbl = doc.add_table(rows=1 + len(top_io), cols=4, style='Table Grid')
+            for j, htext in enumerate(headers):
+                cell = tbl.rows[0].cells[j]; cell.text = htext
+                _set_cell_bg(cell, '336699')
+                for p in cell.paragraphs:
+                    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    for run in p.runs:
+                        run.font.size = Pt(9); run.font.name = '微软雅黑'; run.bold = True
+                        run.font.color.rgb = RGBColor(255, 255, 255)
+            for i, pr in enumerate(top_io, 1):
+                row = tbl.rows[i].cells
+                row[0].text = str(pr.get('pid', ''))
+                row[1].text = str(pr.get('comm', ''))
+                row[2].text = str(pr.get('ios', ''))
+                row[3].text = str(pr.get('ms', ''))
+                for j in range(4):
+                    for p in row[j].paragraphs:
+                        for run in p.runs:
+                            run.font.size = Pt(9); run.font.name = '微软雅黑'
+            doc.add_paragraph()
+        # 表5c：按进程 Top CPU 归因
+        top_cpu = ebpf.get('host_cpu_top_procs') or []
+        if top_cpu:
+            _add_heading(_t('report.system_resource_ebpf_topcpu', default='CPU 占用 Top 进程'), 3)
+            headers = [_t('report.system_resource_col_pid', default='PID'),
+                       _t('report.system_resource_col_proc', default='进程'),
+                       _t('report.system_resource_col_samples', default='采样数'),
+                       _t('report.system_resource_col_ms', default='耗时(ms)')]
+            tbl = doc.add_table(rows=1 + len(top_cpu), cols=4, style='Table Grid')
+            for j, htext in enumerate(headers):
+                cell = tbl.rows[0].cells[j]; cell.text = htext
+                _set_cell_bg(cell, '336699')
+                for p in cell.paragraphs:
+                    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    for run in p.runs:
+                        run.font.size = Pt(9); run.font.name = '微软雅黑'; run.bold = True
+                        run.font.color.rgb = RGBColor(255, 255, 255)
+            for i, pr in enumerate(top_cpu, 1):
+                row = tbl.rows[i].cells
+                row[0].text = str(pr.get('pid', ''))
+                row[1].text = str(pr.get('comm', ''))
+                row[2].text = str(pr.get('samples', ''))
+                row[3].text = str(pr.get('ms', ''))
+                for j in range(4):
+                    for p in row[j].paragraphs:
+                        for run in p.runs:
+                            run.font.size = Pt(9); run.font.name = '微软雅黑'
+            doc.add_paragraph()
+
     if disk_list:
         tbl = doc.add_table(rows=1 + len(disk_list), cols=5, style='Table Grid')
         _render_disk_header(tbl)
@@ -423,6 +604,9 @@ def render_system_resource_chapter(doc, context, lang, chapter_prefix=''):
                 for run in p.runs:
                     run.font.size = Pt(9); run.font.name = '微软雅黑'
         doc.add_paragraph()
+
+    # ── 表5：eBPF 内核级指标（可选子章节）──
+    _render_ebpf_section()
 
 
 # ============================================================
@@ -733,7 +917,8 @@ class BaseInspectionEngine:
                 collector = RemoteSystemInfoCollector(
                     host=self.ssh_info['ssh_host'], port=self.ssh_info.get('ssh_port', 22),
                     username=self.ssh_info.get('ssh_user', 'root'),
-                    password=self.ssh_info.get('ssh_password'), key_file=self.ssh_info.get('ssh_key_file')
+                    password=self.ssh_info.get('ssh_password'), key_file=self.ssh_info.get('ssh_key_file'),
+                    enable_ebpf=self.ssh_info.get('ssh_ebpf', True)
                 )
                 if collector.connect():
                     system_info = collector.get_system_info()
@@ -1512,6 +1697,32 @@ class BaseInspectionEngine:
                 description_zh = bl.get('description_zh', '')
                 description_en = bl.get('description_en', '')
                 
+                # Galera 专属基线（wsrep_on / wsrep_cluster_address）仅对真正的 Galera 集群节点有意义。
+                # 独立（非集群）MariaDB 上这两个变量本就为空 / 为 OFF，若照常判定会误报为风险。
+                # 仅当 wsrep_on=ON 时才检查，否则标记为 SKIP 跳过（SKIP 不会进入风险章节，无噪声）。
+                if self.db_type == 'mariadb' and param_name in ('wsrep_on', 'wsrep_cluster_address'):
+                    try:
+                        _wc = self.conn.cursor()
+                        _wc.execute("SHOW VARIABLES LIKE 'wsrep_on'")
+                        _wr = _wc.fetchone()
+                        _wc.close()
+                        _wsrep_on_val = _wr[1] if _wr and len(_wr) >= 2 else ''
+                    except Exception:
+                        _wsrep_on_val = ''
+                    if str(_wsrep_on_val).strip().upper() != 'ON':
+                        results.append({
+                            'param_name': param_name,
+                            'current_value': 'N/A (非集群节点)',
+                            'expected_value': expected_value,
+                            'operator': operator,
+                            'status': 'SKIP',
+                            'risk_level': risk_level,
+                            'description_zh': description_zh,
+                            'description_en': description_en,
+                            'message': '非 Galera 集群节点，跳过检查',
+                        })
+                        continue
+
                 # 执行查询获取当前值
                 try:
                     _cur = self.conn.cursor() if self.conn else None
@@ -1644,7 +1855,7 @@ class BaseInspectionEngine:
                     issue_item = {
                         'col1': f'基线: {param_name}',
                         'col2': risk_level,
-                        'col3': f'当前值={current_value}, 期望值={expected_value}',
+                        'col3': f'当前值={current_value}, 期望值={self._baseline_expected_display(result)}',
                         'col4': desc_zh,
                         'col5': 'HIGH' if risk_level == 'HIGH' else ('MEDIUM' if risk_level == 'MEDIUM' else 'LOW'),
                         'fix_sql': (f"SET {param_name} = {expected_value};"
@@ -1891,6 +2102,26 @@ class BaseInspectionEngine:
             print(f"[WARN] 基线对比失败: {e}")
             return 'ERROR'
 
+    def _baseline_expected_display(self, br: dict) -> str:
+        """将基线期望值格式化为人类可读文本，避免「期望值=」（空白）被误认为取值失败。
+
+        - ``!= ''`` 规则语义是「不应为空」，期望值本就是空串，渲染为「非空 / non-empty」。
+        - ``= ''`` 规则语义是「应为空」，渲染为「（空）/ (empty)」。
+        - BETWEEN 规则使用 min/max 区间。
+        - 其它规则原样显示期望值。
+        """
+        op = br.get('operator')
+        if op == 'BETWEEN':
+            mn, mx = br.get('expected_value_min'), br.get('expected_value_max')
+            if mn or mx:
+                return f"{mn} - {mx}"
+        ev = br.get('expected_value')
+        if not ev:  # 空串或 None
+            if op == '!=':
+                return '非空' if self._lang == 'zh' else 'non-empty'
+            return '（空）' if self._lang == 'zh' else '(empty)'
+        return str(ev)
+
     def _append_chapters(self, output_file):
         """追加章节（通用逻辑）"""
         try:
@@ -1955,8 +2186,7 @@ class BaseInspectionEngine:
                     row[0].text = br.get('param_name', '')
                     row[1].text = self._clean_xml_str(br.get('current_value', ''), max_len=100)
                     row[2].text = self._clean_xml_str(
-                        br.get('expected_value', '') if br.get('expected_value')
-                        else f"{br.get('expected_value_min', '')} - {br.get('expected_value_max', '')}",
+                        self._baseline_expected_display(br),
                         max_len=200,
                     )
                     row[3].text = br.get('operator', '')

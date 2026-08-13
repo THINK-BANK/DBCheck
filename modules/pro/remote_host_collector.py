@@ -378,14 +378,24 @@ def _collect_ebpf(window: float = 0.5) -> dict:
             pass
 
 
-def collect_host(use_ebpf: bool = False, window: float = 0.5) -> dict:
+def collect_host(use_ebpf: bool = False, window: float = 0.5, ebpf_only: bool = False) -> dict:
     """采集宿主机资源，返回可直接合并进 snapshot 的 dict。
 
     - psutil 基础指标始终尝试（目标机未装 psutil 则返回 unavailable）；
     - use_ebpf 默认 False（仅 psutil 用户态，安全、不向目标内核注入任何程序）；
       仅当显式传入 True 且环境满足（Linux + root + bcc）时才叠加 eBPF 内核级指标，
       并据此把 host_collector_source 标记为 'ebpf'，否则为 'psutil'。
+    - ebpf_only=True 时跳过 psutil 基础指标，仅采集 eBPF 内核级指标（不要求目标机
+      安装 psutil）；不可用时返回空字典。供社区版巡检路径在「目标机具备 Python3 +
+      bcc + root」时精确叠加内核级指标，而无需目标机额外安装 psutil。
     """
+    if ebpf_only:
+        if not use_ebpf:
+            return {}
+        try:
+            return _collect_ebpf(window)
+        except Exception:
+            return {}
     m = _collect_psutil()
     if not m:
         return {"host_collector_source": "unavailable"}
@@ -410,6 +420,8 @@ def main():
                     help="禁用 eBPF，仅采集 psutil 基础指标")
     ap.add_argument("--max-time", type=float, default=8.0,
                     help="整个采集的硬上限（秒）；超时强制退出，防止远端进程卡死导致 SSH 会话在目标机侧永久悬挂")
+    ap.add_argument("--ebpf-only", action="store_true",
+                    help="仅采集 eBPF 内核级指标（磁盘 p99 时延 / IOPS / 按进程 Top 归因），不依赖 psutil；不可用时输出空 JSON")
     args = ap.parse_args()
 
     # 硬超时看门狗：保证远端进程无论 eBPF 是否卡死都在有限时间内退出。
@@ -441,7 +453,8 @@ def main():
     _watchdogs.append(_t)
 
     try:
-        out = collect_host(use_ebpf=not args.no_ebpf, window=args.window)
+        out = collect_host(use_ebpf=not args.no_ebpf, window=args.window,
+                           ebpf_only=args.ebpf_only)
     except Exception:
         out = {}
     finally:
