@@ -8,7 +8,7 @@
 ```bash
 docker run -d -p 5003:5003 \
   -v dbcheck_data:/app/data \
-  -v dbcheck_reports:/app/reports \
+  -v dbcheck_reports:/app/data/reports \
   -v /path/to/dm8:/opt/dm8 \
   --name dbcheck \
   jackge12345/dbcheck:v2.5.3

@@ -384,7 +384,7 @@ Docker 可以使用以下两种方式：
 docker pull jackge12345/dbcheck:latest
 docker run -d -p 5003:5003 \
   -v dbcheck_data:/app/data \
-  -v dbcheck_reports:/app/reports \
+  -v dbcheck_reports:/app/data/reports \
   --name dbcheck \
   jackge12345/dbcheck:latest
 
@@ -392,7 +392,7 @@ docker run -d -p 5003:5003 \
 docker pull ghcr.io/fiyo/dbcheck:latest
 docker run -d -p 5003:5003 \
   -v dbcheck_data:/app/data \
-  -v dbcheck_reports:/app/reports \
+  -v dbcheck_reports:/app/data/reports \
   --name dbcheck \
   ghcr.io/fiyo/dbcheck:latest
 ```

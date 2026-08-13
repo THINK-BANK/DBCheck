@@ -99,4 +99,4 @@ fi
 
 echo ""
 echo "==> 运行命令："
-echo "   docker run -d -p ${APP_PORT}:${APP_PORT} -v dbcheck_data:/app/data -v dbcheck_reports:/app/reports ${DHUB_IMAGE}:latest${TAG_SUFFIX}"
+echo "   docker run -d -p ${APP_PORT}:${APP_PORT} -v dbcheck_data:/app/data -v dbcheck_reports:/app/data/reports ${DHUB_IMAGE}:latest${TAG_SUFFIX}"

@@ -136,5 +136,5 @@ if [ "$PUSH_MODE" = "1" ]; then
     echo "     ${DHUB_IMAGE}:latest${TAG_SUFFIX}"
 else
     echo "   本地镜像: ${DHUB_IMAGE}:latest${TAG_SUFFIX} (仅 ${PLATFORMS})"
-    echo "   运行: docker run -d -p ${APP_PORT}:${APP_PORT} -v dbcheck_data:/app/data -v dbcheck_reports:/app/reports ${DHUB_IMAGE}:latest${TAG_SUFFIX}"
+    echo "   运行: docker run -d -p ${APP_PORT}:${APP_PORT} -v dbcheck_data:/app/data -v dbcheck_reports:/app/data/reports ${DHUB_IMAGE}:latest${TAG_SUFFIX}"
 fi

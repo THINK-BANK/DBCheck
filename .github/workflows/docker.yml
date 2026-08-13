@@ -143,7 +143,7 @@ jobs:
             docker pull ${{ env.DOCKER_IMAGE }}:${{ steps.version.outputs.version_num }}
             docker run -d -p 5003:5003 \
               -v dbcheck_data:/app/data \
-              -v dbcheck_reports:/app/reports \
+              -v dbcheck_reports:/app/data/reports \
               ${{ env.DOCKER_IMAGE }}:${{ steps.version.outputs.version_num }}
             ```
 
@@ -152,7 +152,7 @@ jobs:
             docker pull ${{ env.GHCR_IMAGE }}:${{ steps.version.outputs.version_num }}
             docker run -d -p 5003:5003 \
               -v dbcheck_data:/app/data \
-              -v dbcheck_reports:/app/reports \
+              -v dbcheck_reports:/app/data/reports \
               ${{ env.GHCR_IMAGE }}:${{ steps.version.outputs.version_num }}
             ```
 
