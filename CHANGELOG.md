@@ -1,5 +1,10 @@
 # Changelog
 
+## v26.8.13.0 (2026-08-13)
+- **版本统一**：各源文件版本标记 v26.8.12.1 → v26.8.13.0（version.py / version.json / Dockerfile `VERSION.txt` / build 脚本 / login.js / skill `dbcheck` `scripts/version.py` / README + README_zh 徽章 / deploy 脚本 / release 说明），消除版本漂移。
+- **安全加固**：SQL 编辑器强制只读（仅放行 SELECT / SHOW / EXPLAIN 等查询类命令，多语句含非只读整体拒绝 HTTP 403）+ 新增 Redis 只读命令分支（拒绝 DEL / FLUSH* / SET 等写删管理命令）（commit a7ad729）。
+- **SQL Server JDBC 连接修复**：`encrypt=false` 不再附 `trustServerCertificate`，服务器强制加密时自动回退 TLS（commit 1a88ba7）。
+
 ## v26.8.11.0 (2026-08-11)
 - **修复 GitHub Issue #46：MariaDB 10.3 巡检报语法错误**：MariaDB 10.3/10.4 不支持 `SHOW BINLOG STATUS`（该命令 10.5.2+ 才引入），`modules/entrypoints/main_mariadb.py` 在 `log_bin=ON` 时把 `master_status` 替换为该语句，导致执行巡检报 1064 语法错误；统一改为 `SHOW MASTER STATUS`（所有 MariaDB 版本可用，且为 `SHOW BINLOG STATUS` 的别名）。（详见 commit 87b499c）
 - **版本统一**：各源文件版本标记 v26.8.10.x → v26.8.11.0（version.py / version.json / Dockerfile `VERSION.txt` / build 脚本 / login.js / skill `dbcheck` `scripts/version.py` / README + README_zh 徽章），消除此前 `version.py`(v26.8.10.2) 与 `version.json`(v26.8.10.3) 的版本漂移。

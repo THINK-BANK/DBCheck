@@ -19,7 +19,7 @@ RaccoonX 支持多个关系数据库、文档数据库和KV数据库。
 > 
 Language switch（语言切换）: [English](./README.md) | [中文](./README_zh.md)
 
-[![Version](https://img.shields.io/badge/版本-v26.8.11.0-blue.svg)]()
+[![Version](https://img.shields.io/badge/版本-v26.8.13.0-blue.svg)]()
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)]()
 [![Open Source](https://img.shields.io/badge/Open%20Source-Yes-green.svg)]()
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)]()
