@@ -3,7 +3,7 @@
 Usage: python package_windows.py <distpath> <version>
 
   distpath  - path to 'dist' directory (contains DBCheck-Windows folder)
-  version   - version string, e.g. v26.8.13.0
+  version   - version string, e.g. v26.8.14.0
 """
 import os
 import shutil
