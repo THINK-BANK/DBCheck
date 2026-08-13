@@ -278,13 +278,18 @@ def smart_analyze_mysql(context: dict) -> list:
 
     # ── 10. 数据库用户安全 ───────────────────────────────
     users = context.get('mysql_users', [])
+    # mysql_users 查询返回列名：col1=用户, col2=主机, col4=插件, col7=是否设置密码(1/0)
+    _SYS_USERS = ('mysql.sys', 'mysql.session', 'mysql.infoschema')
     for u in users:
-        host = str(u.get('Host', ''))
-        plugin = str(u.get('plugin', ''))
-        uname = str(u.get('User', ''))
-        # 空密码检测（authentication_string 为空）
-        auth = str(u.get('authentication_string', '') or '')
-        if not auth and uname != 'mysql.sys':
+        uname = str(u.get('col1') or u.get('User') or '')
+        host = str(u.get('col2') or u.get('Host') or '')
+        plugin = str(u.get('col4') or u.get('plugin') or '')
+        # 空密码判定：优先使用查询内置的 col7（has_password 标志），回退到 authentication_string
+        has_pwd = u.get('col7')
+        if has_pwd is None:
+            auth = str(u.get('authentication_string') or '')
+            has_pwd = bool(auth.strip())
+        if not has_pwd and uname and uname not in _SYS_USERS:
             issues.append({
                 'col1': f'用户 {uname}@{host} 空密码', 'col2': '高风险',
                 'col3': f'数据库用户 {uname}@{host} 未设置密码，存在严重安全风险',

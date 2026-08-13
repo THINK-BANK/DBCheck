@@ -75,6 +75,22 @@ class MariaDBInspector(BaseInspectionEngine):
         except Exception as e:
             return False, str(e)
 
+    def _mariadb_major_version(self):
+        """返回 MariaDB 主版本号（如 10.4 / 10.6 / 11.2），无法获取时默认 10.4（现代版）。"""
+        try:
+            if getattr(self, 'conn', None) is None:
+                return 10.4
+            with self.conn.cursor() as cur:
+                cur.execute("SELECT VERSION()")
+                ver = cur.fetchone()[0] or ''
+            import re
+            m = re.match(r'(\d+)\.(\d+)', ver)
+            if m:
+                return float(f"{m.group(1)}.{m.group(2)}")
+        except Exception:
+            pass
+        return 10.4
+
     def _customize_queries(self, sql_dict):
         """覆盖 MySQL 不兼容的 SQL 查询（MariaDB 专用）
 
@@ -86,11 +102,25 @@ class MariaDBInspector(BaseInspectionEngine):
         - information_schema.INNODB_DATAFILES / INNODB_TABLESPACES 表名跨版本不稳定（<10.6 为 INNODB_SYS_*，>=10.6 去掉前缀），且 INNODB_* 表在 information_schema.TABLES 目录中登记不可靠；已改为用「能否真正 SELECT」做运行时探测（_resolve_innodb_table），两者皆不可用时降级为空结果避免 WARN
         - SHOW BINARY LOGS 在 binlog 未开启时报 1381，改用 @@log_bin 探针避免报错
         """
-        # 安全信息 - 用户章节（去掉 MySQL 专有列）
+        # 安全信息 - 用户章节（去掉 MySQL 专有列；col7 = 是否设置密码）
         if 'mysql_users' in sql_dict:
+            major = self._mariadb_major_version()
+            if major >= 10.4:
+                # 10.4+ 密码存于 mysql.global_priv JSON；authentication_string 仅对部分插件有效，
+                # 需同时解析 global_priv 中的 authentication_string 才能可靠判定是否设置密码。
+                col7 = (
+                    "(CASE "
+                    "WHEN COALESCE(authentication_string, '') <> '' THEN 1 "
+                    "WHEN global_priv IS NOT NULL AND global_priv <> '' "
+                    "AND JSON_UNQUOTE(JSON_EXTRACT(global_priv, '$.authentication_string')) IS NOT NULL "
+                    "AND JSON_UNQUOTE(JSON_EXTRACT(global_priv, '$.authentication_string')) <> '' THEN 1 "
+                    "ELSE 0 END) AS col7"
+                )
+            else:
+                col7 = "(COALESCE(authentication_string, '') <> '') AS col7"
             sql_dict['mysql_users'] = (
                 "SELECT user AS col1, host AS col2, Grant_priv AS col3, "
-                "plugin AS col4, password_expired AS col5, is_role AS col6 "
+                f"plugin AS col4, password_expired AS col5, is_role AS col6, {col7} "
                 "FROM mysql.user "
                 "WHERE user NOT IN ('mysql.infoschema','mysql.session','mysql.sys','root') "
                 "ORDER BY user;"
@@ -102,9 +132,21 @@ class MariaDBInspector(BaseInspectionEngine):
                 "WHERE password_expired='Y';"
             )
         if 'user_list' in sql_dict:
+            major = self._mariadb_major_version()
+            if major >= 10.4:
+                # 10.4+ 密码存于 mysql.global_priv JSON，需解析其中 authentication_string 才能可靠判定
+                has_pwd = (
+                    "(CASE "
+                    "WHEN COALESCE(authentication_string, '') <> '' THEN 1 "
+                    "WHEN global_priv IS NOT NULL AND global_priv <> '' "
+                    "AND JSON_UNQUOTE(JSON_EXTRACT(global_priv, '$.authentication_string')) IS NOT NULL "
+                    "AND JSON_UNQUOTE(JSON_EXTRACT(global_priv, '$.authentication_string')) <> '' THEN 1 "
+                    "ELSE 0 END)"
+                )
+            else:
+                has_pwd = "(COALESCE(authentication_string, '') <> '')"
             sql_dict['user_list'] = (
-                "SELECT user, host, "
-                "authentication_string IS NOT NULL AS has_password, "
+                f"SELECT user, host, {has_pwd} AS has_password, "
                 "password_expired, is_role AS is_role_account, plugin "
                 "FROM mysql.user "
                 "WHERE user != '' "

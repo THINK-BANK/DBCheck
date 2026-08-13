@@ -335,6 +335,10 @@ def render_system_resource_chapter(doc, context, lang, chapter_prefix=''):
         return tbl
 
     system_info = context.get('system_info') or {}
+    # 未采集目标服务器系统信息（未启用 SSH / 连接失败）时不渲染本章节，
+    # 避免展示「未知」占位或把本机资源误列入报告。
+    if not system_info.get('_is_target_server'):
+        return
 
     # ── 章节标题 ──
     title = _t('report.system_resource_title', default='系统资源（CPU / 内存 / 硬盘）')
@@ -721,32 +725,36 @@ class BaseInspectionEngine:
         current_step = total_steps - 4
         self.print_progress_bar(current_step, total_steps, prefix=_prog_prefix, suffix=self._t(f'{self.db_type}_progress_sysinfo', default='dm8_progress_sysinfo'))
         try:
+            system_info = None
             if self.ssh_info and self.ssh_info.get('ssh_host'):
+                # 仅当配置了「查询服务器」(SSH) 且连接成功时，才采集「目标数据库服务器」的系统资源。
+                # 系统资源告警（磁盘/内存）必须反映目标库主机，绝不能把巡检工具所在本机误报进去。
                 print(self._t(f'{self.db_type}_ssh_collecting', default='dm8_ssh_collecting').format(host=self.ssh_info['ssh_host']))
                 collector = RemoteSystemInfoCollector(
                     host=self.ssh_info['ssh_host'], port=self.ssh_info.get('ssh_port', 22),
                     username=self.ssh_info.get('ssh_user', 'root'),
                     password=self.ssh_info.get('ssh_password'), key_file=self.ssh_info.get('ssh_key_file')
                 )
-                if not collector.connect():
+                if collector.connect():
+                    system_info = collector.get_system_info()
+                    system_info['_is_target_server'] = True
+                else:
+                    # SSH 连接失败：不再回退到本机采集，避免把巡检工具所在主机误报为目标库主机
                     print(self._t(f'{self.db_type}_ssh_conn_fail_skip', default='dm8_ssh_conn_fail_skip'))
-                    collector = LocalSystemInfoCollector()
+            if system_info is None:
+                # 未启用「查询服务器」或 SSH 连接失败：不采集任何系统资源，
+                # 报告中不展示、也不告警本机磁盘与内存（与本次巡检目标无关）。
+                system_info = {}
             else:
-                collector = LocalSystemInfoCollector()
-            system_info = collector.get_system_info()
-            disk_list = system_info.get('disk_list') or system_info.get('disk') or get_host_disk_usage()
-            if isinstance(disk_list, dict):
-                disk_list = list(disk_list.values())
-            system_info['disk_list'] = disk_list
+                disk_list = system_info.get('disk_list') or system_info.get('disk') or []
+                if isinstance(disk_list, dict):
+                    disk_list = list(disk_list.values())
+                system_info['disk_list'] = disk_list
             self.context.update({"system_info": system_info})
         except Exception as e:
             print(self._t(f'{self.db_type}_sysinfo_fail', default='dm8_sysinfo_fail').format(e=e))
-            self.context.update({"system_info": {
-                'platform': '未知', 'boot_time': '未知',
-                'cpu': {}, 'memory': {},
-                'disk_list': [{'device':'C:','mountpoint':'C:\\','fstype':'NTFS',
-                               'total_gb':0,'used_gb':0,'free_gb':0,'usage_percent':0}]
-            }})
+            # 异常时同样不写入任何本机磁盘数据，避免误报告警
+            self.context.update({"system_info": {}})
         
         # 7. 风险分析
         current_step = total_steps - 3

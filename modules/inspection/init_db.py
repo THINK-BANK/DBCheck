@@ -158,7 +158,8 @@ MYSQL_DEFAULT_CHAPTERS = [
         'queries': [
             {'key': 'mysql_users', 'sql': """
                 SELECT user AS col1, host AS col2, Grant_priv AS col3,
-                       plugin AS col4, account_locked AS col5, password_expired AS col6
+                       plugin AS col4, account_locked AS col5, password_expired AS col6,
+                       (COALESCE(authentication_string, '') <> '') AS col7
                 FROM mysql.user
                 WHERE user NOT IN ('mysql.infoschema','mysql.session','mysql.sys','root')
                 ORDER BY user;
@@ -579,7 +580,8 @@ OCEANBASE_DEFAULT_CHAPTERS = [
         'queries': [
             {'key': 'mysql_users', 'sql': """
                 SELECT user AS col1, host AS col2, Grant_priv AS col3,
-                       plugin AS col4, account_locked AS col5, password_expired AS col6
+                       plugin AS col4, account_locked AS col5, password_expired AS col6,
+                       (COALESCE(authentication_string, '') <> '') AS col7
                 FROM mysql.user
                 WHERE user NOT IN ('mysql.infoschema','mysql.session','mysql.sys','root')
                 ORDER BY user;
@@ -3041,7 +3043,8 @@ TIDB_DEFAULT_CHAPTERS = [
         'queries': [
             {'key': 'mysql_users', 'sql': """
                 SELECT user AS col1, host AS col2, Grant_priv AS col3,
-                       plugin AS col4, account_locked AS col5, password_expired AS col6
+                       plugin AS col4, account_locked AS col5, password_expired AS col6,
+                       (COALESCE(authentication_string, '') <> '') AS col7
                 FROM mysql.user
                 WHERE user NOT IN ('mysql.infoschema','mysql.session','mysql.sys','root')
                 ORDER BY user;
