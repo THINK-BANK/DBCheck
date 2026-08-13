@@ -321,6 +321,7 @@ class MssqlJdbcInspector(BaseInspectionEngine):
         self.raw_jdbc_conn = None
         self.conn_cfg = None
         self._mssql_version_str = 'unknown'
+        self._used_encrypt_fallback = False
 
     # ════════════════════════════════════════════════
     # 连接层
@@ -363,7 +364,35 @@ class MssqlJdbcInspector(BaseInspectionEngine):
             for k, v in cfg.build_properties().items():
                 props.setProperty(str(k), str(v))
 
-            jdbc_conn = DriverManager.getConnection(url, props)
+            print(f"[MSSQL-JDBC] JDBC URL: {url}")
+
+            try:
+                jdbc_conn = DriverManager.getConnection(url, props)
+                self._used_encrypt_fallback = False
+            except Exception as first_e:
+                err = str(first_e)
+                # encrypt=false 时若错误与 SSL/TLS/encrypt 相关，自动回退到
+                # encrypt=true;trustServerCertificate=true 再试一次，兼容服务
+                # 器强制加密的场景（常见旧版/内网 SQL Server 配置）。
+                _ssl_keywords = (
+                    'encrypt', 'ssl', 'tls', 'secure',
+                    'trustservercertificate', 'certificate', 'handshake',
+                    'unexpected_message', 'did not return a response',
+                )
+                if (not cfg.encrypt) and any(k in err.lower() for k in _ssl_keywords):
+                    cfg.encrypt = True
+                    cfg.trust_server_certificate = True
+                    url2 = cfg.build_jdbc_url()
+                    print(f"[MSSQL-JDBC] 首次连接因 TLS/encrypt 失败，尝试启用 TLS 回退: {url2}")
+                    try:
+                        jdbc_conn = DriverManager.getConnection(url2, props)
+                        self._used_encrypt_fallback = True
+                    except Exception as second_e:
+                        raise RuntimeError(
+                            f"{err}（已尝试自动启用 TLS 加密回退，但仍失败: {second_e}）"
+                        ) from second_e
+                else:
+                    raise
 
             self.raw_jdbc_conn = jdbc_conn
             self.conn = JdbcConnectionWrapper(jdbc_conn)
@@ -377,6 +406,9 @@ class MssqlJdbcInspector(BaseInspectionEngine):
             self.context['mssql_version'] = [{'VERSION': version_raw, 'VERSION_STR': self._mssql_version_str}]
             self.context['version'] = [{'VERSION': version_raw, 'VERSION_STR': self._mssql_version_str}]
 
+            if self._used_encrypt_fallback:
+                print(f"[MSSQL-JDBC] 连接成功（已自动启用 TLS 加密回退），版本: {self._mssql_version_str}")
+                return True, f"{self._mssql_version_str}（已自动启用 TLS 加密回退）"
             print(f"[MSSQL-JDBC] 连接成功，版本: {self._mssql_version_str}")
             return True, self._mssql_version_str
         except Exception as e:

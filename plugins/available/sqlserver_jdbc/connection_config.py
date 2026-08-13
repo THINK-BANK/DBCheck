@@ -62,20 +62,38 @@ class MssqlJdbcConnectionConfig:
           2. 若 instance_name 非空 → jdbc:sqlserver://{host};instanceName={instance};...
           3. 否则 → jdbc:sqlserver://{host}:{port};databaseName={database};...
 
+        安全/兼容性要点：
+          - encrypt=false 时**不附加** trustServerCertificate，避免 mssql-jdbc
+            在旧版/强制加密服务器上进入异常 SSL 握手分支而报 unexpected_message。
+          - encrypt=true 时附加 trustServerCertificate + sslProtocol=TLSv1.2，兼
+            容自签证书并明确 TLS 版本。
+          - 固定 authentication=NotSpecified，显式使用 SQL 认证，避免驱动尝试
+            Windows/Kerberos 集成认证回退。
+
         Returns:
             可用的 JDBC 连接 URL 字符串
         """
         if self.jdbc_url and str(self.jdbc_url).strip().lower().startswith("jdbc:sqlserver"):
             return self.jdbc_url.strip()
 
-        # 公共参数：databaseName / encrypt / trustServerCertificate / loginTimeout / applicationName
-        common_params = (
-            f"databaseName={self.database or 'master'}"
-            f";encrypt={'true' if self.encrypt else 'false'}"
-            f";trustServerCertificate={'true' if self.trust_server_certificate else 'false'}"
-            f";loginTimeout={int(self.login_timeout_s) if self.login_timeout_s and self.login_timeout_s > 0 else 10}"
-            f";applicationName={self.application_name or 'DBCheck'}"
+        params: list = [f"databaseName={self.database or 'master'}"]
+
+        if self.encrypt:
+            params.append("encrypt=true")
+            params.append(f"trustServerCertificate={'true' if self.trust_server_certificate else 'false'}")
+            params.append("sslProtocol=TLSv1.2")
+        else:
+            # encrypt=false 时 trustServerCertificate 无意义；保留 false 也会触发
+            # 某些驱动版本/服务器配置的异常 SSL 路径，因此直接省略该参数。
+            params.append("encrypt=false")
+
+        params.append(
+            f"loginTimeout={int(self.login_timeout_s) if self.login_timeout_s and self.login_timeout_s > 0 else 10}"
         )
+        params.append(f"applicationName={self.application_name or 'DBCheck'}")
+        params.append("authentication=NotSpecified")
+
+        common_params = ";".join(params)
 
         if self.instance_name:
             # 命名实例：不带端口；MS JDBC 通过 SQL Browser 解析
