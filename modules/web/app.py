@@ -2293,86 +2293,115 @@ def _ct_kingbase(data, flavor):
 
 
 def _ct_oracle_pro(data):
-    """复刻原 /api/pro/datasources/test-connection 中 oracle 分支（含 SSH / thick mode）。"""
+    """复刻原 /api/pro/datasources/test-connection 中 oracle 分支（含 SSH / thick mode）。
+
+    修复点：
+    1. 用户填写 DSN 描述符且启用 SSH 时，必须把 DSN 里的 HOST/PORT 替换为 SSH 隧道
+       本地端口，否则 oracledb 仍按原 DSN 直连，导致"配了 SSH 仍超时"。
+    2. 隧道本地监听 127.0.0.1，DSN 用 127.0.0.1 避免 localhost 被解析到 IPv6。
+    3. 错误提示区分"未配 SSH"与"已配 SSH 但隧道后仍连不上"。
+    4. thick mode 失败等异常路径也确保关闭 SSH 隧道。
+    """
     import oracledb
+    import re as _re
+
     _jdbc = (data.get('jdbc_url') or '').strip()
-    if _jdbc and _jdbc.lstrip().upper().startswith('(DESCRIPTION'):
+    _has_dsn = bool(_jdbc and _jdbc.lstrip().upper().startswith('(DESCRIPTION'))
+    if _has_dsn:
         dsn = _jdbc
     else:
         dsn = f"{data['host']}:{data['port']}/{data.get('service_name', '')}" if data.get('service_name') \
             else f"{data['host']}:{data['port']}"
+
     ssh_host = data.get('ssh_host', '')
     _tunnel = None
-    if ssh_host:
-        try:
-            from modules.ssh import SSHTunnel
-            _tunnel = SSHTunnel(
-                ssh_host=ssh_host,
-                ssh_port=int(data.get('ssh_port', 22)),
-                ssh_user=data.get('ssh_user', 'root'),
-                ssh_password=data.get('ssh_password', ''),
-                remote_host=data['host'],
-                remote_port=int(data['port']),
-            )
-            _tunnel.__enter__()
-            _local = _tunnel.local_port
-            dsn = f"localhost:{_local}/{data.get('service_name', '')}" if data.get('service_name') \
-                else f"localhost:{_local}"
-        except Exception as te:
-            return {'ok': False, 'error': f'SSH 隧道建立失败: {te}'}
     try:
+        if ssh_host:
+            try:
+                from modules.ssh import SSHTunnel
+                _tunnel = SSHTunnel(
+                    ssh_host=ssh_host,
+                    ssh_port=int(data.get('ssh_port', 22)),
+                    ssh_user=data.get('ssh_user', 'root'),
+                    ssh_password=data.get('ssh_password', ''),
+                    remote_host=data['host'],
+                    remote_port=int(data['port']),
+                )
+                _tunnel.__enter__()
+                _local = _tunnel.local_port
+                if _has_dsn:
+                    # 把 DSN 中的 HOST/PORT 替换为隧道本地端点，确保流量走 SSH
+                    dsn = _re.sub(r'\(HOST\s*=\s*[^)]+\)', '(HOST=127.0.0.1)', dsn, flags=_re.IGNORECASE)
+                    dsn = _re.sub(r'\(PORT\s*=\s*\d+\)', f'(PORT={_local})', dsn, flags=_re.IGNORECASE)
+                else:
+                    dsn = f"127.0.0.1:{_local}/{data.get('service_name', '')}" if data.get('service_name') \
+                        else f"127.0.0.1:{_local}"
+            except Exception as te:
+                return {'ok': False, 'error': f'SSH 隧道建立失败: {te}'}
+
         params = {"user": data['user'], "password": data['password'], "dsn": dsn,
                   "connection_timeout": 15}
         if data.get('sysdba'):
             params["mode"] = oracledb.SYSDBA
-        conn = oracledb.connect(**params)
-    except Exception as e:
-        err_msg = str(e)
-        if 'DPY-3010' in err_msg or 'DPY-3015' in err_msg:
-            _thick_ok = False
-            try:
-                oracledb.init_oracle_client()
-                _thick_ok = True
-            except Exception:
-                pass
-            if not _thick_ok:
-                _lib_dir = _find_oracle_client_lib_dir()
-                if _lib_dir:
-                    try:
-                        oracledb.init_oracle_client(lib_dir=_lib_dir)
-                        _thick_ok = True
-                    except Exception:
-                        pass
-            if not _thick_ok:
+
+        def _try_connect():
+            conn = oracledb.connect(**params)
+            conn.close()
+
+        try:
+            _try_connect()
+            return {'ok': True, 'message': '连接成功'}
+        except Exception as e:
+            err_msg = str(e)
+            if 'DPY-3010' in err_msg or 'DPY-3015' in err_msg:
+                _thick_ok = False
                 try:
-                    import json
-                    with open(os.path.join(BASE_DIR, 'dbc_config.json')) as f:
-                        _cfg = json.load(f)
-                    _lib_dir = _cfg.get('oracle_client_lib_dir', '')
-                    if _lib_dir and os.path.isdir(_lib_dir):
-                        oracledb.init_oracle_client(lib_dir=_lib_dir)
-                        _thick_ok = True
+                    oracledb.init_oracle_client()
+                    _thick_ok = True
                 except Exception:
                     pass
-            if not _thick_ok:
-                return {'ok': False, 'error': 'Oracle 11g 及以下版本需要 Oracle Instant Client。'
-                                            '请通过左侧导航"Oracle Client"设置页，点击"一键下载并安装"按钮自动下载安装。'}
-            try:
-                conn = oracledb.connect(**params)
-            except Exception as e2:
-                return {'ok': False, 'error': f'Oracle 连接失败（thick mode）: {e2}'}
-        elif 'timed out' in err_msg.lower() or 'timeout' in err_msg.lower():
-            return {'ok': False, 'error': '连接超时，Oracle 可能无法直连，请在数据源中配置 SSH'}
-        else:
-            return {'ok': False, 'error': str(e)}
-    conn.close()
-    if _tunnel:
-        _tunnel.close()
-    return {'ok': True, 'message': '连接成功'}
+                if not _thick_ok:
+                    _lib_dir = _find_oracle_client_lib_dir()
+                    if _lib_dir:
+                        try:
+                            oracledb.init_oracle_client(lib_dir=_lib_dir)
+                            _thick_ok = True
+                        except Exception:
+                            pass
+                if not _thick_ok:
+                    try:
+                        import json
+                        with open(os.path.join(BASE_DIR, 'dbc_config.json')) as f:
+                            _cfg = json.load(f)
+                        _lib_dir = _cfg.get('oracle_client_lib_dir', '')
+                        if _lib_dir and os.path.isdir(_lib_dir):
+                            oracledb.init_oracle_client(lib_dir=_lib_dir)
+                            _thick_ok = True
+                    except Exception:
+                        pass
+                if not _thick_ok:
+                    return {'ok': False, 'error': 'Oracle 11g 及以下版本需要 Oracle Instant Client。'
+                                                '请通过左侧导航"Oracle Client"设置页，点击"一键下载并安装"按钮自动下载安装。'}
+                try:
+                    _try_connect()
+                    return {'ok': True, 'message': '连接成功'}
+                except Exception as e2:
+                    return {'ok': False, 'error': f'Oracle 连接失败（thick mode）: {e2}'}
+            elif 'timed out' in err_msg.lower() or 'timeout' in err_msg.lower():
+                if ssh_host:
+                    return {'ok': False, 'error': '连接超时，SSH 隧道已建立但无法访问 Oracle，'
+                                                '请检查数据库监听地址、Service Name/SID 及防火墙'}
+                return {'ok': False, 'error': '连接超时，Oracle 可能无法直连，请在数据源中配置 SSH'}
+            else:
+                return {'ok': False, 'error': str(e)}
+    finally:
+        if _tunnel:
+            _tunnel.close()
 
 
 def _ct_oracle(data, flavor):
-    if flavor == 'regular':
+    """Oracle 连接测试：regular  flavor 默认直连；若提供了 ssh_host 则复用 pro 分支的 SSH 隧道逻辑。"""
+    if flavor == 'regular' and not data.get('ssh_host'):
         ok, msg = test_oracle_connection(data['host'], data['port'], data['user'], data['password'],
                                          data.get('service_name', 'ORCL'), bool(data.get('sysdba')),
                                          data.get('jdbc_url') or None)
@@ -2383,7 +2412,21 @@ def _ct_oracle(data, flavor):
             if m:
                 result['oracle_major_version'] = int(m.group(1))
         return result
-    return _ct_oracle_pro(data)
+
+    # 有 SSH 配置时（无论 regular/pro）统一走支持隧道的完整逻辑
+    pro_result = _ct_oracle_pro(data)
+    if flavor == 'regular':
+        result = {'ok': pro_result.get('ok', False)}
+        if result['ok']:
+            result['msg'] = pro_result.get('message') or '连接成功'
+            import re as _re
+            m = _re.search(r'(\d{2})\.', result['msg'])
+            if m:
+                result['oracle_major_version'] = int(m.group(1))
+        else:
+            result['msg'] = pro_result.get('error') or pro_result.get('message') or '连接失败'
+        return result
+    return pro_result
 
 
 def _ct_dm(data, flavor):
