@@ -104,6 +104,7 @@ CREATE TABLE IF NOT EXISTS sql_audit_rollbacks (
     rollback_sql TEXT,
     backup_ref   TEXT,
     auto_rollback INTEGER NOT NULL DEFAULT 0,
+    note         TEXT,
     created_at   TEXT    NOT NULL,
     FOREIGN KEY (task_id) REFERENCES sql_audit_tasks(id) ON DELETE CASCADE
 );
@@ -143,6 +144,11 @@ def init_db() -> None:
     conn.executescript(SCHEMA)
     # MVP2 幂等补齐：老库可能缺 plan_json 列，这里按需 ALTER（PRAGMA 探测避免重复加列）。
     _ensure_column(conn, "sql_audit_items", "plan_json", "TEXT")
+    # MVP3 幂等补齐：任务表补审批/执行留痕列（设计文档 §5.1，老库升级用）。
+    _ensure_column(conn, "sql_audit_tasks", "approved_by", "TEXT")
+    _ensure_column(conn, "sql_audit_tasks", "approved_at", "TEXT")
+    _ensure_column(conn, "sql_audit_tasks", "executed_at", "TEXT")
+    _ensure_column(conn, "sql_audit_rollbacks", "note", "TEXT")
     cur = conn.cursor()
     cur.execute("SELECT COUNT(*) FROM sql_audit_rules")
     if cur.fetchone()[0] == 0:
@@ -215,3 +221,79 @@ def list_rules() -> list:
     for r in rows:
         r["logic"] = json.loads(r["logic"]) if r["logic"] else {}
     return rows
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MVP3：执行记录 / 回滚备援 写入与查询（表结构已在 SCHEMA 中建好，此处补读写）
+# ─────────────────────────────────────────────────────────────────────────────
+
+def insert_execution(task_id: int, item_id, mode: str, executed_sql, affected_rows,
+                      status: str, started_at: str, finished_at: str, error=None) -> int:
+    """写入一条执行记录，返回新行 id。"""
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO sql_audit_executions "
+        "(task_id, item_id, mode, executed_sql, affected_rows, started_at, finished_at, status, error) "
+        "VALUES (?,?,?,?,?,?,?,?,?)",
+        (task_id, item_id, mode, executed_sql, affected_rows, started_at, finished_at, status, error),
+    )
+    rid = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return rid
+
+
+def insert_rollback(task_id: int, item_id, rollback_sql, backup_ref, auto_rollback: bool,
+                    created_at: str, note: str = None) -> int:
+    """写入一条回滚备援记录，返回新行 id。"""
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO sql_audit_rollbacks "
+        "(task_id, item_id, rollback_sql, backup_ref, auto_rollback, note, created_at) "
+        "VALUES (?,?,?,?,?,?,?)",
+        (task_id, item_id, rollback_sql, backup_ref, 1 if auto_rollback else 0,
+         note, created_at),
+    )
+    rid = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return rid
+
+
+def get_executions(task_id: int) -> list:
+    """返回某任务的全部执行记录（按 id 升序）。"""
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM sql_audit_executions WHERE task_id=? ORDER BY id", (task_id,))
+    rows = [dict(r) for r in cur.fetchall()]
+    conn.close()
+    return rows
+
+
+def get_rollbacks(task_id: int) -> list:
+    """返回某任务的全部回滚备援记录（按 id 升序）。"""
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM sql_audit_rollbacks WHERE task_id=? ORDER BY id", (task_id,))
+    rows = [dict(r) for r in cur.fetchall()]
+    conn.close()
+    return rows
+
+
+def update_task_status(task_id: int, status: str, **fields) -> None:
+    """更新任务状态及可选留痕字段（approved_by/approved_at/executed_at/remark）。"""
+    allowed = {"approved_by", "approved_at", "executed_at", "remark"}
+    sets = ["status=?", "updated_at=?"]
+    params = [status, _now()]
+    for k, v in fields.items():
+        if k in allowed:
+            sets.append(f"{k}=?")
+            params.append(v)
+    params.append(task_id)
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(f"UPDATE sql_audit_tasks SET {', '.join(sets)} WHERE id=?", params)
+    conn.commit()
+    conn.close()

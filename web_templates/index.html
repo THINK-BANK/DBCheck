@@ -6185,8 +6185,8 @@ function formatBytes(bytes) {
       <div class="page" id="page-sql-audit">
         <div class="card" style="margin-bottom:16px">
           <div class="card-title"><span>🛡️</span> <span>SQL 审核</span>
-            <span class="badge" style="margin-left:8px;font-size:11px">MVP2 · 多库方言 + 执行计划分析</span>
-            <span style="margin-left:8px;background:#f59e0b;color:#1f2937;font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px">🚧 加紧开发中</span>
+            <span class="badge" style="margin-left:8px;font-size:11px">MVP3 · 受控执行 + 回滚生成</span>
+            <span style="margin-left:8px;background:#22c55e;color:#1f2937;font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px">✅ 执行器已可用</span>
           </div>
           <div class="form-grid">
             <div class="field">
@@ -6221,8 +6221,12 @@ function formatBytes(bytes) {
               <input type="checkbox" id="sa-plan-enabled" style="width:15px;height:15px" />
               执行计划分析（连接目标实例执行 EXPLAIN，只读不执行）
             </label>
+            <label style="font-size:12px;color:var(--text-muted);display:inline-flex;align-items:center;gap:6px;cursor:pointer">
+              <input type="checkbox" id="sa-exec-enabled" style="width:15px;height:15px" />
+              允许真实执行（开启后可在任务详情中真实执行，需谨慎）
+            </label>
             <button id="sa-submit-btn" class="btn btn-primary" style="padding:9px 24px" onclick="submitSqlAudit()">开始审核</button>
-            <span style="font-size:12px;color:var(--text-muted)">MVP2 仅做只读分析：规则评分 + 可选执行计划（EXPLAIN 只读不执行）</span>
+            <span style="font-size:12px;color:var(--text-muted)">MVP3 支持：只读分析 + 受控执行 + 回滚生成</span>
           </div>
         </div>
 
@@ -10831,7 +10835,7 @@ async function submitSqlAudit() {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({instance_id: instId, db_type: dbType, env: env, sql_text: sql,
         plan_enabled: document.getElementById('sa-plan-enabled') ? document.getElementById('sa-plan-enabled').checked : false,
-        exec_enabled: false})
+        exec_enabled: document.getElementById('sa-exec-enabled') ? (document.getElementById('sa-exec-enabled').checked && !!instId) : false})
     });
     const data = await res.json();
     if (!data.ok) { alert('审核失败: ' + (data.error||'未知错误')); return; }
@@ -10937,6 +10941,93 @@ async function showSqlAuditDetail(taskId) {
   } catch(e) {
     alert('加载详情失败: ' + e.message);
   }
+}
+
+function saExecHistoryHtml(t) {
+  const execs = t.executions || [];
+  const rbs = t.rollbacks || [];
+  if (!execs.length && !rbs.length) return '';
+  let h = '<div style="margin-top:12px"><div style="font-size:13px;font-weight:600;margin-bottom:6px">⚙️ 执行与回滚记录</div>';
+  execs.forEach(e => {
+    const ok = e.status === 'success';
+    const c = ok ? '#22c55e' : '#ef4444';
+    h += `<div style="border:1px solid var(--border);border-radius:6px;padding:8px;margin-bottom:6px;font-size:12px;background:var(--surface2)">
+      <span class="tag">${escHtml(e.mode)}</span>
+      <span class="tag" style="color:${c}">${escHtml(e.status)}</span>
+      ${e.affected_rows != null ? `影响行数: <b>${e.affected_rows}</b>` : ''}
+      ${e.error ? `<div style="color:#ef4444;margin-top:4px">${escHtml(e.error)}</div>` : ''}
+      ${e.executed_sql ? `<pre style="white-space:pre-wrap;word-break:break-all;margin:6px 0 0">${escHtml(e.executed_sql)}</pre>` : ''}
+    </div>`;
+  });
+  rbs.forEach(r => {
+    const ar = r.auto_rollback ? '<span style="color:#22c55e">可自动回滚</span>' : '<span style="color:#f59e0b">仅建议（不可自动回滚）</span>';
+    h += `<div style="border:1px dashed var(--border);border-radius:6px;padding:8px;margin-bottom:6px;font-size:12px">
+      ${ar}
+      ${r.backup_ref ? ` · 备份表: <b>${escHtml(r.backup_ref)}</b>` : ''}
+      ${r.rollback_sql ? `<pre style="white-space:pre-wrap;word-break:break-all;margin:6px 0 0;background:var(--surface2);padding:6px;border-radius:6px">${escHtml(r.rollback_sql)}</pre>` : ''}
+      ${r.note ? `<div style="color:var(--text-muted);margin-top:4px">${escHtml(r.note)}</div>` : ''}
+    </div>`;
+  });
+  h += '</div>';
+  return h;
+}
+
+async function dryRunSqlAudit(taskId) {
+  const box = document.getElementById('sa-exec-result-' + taskId);
+  if (box) box.innerHTML = '<div style="font-size:12px;color:var(--text-muted)">预演中...</div>';
+  try {
+    const res = await fetch('/api/sql-audit/tasks/' + taskId + '/execute', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({mode: 'dry_run'})
+    });
+    const data = await res.json();
+    if (!data.ok) { if (box) box.innerHTML = `<div class="status-banner err">预演失败: ${escHtml(data.error || '')}</div>`; return; }
+    renderExecResult(taskId, data);
+  } catch (e) { if (box) box.innerHTML = `<div class="status-banner err">预演失败: ${escHtml(e.message)}</div>`; }
+}
+
+async function realExecSqlAudit(taskId) {
+  const ok = await showConfirmDialog('确认真实执行', '真实执行将修改目标数据库！系统会执行前快照并对 UPDATE/DELETE 生成回滚 SQL。\n仍要执行吗？');
+  if (!ok) return;
+  const maxRows = prompt('影响行数上限（超过将自动回滚，默认 100000）：', '100000');
+  if (maxRows === null) return;
+  const box = document.getElementById('sa-exec-result-' + taskId);
+  if (box) box.innerHTML = '<div style="font-size:12px;color:#f59e0b">真实执行中...</div>';
+  try {
+    const res = await fetch('/api/sql-audit/tasks/' + taskId + '/execute', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({mode: 'real', max_affected_rows: parseInt(maxRows, 10) || 100000})
+    });
+    const data = await res.json();
+    if (!data.ok) { if (box) box.innerHTML = `<div class="status-banner err">执行失败: ${escHtml(data.error || '')}</div>`; return; }
+    renderExecResult(taskId, data);
+    showSqlAuditDetail(taskId);
+  } catch (e) { if (box) box.innerHTML = `<div class="status-banner err">执行失败: ${escHtml(e.message)}</div>`; }
+}
+
+function renderExecResult(taskId, data) {
+  const box = document.getElementById('sa-exec-result-' + taskId);
+  if (!box) return;
+  let h = `<div style="font-size:13px;font-weight:600;margin-bottom:6px">执行结果（${escHtml(data.mode)}）</div>`;
+  (data.executions || []).forEach(e => {
+    const ok = e.status === 'success';
+    const c = ok ? '#22c55e' : '#ef4444';
+    h += `<div style="border:1px solid var(--border);border-radius:6px;padding:8px;margin-bottom:6px;font-size:12px;background:var(--surface2)">
+      <span class="tag">#${e.seq}</span><span class="tag">${escHtml(e.op_type || '')}</span>
+      <span class="tag" style="color:${c}">${escHtml(e.status)}</span>
+      ${e.affected_rows != null ? `影响行数: <b>${e.affected_rows}</b>` : ''}
+      ${e.error ? `<div style="color:#ef4444;margin-top:4px">${escHtml(e.error)}</div>` : ''}
+    </div>`;
+  });
+  (data.rollbacks || []).forEach(r => {
+    const ar = r.auto_rollback ? '<span style="color:#22c55e">可自动回滚</span>' : '<span style="color:#f59e0b">仅建议</span>';
+    h += `<div style="border:1px dashed var(--border);border-radius:6px;padding:8px;margin-bottom:6px;font-size:12px">
+      ${ar}${r.backup_ref ? ` · 备份表: <b>${escHtml(r.backup_ref)}</b>` : ''}
+      ${r.rollback_sql ? `<pre style="white-space:pre-wrap;word-break:break-all;margin:6px 0 0;background:var(--surface2);padding:6px;border-radius:6px">${escHtml(r.rollback_sql)}</pre>` : ''}
+      ${r.note ? `<div style="color:var(--text-muted);margin-top:4px">${escHtml(r.note)}</div>` : ''}
+    </div>`;
+  });
+  box.innerHTML = h;
 }
 
 function filterReports(type) {

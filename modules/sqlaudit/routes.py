@@ -75,6 +75,28 @@ def delete_task(task_id):
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+@bp.route("/tasks/<int:task_id>/execute", methods=["POST"])
+def execute_task_route():
+    """受控执行 SQL 审核任务（MVP3 执行器 + 回滚）。
+
+    请求体: {mode: 'dry_run'|'real', max_affected_rows?, timeout?, operator?}
+    dry_run 默认只读重跑执行计划；real 需任务已开启 exec_enabled 且连接目标实例。
+    """
+    try:
+        data = request.get_json(force=True, silent=True) or {}
+        mode = (data.get("mode") or "dry_run").lower()
+        operator = data.get("operator") or request.headers.get("X-User") or "anonymous"
+        max_affected_rows = data.get("max_affected_rows")
+        timeout = data.get("timeout")
+        result = service.execute_task(
+            task_id, mode=mode, operator=operator,
+            max_affected_rows=max_affected_rows, timeout=timeout,
+        )
+        return jsonify(result)
+    except Exception as e:  # noqa: BLE001
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @bp.route("/rules", methods=["GET"])
 def rules():
     try:

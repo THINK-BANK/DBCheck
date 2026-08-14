@@ -243,8 +243,46 @@ def get_task(task_id: int) -> dict:
             it["plan_json"] = None
         items.append(it)
     task["items"] = items
+    task["executions"] = models.get_executions(task_id)
+    task["rollbacks"] = models.get_rollbacks(task_id)
     conn.close()
     return task
+
+
+def execute_task(task_id: int, mode: str = "dry_run", operator: str = "anonymous",
+                  max_affected_rows=None, timeout=None) -> dict:
+    """受控执行 SQL 审核任务（MVP3 执行器 + 回滚）。
+
+    mode: 'dry_run'（默认，只读重跑执行计划，不改数据）
+          'real'   （真实执行，需任务 exec_enabled=1 且连接目标实例）
+    返回 {ok, mode, task, executions, rollbacks, summary}
+    """
+    models.init_db()
+    task = get_task(task_id)
+    if not task:
+        raise ValueError("任务不存在")
+    mode = (mode or "dry_run").lower()
+    if mode not in ("dry_run", "real"):
+        raise ValueError("mode 必须为 dry_run 或 real")
+    from . import executor
+    max_affected_rows = max_affected_rows or executor.MAX_AFFECTED_ROWS_DEFAULT
+    timeout = timeout or executor.EXEC_TIMEOUT_DEFAULT
+    instance = None
+    if task.get("instance_id"):
+        from modules.pro.instance_manager import get_instance_manager
+        instance = get_instance_manager().get_instance_decrypted(task["instance_id"])
+        if not instance:
+            raise ValueError("目标实例不存在或无权访问")
+    if mode == "dry_run":
+        summary = executor.dry_run(task, instance)
+    else:
+        summary = executor.real_execute(task, instance, max_affected_rows, timeout)
+    # 重新读取任务（状态/留痕可能已更新）并附带执行/回滚记录
+    task = get_task(task_id)
+    executions = models.get_executions(task_id)
+    rollbacks = models.get_rollbacks(task_id)
+    return {"ok": True, "mode": mode, "task": task,
+            "executions": executions, "rollbacks": rollbacks, "summary": summary}
 
 
 def list_tasks(submitter: str = None, status: str = None, limit: int = 100) -> list:
