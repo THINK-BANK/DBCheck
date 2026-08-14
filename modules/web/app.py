@@ -1901,11 +1901,18 @@ def test_oracle_connection(host, port, user, password, service_name='ORCL', sysd
             kw = dict(user=_user, password=password, dsn=_jdbc)
         else:
             kw = dict(user=_user, password=password, host=host, port=int(port),
-                      service_name=service_name, connection_timeout=15)
+                      service_name=service_name, tcp_connect_timeout=15)
         if _mode is not None:
             kw['mode'] = _mode
         try:
-            conn = oracledb.connect(**kw)
+            try:
+                conn = oracledb.connect(**kw)
+            except TypeError as te:
+                if 'tcp_connect_timeout' in str(te):
+                    kw.pop('tcp_connect_timeout', None)
+                    conn = oracledb.connect(**kw)
+                else:
+                    raise
         except Exception as e:
             err_str = str(e)
             if 'DPY-3010' in err_str or 'DPY-3015' in err_str:
@@ -2292,15 +2299,50 @@ def _ct_kingbase(data, flavor):
     return _ct_pg(data, flavor, db_default='kingbase')
 
 
+def _normalize_oracle_dsn(dsn, host, port):
+    """规范化 Oracle TNS 描述符中的占位符。
+
+    用户常把 DSN 写成 ``(DESCRIPTION=(HOST=host)(PORT=1521)(CONNECT_DATA=...))``，
+    其中 ``HOST=host`` 是占位符，需要替换为表单中填写的真实地址。若 DSN 里
+    已经写了明确的非占位符地址，则保持不变。
+    """
+    import re as _re
+
+    if not (dsn and str(dsn).strip().upper().startswith('(DESCRIPTION')):
+        return dsn
+
+    def _replace_host(m):
+        val = m.group(1).strip().lower()
+        if val in ('host', 'localhost', '127.0.0.1', ''):
+            return f'(HOST={host})'
+        return m.group(0)
+
+    def _replace_port(m):
+        val = m.group(1).strip()
+        if val.lower() == 'port':
+            return f'(PORT={port})'
+        try:
+            int(val)
+        except (TypeError, ValueError):
+            return f'(PORT={port})'
+        return m.group(0)
+
+    dsn = _re.sub(r'\(HOST\s*=\s*([^)]*)\)', _replace_host, dsn, flags=_re.IGNORECASE)
+    dsn = _re.sub(r'\(PORT\s*=\s*([^)]*)\)', _replace_port, dsn, flags=_re.IGNORECASE)
+    return dsn
+
+
 def _ct_oracle_pro(data):
     """复刻原 /api/pro/datasources/test-connection 中 oracle 分支（含 SSH / thick mode）。
 
     修复点：
     1. 用户填写 DSN 描述符且启用 SSH 时，必须把 DSN 里的 HOST/PORT 替换为 SSH 隧道
        本地端口，否则 oracledb 仍按原 DSN 直连，导致"配了 SSH 仍超时"。
-    2. 隧道本地监听 127.0.0.1，DSN 用 127.0.0.1 避免 localhost 被解析到 IPv6。
-    3. 错误提示区分"未配 SSH"与"已配 SSH 但隧道后仍连不上"。
-    4. thick mode 失败等异常路径也确保关闭 SSH 隧道。
+    2. 未启用 SSH 时，DSN 里的占位符（如 HOST=host）也要替换为表单填写的真实地址，
+       否则会出现"填了主机地址却仍连 host"的误导性超时。
+    3. 隧道本地监听 127.0.0.1，DSN 用 127.0.0.1 避免 localhost 被解析到 IPv6。
+    4. 错误提示区分"未配 SSH"、"已配 SSH 但隧道后仍连不上"以及 DSN 占位符问题。
+    5. thick mode 失败等异常路径也确保关闭 SSH 隧道。
     """
     import oracledb
     import re as _re
@@ -2308,7 +2350,11 @@ def _ct_oracle_pro(data):
     _jdbc = (data.get('jdbc_url') or '').strip()
     _has_dsn = bool(_jdbc and _jdbc.lstrip().upper().startswith('(DESCRIPTION'))
     if _has_dsn:
-        dsn = _jdbc
+        # 先把 DSN 里的占位符（HOST=host / PORT=port）换成表单真实地址
+        dsn = _normalize_oracle_dsn(_jdbc, data['host'], int(data['port']))
+        # 防御性检查：若还有明显占位符未替换，立即给出明确错误，避免连到不存在的 host
+        if _re.search(r'\(HOST\s*=\s*host\s*\)', dsn, flags=_re.IGNORECASE):
+            return {'ok': False, 'error': f'DSN 中 HOST 占位符未解析（当前 DSN: {dsn}），请检查连接串或清空 DSN 使用上方主机地址'}
     else:
         dsn = f"{data['host']}:{data['port']}/{data.get('service_name', '')}" if data.get('service_name') \
             else f"{data['host']}:{data['port']}"
@@ -2340,12 +2386,20 @@ def _ct_oracle_pro(data):
                 return {'ok': False, 'error': f'SSH 隧道建立失败: {te}'}
 
         params = {"user": data['user'], "password": data['password'], "dsn": dsn,
-                  "connection_timeout": 15}
+                  "tcp_connect_timeout": 15}
         if data.get('sysdba'):
             params["mode"] = oracledb.SYSDBA
 
         def _try_connect():
-            conn = oracledb.connect(**params)
+            try:
+                conn = oracledb.connect(**params)
+            except TypeError as te:
+                # 极个别 oracledb 旧版本不认 tcp_connect_timeout，去掉后重试（子进程超时仍兜底）
+                if 'tcp_connect_timeout' in str(te):
+                    params.pop('tcp_connect_timeout', None)
+                    conn = oracledb.connect(**params)
+                else:
+                    raise
             conn.close()
 
         try:
@@ -2387,11 +2441,20 @@ def _ct_oracle_pro(data):
                     return {'ok': True, 'message': '连接成功'}
                 except Exception as e2:
                     return {'ok': False, 'error': f'Oracle 连接失败（thick mode）: {e2}'}
+            elif 'unexpected keyword argument' in err_msg.lower() or type(e).__name__ == 'TypeError':
+                # 驱动连接参数错误（如传入了 oracledb 不认识的 kwarg），不应误判为「连接超时」
+                return {'ok': False, 'error': f'Oracle 驱动连接参数错误: {type(e).__name__}: {err_msg[:300]}'}
             elif 'timed out' in err_msg.lower() or 'timeout' in err_msg.lower():
+                # 把实际用于连接的 DSN/地址 + oracledb 原始异常暴露出来，方便排查：
+                # 真 TCP 超时（DPY-6001/ORA-12170）vs 握手/权限问题被误判为超时（如 SYSDBA+服务名）
+                _safe_dsn = _re.sub(r'(PASSWORD\s*=\s*)[^)]+', r'\1***', str(dsn),
+                                    flags=_re.IGNORECASE) if isinstance(dsn, str) else str(dsn)
+                _detail = f'（原始异常: {type(e).__name__}: {err_msg[:400]}）'
                 if ssh_host:
-                    return {'ok': False, 'error': '连接超时，SSH 隧道已建立但无法访问 Oracle，'
-                                                '请检查数据库监听地址、Service Name/SID 及防火墙'}
-                return {'ok': False, 'error': '连接超时，Oracle 可能无法直连，请在数据源中配置 SSH'}
+                    return {'ok': False, 'error': f'连接超时，SSH 隧道已建立但无法访问 Oracle（实际 DSN: {_safe_dsn}）{_detail}，'
+                                                f'请检查数据库监听地址、Service Name/SID 及防火墙'}
+                return {'ok': False, 'error': f'连接超时，Oracle 可能无法直连（实际 DSN: {_safe_dsn}）{_detail}，'
+                                              f'请在数据源中配置 SSH，或确认上方主机地址/端口/服务名/SYSDBA 是否正确'}
             else:
                 return {'ok': False, 'error': str(e)}
     finally:
@@ -2400,33 +2463,24 @@ def _ct_oracle_pro(data):
 
 
 def _ct_oracle(data, flavor):
-    """Oracle 连接测试：regular  flavor 默认直连；若提供了 ssh_host 则复用 pro 分支的 SSH 隧道逻辑。"""
-    if flavor == 'regular' and not data.get('ssh_host'):
-        ok, msg = test_oracle_connection(data['host'], data['port'], data['user'], data['password'],
-                                         data.get('service_name', 'ORCL'), bool(data.get('sysdba')),
-                                         data.get('jdbc_url') or None)
-        result = {'ok': ok, 'msg': msg}
-        if ok:
-            import re as _re
-            m = _re.search(r'(\d{2})\.', msg)
-            if m:
-                result['oracle_major_version'] = int(m.group(1))
-        return result
+    """Oracle 连接测试 —— 走子进程隔离。
 
-    # 有 SSH 配置时（无论 regular/pro）统一走支持隧道的完整逻辑
-    pro_result = _ct_oracle_pro(data)
-    if flavor == 'regular':
-        result = {'ok': pro_result.get('ok', False)}
-        if result['ok']:
-            result['msg'] = pro_result.get('message') or '连接成功'
-            import re as _re
-            m = _re.search(r'(\d{2})\.', result['msg'])
-            if m:
-                result['oracle_major_version'] = int(m.group(1))
-        else:
-            result['msg'] = pro_result.get('error') or pro_result.get('message') or '连接失败'
-        return result
-    return pro_result
+    oracledb thin 模式与 gevent monkey-patch 不兼容（连接会挂死），且启用 Instant
+    Client 时的 thick/OCI 原生库同样会在被 patch 的主进程里钉死 hub。无论 regular
+    还是 pro、是否配置 SSH，统一在干净子进程内执行：子进程复用 ``_ct_oracle_pro``
+    处理 SSH 隧道与 thick 回退，杜绝在主进程冻结整个界面（同 hgdb/db2 的修复思路）。
+    """
+    _kwargs = dict(
+        service_name=data.get('service_name', '') or '',
+        sysdba=bool(data.get('sysdba', False)),
+        jdbc_url=data.get('jdbc_url') or None,
+        ssh_host=data.get('ssh_host', '') or '',
+        ssh_port=int(data.get('ssh_port', 22) or 22),
+        ssh_user=data.get('ssh_user', '') or 'root',
+        ssh_password=data.get('ssh_password', '') or '',
+    )
+    ok, msg = run_jdbc_test_subprocess('oracle', data, _kwargs)
+    return _jdbc_conn_result(ok, msg, flavor, 'Oracle')
 
 
 def _ct_dm(data, flavor):
@@ -2597,7 +2651,7 @@ def _ct_mongodb(data, flavor):
 #   - 主进程只负责 spawn 子进程（同一个 exe 加 --jdbc-test-cli）+ 协作式轮询等待；
 #   - 等待期间用 gevent.sleep 让出执行权 → 界面全程可用；
 #   - 超时直接杀子进程树，JVM 随之消失，主进程不受任何残留影响。
-JDBC_SUBPROCESS_DB_TYPES = ('hgdb', 'db2', 'sqlserver_jdbc')
+JDBC_SUBPROCESS_DB_TYPES = ('hgdb', 'db2', 'sqlserver_jdbc', 'oracle_jdbc', 'oracle')
 JDBC_TEST_TIMEOUT = 30  # 秒；需覆盖 JVM 冷启动(3~10s) + JDBC 登录超时(10~15s)
 
 # 需要整条巡检任务隔离到子进程的数据库类型（均依赖进程内 JVM/JPype）
@@ -2952,6 +3006,24 @@ def _ct_hgdb(data, flavor):
     return _jdbc_conn_result(ok, msg, flavor, 'hgdb')
 
 
+def _ct_oracle_jdbc(data, flavor):
+    """Oracle (JDBC) 连接测试 —— 走子进程隔离。
+
+    与 hgdb/db2/sqlserver_jdbc 同源：oracle_jdbc 依赖 JPype 在进程内启动 JVM，
+    若在主进程（已被 gevent monkey-patch）里发起连接，hub 会被原生线程钉死、
+    HTTP 响应写不回，表现为「点测试连接后整个界面卡死」。此前 oracle_jdbc 既
+    未加入 JDBC_SUBPROCESS_DB_TYPES、也未注册连接测试器，落到插件回退在主进程
+    起 JVM，正是本 bug 的直接原因。隔离到干净子进程后即可正常返回。
+    """
+    _kwargs = dict(
+        service_name=data.get('service_name', '') or 'ORCL',
+        sysdba=bool(data.get('sysdba', False)),
+        jdbc_url=data.get('jdbc_url') or None,
+    )
+    ok, msg = run_jdbc_test_subprocess('oracle_jdbc', data, _kwargs)
+    return _jdbc_conn_result(ok, msg, flavor, 'Oracle (JDBC)')
+
+
 def _ct_db2(data, flavor):
     _kwargs = dict(database=data.get('database', ''),
                    jdbc_url=data.get('jdbc_url') or None,
@@ -3063,6 +3135,8 @@ register_connection_tester('db2', _ct_db2)
 register_connection_tester('sqlserver_jdbc', _ct_sqlserver_jdbc)
 # hgdb 此前未注册 → 落到 _plugin_conn_fallback 在主进程内起 JVM 导致界面卡死
 register_connection_tester('hgdb', _ct_hgdb)
+# oracle_jdbc 同理：必须隔离到子进程，否则 JPype/JVM 在 monkey-patch 进程内冻结 hub
+register_connection_tester('oracle_jdbc', _ct_oracle_jdbc)
 
 
 def test_ssh_connection(host, port=22, username='root', password=None, key_file=None):

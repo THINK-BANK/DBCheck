@@ -181,6 +181,29 @@ def run_test(payload):
     if not db_type:
         return False, '缺少 db_type'
 
+    # Oracle（原生 oracledb）连接测试：
+    # oracledb thin 模式与 gevent monkey-patch 不兼容（连接会挂死），且启用 Instant
+    # Client 时的 thick/OCI 原生库同样会在被 patch 的主进程里钉死 hub。因此必须像
+    # JVM 类 JDBC 数据源一样，在未被 patch 的干净子进程内执行。逻辑直接复用
+    # app._ct_oracle_pro（含 SSH 隧道 + thick 回退），避免重复实现。
+    if db_type == 'oracle':
+        try:
+            from modules.web.app import _ct_oracle_pro
+        except Exception as e:  # noqa: BLE001 - 子进程内导入失败要转成可读错误
+            return False, f'Oracle 测试器不可用: {e}'
+        _data = {
+            'host': payload.get('host'),
+            'port': payload.get('port'),
+            'user': payload.get('user'),
+            'password': payload.get('password'),
+        }
+        _data.update(payload.get('kwargs') or {})
+        try:
+            r = _ct_oracle_pro(_data)
+        except Exception as e:  # noqa: BLE001
+            return False, f'Oracle 连接测试异常: {e}'
+        return bool(r.get('ok')), str(r.get('message') or r.get('error') or '')
+
     # 自定义 jdbc_url 可能指向别的地址（含多主机/故障转移），此时不做预检
     _kw = payload.get('kwargs') or {}
     if not (isinstance(_kw, dict) and _kw.get('jdbc_url')):
