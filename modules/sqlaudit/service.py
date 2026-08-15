@@ -74,7 +74,12 @@ def submit_audit(
         it["risk_level"] = level
         it["rule_hits"] = hits
 
-    # 4) 落库
+    # 4) 落库（状态机：阻断级直接 blocked；高风险进入审批流 pending_approval；低/中风险可直接受控执行）
+    task_status = "analyzed"
+    if task_level == "block":
+        task_status = "blocked"
+    elif task_level == "high":
+        task_status = "pending_approval"
     conn = models.get_conn()
     cur = conn.cursor()
     now = models._now()
@@ -86,7 +91,7 @@ def submit_audit(
         "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (
             task_no, submitter, instance_id, env, db_type, sql_text, len(stmts),
-            "analyzed", task_level, task_score,
+            task_status, task_level, task_score,
             1 if plan_enabled else 0, 1 if exec_enabled else 0,
             now, now, remark,
         ),
@@ -243,10 +248,29 @@ def get_task(task_id: int) -> dict:
             it["plan_json"] = None
         items.append(it)
     task["items"] = items
-    task["executions"] = models.get_executions(task_id)
+    task["executions"] = _enrich_executions(task, models.get_executions(task_id))
     task["rollbacks"] = models.get_rollbacks(task_id)
+    task["approvals"] = models.get_approvals(task_id)
     conn.close()
     return task
+
+
+def _enrich_executions(task: dict, executions: list) -> list:
+    """执行记录表只存 item_id，不含 seq / op_type；按 item_id 关联 items 补回这两字段，
+    供前端渲染序号与操作类型（如 #1 UPDATE）。"""
+    by_id = {i["id"]: i for i in (task.get("items") or [])}
+    out = []
+    for ex in executions:
+        ex = dict(ex)
+        it = by_id.get(ex.get("item_id"))
+        if it:
+            ex["seq"] = it.get("seq")
+            ex["op_type"] = it.get("op_type")
+        else:
+            ex.setdefault("seq", ex.get("item_id"))
+            ex.setdefault("op_type", "")
+        out.append(ex)
+    return out
 
 
 def execute_task(task_id: int, mode: str = "dry_run", operator: str = "anonymous",
@@ -279,10 +303,39 @@ def execute_task(task_id: int, mode: str = "dry_run", operator: str = "anonymous
         summary = executor.real_execute(task, instance, max_affected_rows, timeout)
     # 重新读取任务（状态/留痕可能已更新）并附带执行/回滚记录
     task = get_task(task_id)
-    executions = models.get_executions(task_id)
+    executions = _enrich_executions(task, models.get_executions(task_id))
     rollbacks = models.get_rollbacks(task_id)
     return {"ok": True, "mode": mode, "task": task,
             "executions": executions, "rollbacks": rollbacks, "summary": summary}
+
+
+def approve_task(task_id: int, approver: str, action: str, comment: str = "") -> dict:
+    """审批 SQL 审核任务（MVP3 审批流）。
+
+    action: 'approve' | 'reject'。写 sql_audit_approvals，更新任务状态与审批留痕：
+      approve → status='approved'，置 approved_by / approved_at
+      reject  → status='rejected'
+    返回更新后的任务详情。
+    """
+    models.init_db()
+    action = (action or "").lower()
+    if action not in ("approve", "reject"):
+        raise ValueError("action 必须为 approve 或 reject")
+    task = get_task(task_id)
+    if not task:
+        raise ValueError("任务不存在")
+    if task.get("status") == "blocked":
+        raise ValueError("阻断级任务不可审批，已禁止执行")
+    if task.get("status") in ("approved", "rejected", "executed"):
+        raise ValueError(f"任务当前状态为 {task.get('status')}，无法重复审批")
+    models.insert_approval(task_id, approver, action, comment)
+    if action == "approve":
+        models.update_task_status(
+            task_id, "approved", approved_by=approver, approved_at=models._now(),
+        )
+    else:
+        models.update_task_status(task_id, "rejected")
+    return get_task(task_id)
 
 
 def list_tasks(submitter: str = None, status: str = None, limit: int = 100) -> list:

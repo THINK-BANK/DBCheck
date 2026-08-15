@@ -282,6 +282,35 @@ def get_rollbacks(task_id: int) -> list:
     return rows
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# MVP3 审批流：审批记录写入与查询（表结构已在 SCHEMA 中建好，此处补读写）
+# ─────────────────────────────────────────────────────────────────────────────
+
+def insert_approval(task_id: int, approver: str, action: str, comment: str = None) -> int:
+    """写入一条审批记录，返回新行 id。action: approve / reject。"""
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO sql_audit_approvals (task_id, approver, action, comment, created_at) "
+        "VALUES (?,?,?,?,?)",
+        (task_id, approver, action, comment, _now()),
+    )
+    rid = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return rid
+
+
+def get_approvals(task_id: int) -> list:
+    """返回某任务的全部审批记录（按 id 升序）。"""
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM sql_audit_approvals WHERE task_id=? ORDER BY id", (task_id,))
+    rows = [dict(r) for r in cur.fetchall()]
+    conn.close()
+    return rows
+
+
 def update_task_status(task_id: int, status: str, **fields) -> None:
     """更新任务状态及可选留痕字段（approved_by/approved_at/executed_at/remark）。"""
     allowed = {"approved_by", "approved_at", "executed_at", "remark"}

@@ -140,12 +140,23 @@ if ($LASTEXITCODE -eq 0) {
 # Delete tag if exists (for re-run, suppress error if not found)
 try   { git tag -d $VersionWithV 2>&1 | Out-Null } catch {}
 Write-Host "  (cleaned local tag if existed)" -ForegroundColor Gray
-try   { git push origin :refs/tags/$VersionWithV 2>&1 | Out-Null } catch {}
+# 删除远程旧 tag：必须走 Invoke-GitNet（代理失败自动回退直连 SSH）。
+# 此前这里用裸 git push 经挂掉的代理失败、且被 try/catch 静默吞掉，
+# 导致远程旧 tag 未删除 → 后续 tag 推送非快进被拒（exit 128）。
+$delTagCode = Invoke-GitNet -ArgumentList @('push','origin',":refs/tags/$VersionWithV")
+if ($delTagCode -ne 0) {
+    Write-Host "  WARN: 删除远程旧 tag 失败 (exit $delTagCode)，将尝试强制推送 tag" -ForegroundColor Yellow
+}
 Write-Host "  (cleaned remote tag if existed)" -ForegroundColor Gray
 
 # Create and push tag (triggers GitHub Actions)
 git tag $VersionWithV
 $tagPushCode = Invoke-GitNet -ArgumentList @('push','origin',$VersionWithV)
+if ($tagPushCode -ne 0) {
+    # 兜底：远程可能仍存在同名旧 tag（删除未生效等），强制推送覆盖。
+    Write-Host "  WARN: 普通 tag 推送失败 (exit $tagPushCode)，回退强制推送..." -ForegroundColor Yellow
+    $tagPushCode = Invoke-GitNet -ArgumentList @('push','--force','origin',$VersionWithV)
+}
 if ($tagPushCode -eq 0) {
     Write-Host ""
     Write-Host "============================================" -ForegroundColor Green

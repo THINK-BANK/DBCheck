@@ -5476,6 +5476,7 @@ function formatBytes(bytes) {
         {% if user_role == 'admin' %}
         <div class="dropdown-item" onclick="showUserManagement();toggleUserMenu()" style="padding:6px 14px;font-size:12px;cursor:pointer;" data-i18n="webui.user_menu_admin">⚙️ 系统管理</div>
         {% endif %}
+        <script>window.__userRole = "{{ user_role }}";</script>
         <div class="dropdown-item" onclick="doLogout()" style="padding:6px 14px;font-size:12px;cursor:pointer;color:var(--danger);" data-i18n="webui.user_menu_logout">退出登录</div>
       </div>
     </div>
@@ -10924,6 +10925,41 @@ async function showSqlAuditDetail(taskId) {
     }).join('');
     const panel = document.getElementById('sa-detail');
     panel.style.display = 'block';
+    const canApprove = (window.__userRole === 'admin' || window.__userRole === 'operator');
+    const isHigh = (t.risk_level === 'high' || t.risk_level === 'block');
+    const blocked = (t.status === 'blocked');
+    let actionHtml = '';
+    if (blocked) {
+      actionHtml += '<div class="status-banner err" style="margin:12px 0">🚫 该任务含阻断级风险，已禁止执行。如需变更请修改 SQL 后重新提交。</div>';
+    } else {
+      const realDisabled = (isHigh && !t.approved_by) ? 'disabled style="opacity:.5;cursor:not-allowed"' : '';
+      const realTip = (isHigh && !t.approved_by) ? '需先审批通过' : '真实执行将修改目标库';
+      actionHtml += `<div style="display:flex;gap:10px;flex-wrap:wrap;margin:12px 0">
+        <button class="btn btn-ghost" style="padding:7px 16px" onclick="dryRunSqlAudit(${t.id})">🔍 预演(dry-run)</button>
+        <button class="btn btn-primary" ${realDisabled} style="padding:7px 16px" title="${realTip}" onclick="realExecSqlAudit(${t.id})">⚡ 真实执行</button>
+      </div>`;
+      if (isHigh && !t.approved_by) {
+        if (canApprove) {
+          actionHtml += `<div style="display:flex;gap:10px;align-items:center;margin:8px 0;padding:8px 12px;background:var(--surface2);border-radius:8px;border:1px solid var(--border)">
+            <b style="font-size:13px;color:#f97316">⚠ 高风险任务需审批</b>
+            <button class="btn btn-primary" style="padding:5px 14px;font-size:12px" onclick="approveSqlAudit(${t.id},'approve')">✅ 通过</button>
+            <button class="btn btn-danger" style="padding:5px 14px;font-size:12px" onclick="approveSqlAudit(${t.id},'reject')">⛔ 驳回</button>
+          </div>`;
+        } else {
+          actionHtml += '<div style="font-size:12px;color:var(--text-muted);margin:8px 0">该高风险任务待 admin / operator 审批通过后方可执行。</div>';
+        }
+      } else if (isHigh && t.approved_by) {
+        actionHtml += `<div style="font-size:12px;color:#22c55e;margin:8px 0">✅ 已审批通过（${escHtml(t.approved_by||'')}），可执行。</div>`;
+      }
+    }
+    const approvalsHtml = (t.approvals && t.approvals.length) ? (
+      '<div style="margin-top:12px"><div style="font-size:13px;font-weight:600;margin-bottom:6px">📝 审批记录</div>' +
+      t.approvals.map(a => `<div style="font-size:12px;border:1px solid var(--border);border-radius:6px;padding:6px 10px;margin-bottom:6px;background:var(--surface2)">
+        <span class="tag">${escHtml(a.action)}</span> <b>${escHtml(a.approver||'')}</b>
+        <span style="color:var(--text-muted)">${escHtml(a.created_at||'')}</span>
+        ${a.comment ? `<div style="margin-top:3px">备注: ${escHtml(a.comment)}</div>` : ''}
+      </div>`).join('') + '</div>'
+    ) : '';
     panel.innerHTML = `
       <div class="card-title"><span>🛡️</span> 审核报告 ${escHtml(t.task_no)}
         <button class="btn btn-ghost" style="margin-left:auto;font-size:12px;padding:4px 10px" onclick="document.getElementById('sa-detail').style.display='none'">收起</button>
@@ -10936,8 +10972,13 @@ async function showSqlAuditDetail(taskId) {
         <span>语句数: ${t.sql_count}</span>
         <span>执行计划分析: <b style="color:${t.plan_enabled ? '#22c55e' : 'var(--text-muted)'}">${t.plan_enabled ? '✅ 已开启' : '关闭'}</b></span>
         <span>任务风险: <b style="color:${levelColor[t.risk_level]||'#888'}">${escHtml(t.risk_level)} (${t.risk_score})</b></span>
+        <span class="tag" style="font-size:11px">状态: ${escHtml(t.status||'')}</span>
       </div>
-      ${itemsHtml}`;
+      ${itemsHtml}
+      ${actionHtml}
+      <div id="sa-exec-result-${t.id}"></div>
+      ${approvalsHtml}
+      ${saExecHistoryHtml(t)}`;
   } catch(e) {
     alert('加载详情失败: ' + e.message);
   }
@@ -11003,6 +11044,21 @@ async function realExecSqlAudit(taskId) {
     renderExecResult(taskId, data);
     showSqlAuditDetail(taskId);
   } catch (e) { if (box) box.innerHTML = `<div class="status-banner err">执行失败: ${escHtml(e.message)}</div>`; }
+}
+
+async function approveSqlAudit(taskId, action) {
+  const comment = prompt(action === 'approve' ? '审批通过备注（可选）：' : '驳回原因：', '');
+  if (comment === null) return;
+  try {
+    const res = await fetch('/api/sql-audit/tasks/' + taskId + '/approve', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({action: action, comment: comment})
+    });
+    const data = await res.json();
+    if (!data.ok) { alert('审批失败: ' + (data.error || '')); return; }
+    (typeof toastInfo === 'function' ? toastInfo : alert)('审批已提交');
+    showSqlAuditDetail(taskId);
+  } catch (e) { alert('审批失败: ' + e.message); }
 }
 
 function renderExecResult(taskId, data) {

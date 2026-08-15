@@ -137,6 +137,12 @@ def real_execute(task: dict, instance: dict, max_affected_rows: int, timeout: in
         raise ValueError("真实执行必须指定目标实例")
     if not task.get("exec_enabled"):
         raise ValueError("该任务未开启真实执行（提交时未勾选允许执行），出于安全拒绝执行")
+    # MVP3 审批闸门：阻断级任务禁止执行；高风险任务须先审批通过（approved_by 非空）
+    risk = (task.get("risk_level") or "low").lower()
+    if risk == "block":
+        raise ValueError("任务含阻断级风险（如 DROP TABLE / TRUNCATE），出于安全禁止执行")
+    if risk == "high" and not task.get("approved_by"):
+        raise ValueError("高风险任务须先经审批通过（approved_by 为空），请走审批流程后再执行")
     items = task.get("items") or []
     conn = plan_analyzer.connect_instance(instance)
     started_all = _now_iso()

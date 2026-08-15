@@ -12,10 +12,39 @@
   GET    /rules           规则列表
   GET    /instances       可选目标实例列表（取自 InstanceManager）
 """
-from flask import request, jsonify
+from flask import request, jsonify, g, session
 
 from . import bp
 from . import service
+
+
+# 可审批 / 可执行角色（与 RBAC 种子角色 admin/viewer/operator 对齐；viewer 只读不可审批/执行）
+APPROVER_ROLES = {"admin", "operator"}
+
+
+def _current_actor():
+    """解析当前操作用户（与 user_management.auth_decorator 语义一致，惰性导入避免顶层依赖）。
+
+    优先 JWT Bearer，其次 Flask session；返回 (username, roles)。未登录返回 (None, [])。
+    """
+    token = request.headers.get("Authorization", "").replace("Bearer ", "")
+    if token:
+        try:
+            from modules.user_management.utils.jwt_util import decode_token
+            p = decode_token(token)
+            return p.get("username") or p.get("user_id"), list(p.get("roles", []))
+        except Exception:
+            pass
+    if session.get("user_id"):
+        try:
+            from modules.user_management.services.user_service import UserService
+            u = UserService().get_user(session["user_id"])
+            if u:
+                return u.get("username"), [r["role_code"] for r in u.get("roles", [])]
+        except Exception:
+            pass
+    # 未登录：回退到 X-User 头（免登录/单用户部署可用），无角色信息
+    return request.headers.get("X-User") or "anonymous", []
 
 
 @bp.route("/submit", methods=["POST"])
@@ -25,7 +54,8 @@ def submit():
         sql_text = (data.get("sql_text") or "").strip()
         if not sql_text:
             return jsonify({"ok": False, "error": "sql_text 不能为空"}), 400
-        submitter = data.get("submitter") or request.headers.get("X-User") or "anonymous"
+        username, _roles = _current_actor()
+        submitter = data.get("submitter") or username or request.headers.get("X-User") or "anonymous"
         instance_id = data.get("instance_id")
         db_type = (data.get("db_type") or "mysql").lower()
         env = data.get("env") or "prod"
@@ -76,16 +106,18 @@ def delete_task(task_id):
 
 
 @bp.route("/tasks/<int:task_id>/execute", methods=["POST"])
-def execute_task_route():
+def execute_task_route(task_id):
     """受控执行 SQL 审核任务（MVP3 执行器 + 回滚）。
 
-    请求体: {mode: 'dry_run'|'real', max_affected_rows?, timeout?, operator?}
-    dry_run 默认只读重跑执行计划；real 需任务已开启 exec_enabled 且连接目标实例。
+    请求体: {mode: 'dry_run'|'real', max_affected_rows?, timeout?}
+    dry_run 默认只读重跑执行计划；real 需任务已开启 exec_enabled、且高风险任务须先审批通过。
+    需登录（RBAC），执行人取当前登录用户；免登录部署回退到 X-User 头身份。
     """
     try:
+        username, _roles = _current_actor()
         data = request.get_json(force=True, silent=True) or {}
         mode = (data.get("mode") or "dry_run").lower()
-        operator = data.get("operator") or request.headers.get("X-User") or "anonymous"
+        operator = username
         max_affected_rows = data.get("max_affected_rows")
         timeout = data.get("timeout")
         result = service.execute_task(
@@ -93,6 +125,27 @@ def execute_task_route():
             max_affected_rows=max_affected_rows, timeout=timeout,
         )
         return jsonify(result)
+    except Exception as e:  # noqa: BLE001
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@bp.route("/tasks/<int:task_id>/approve", methods=["POST"])
+def approve_task_route(task_id):
+    """审批 SQL 审核任务（需 admin / operator 角色）。
+
+    请求体: {action: 'approve'|'reject', comment?}
+    """
+    try:
+        username, roles = _current_actor()
+        # 仅当已登录且角色不足时才拦截；免登录部署（无角色）放行，审批人记为当前身份。
+        # 核心安全闸（高风险真实执行须 approved_by）在 executor.real_execute 中独立 enforced。
+        if roles and not (APPROVER_ROLES & set(roles)):
+            return jsonify({"ok": False, "error": "权限不足：审批需 admin 或 operator 角色"}), 403
+        data = request.get_json(force=True, silent=True) or {}
+        action = data.get("action") or ""
+        comment = data.get("comment", "")
+        task = service.approve_task(task_id, username, action, comment)
+        return jsonify({"ok": True, "task": task})
     except Exception as e:  # noqa: BLE001
         return jsonify({"ok": False, "error": str(e)}), 500
 
