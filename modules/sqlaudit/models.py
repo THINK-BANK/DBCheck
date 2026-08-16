@@ -326,3 +326,82 @@ def update_task_status(task_id: int, status: str, **fields) -> None:
     cur.execute(f"UPDATE sql_audit_tasks SET {', '.join(sets)} WHERE id=?", params)
     conn.commit()
     conn.close()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MVP3.5：规则在线 CRUD（运维自调规则，无需改种子代码）
+# 业务标识用 rule_id（与种子规则一致），主键 id 自增；CRUD 均以 rule_id 定位。
+# ─────────────────────────────────────────────────────────────────────────────
+
+def get_rule(rule_id: str) -> dict:
+    """按 rule_id 查询单条规则（logic 解析为 dict），不存在返回 None。"""
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM sql_audit_rules WHERE rule_id=?", (rule_id,))
+    row = cur.fetchone()
+    conn.close()
+    if not row:
+        return None
+    r = dict(row)
+    r["logic"] = json.loads(r["logic"]) if r["logic"] else {}
+    return r
+
+
+def insert_rule(rule_id: str, name: str, db_type: str, category: str,
+                severity: str, logic: dict, enabled: bool = True,
+                description: str = "", suggestion: str = "") -> int:
+    """写入一条规则，返回新行 id。rule_id 调用方需保证唯一。"""
+    conn = get_conn()
+    cur = conn.cursor()
+    now = _now()
+    cur.execute(
+        "INSERT INTO sql_audit_rules "
+        "(rule_id, name, db_type, category, severity, logic, enabled, description, suggestion, created_at, updated_at) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        (rule_id, name, db_type, category, severity,
+         json.dumps(logic, ensure_ascii=False), 1 if enabled else 0,
+         description, suggestion, now, now),
+    )
+    rid = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return rid
+
+
+def update_rule(rule_id: str, **fields) -> int:
+    """按 rule_id 更新规则字段（白名单过滤）。返回被更新行数。"""
+    allowed = {"name", "db_type", "category", "severity", "logic", "enabled",
+               "description", "suggestion"}
+    sets, params = [], []
+    for k, v in fields.items():
+        if k not in allowed or v is None:
+            continue
+        if k == "logic":
+            v = json.dumps(v, ensure_ascii=False)
+        if k == "enabled":
+            v = 1 if v else 0
+        sets.append(f"{k}=?")
+        params.append(v)
+    if not sets:
+        return 0
+    sets.append("updated_at=?")
+    params.append(_now())
+    params.append(rule_id)
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(f"UPDATE sql_audit_rules SET {', '.join(sets)} WHERE rule_id=?", params)
+    n = cur.rowcount
+    conn.commit()
+    conn.close()
+    return n
+
+
+def delete_rule(rule_id: str) -> int:
+    """按 rule_id 删除规则，返回被删除行数。"""
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM sql_audit_rules WHERE rule_id=?", (rule_id,))
+    n = cur.rowcount
+    conn.commit()
+    conn.close()
+    return n

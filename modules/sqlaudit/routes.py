@@ -158,6 +158,76 @@ def rules():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+# 规则写操作（新增/编辑/删除/启停）仅 admin / operator 可操作，与审批/执行角色一致。
+RULE_WRITER_ROLES = {"admin", "operator"}
+
+
+def _require_rule_writer():
+    """写操作角色闸：已登录且角色不足返回 403；免登录部署放行，由核心业务层兜底。"""
+    _username, roles = _current_actor()
+    if roles and not (RULE_WRITER_ROLES & set(roles)):
+        return jsonify({"ok": False, "error": "权限不足：规则管理需 admin 或 operator 角色"}), 403
+    return None
+
+
+@bp.route("/rules", methods=["POST"])
+def create_rule_route():
+    """新增规则（MVP3.5，需 admin / operator）。"""
+    deny = _require_rule_writer()
+    if deny:
+        return deny
+    try:
+        data = request.get_json(force=True, silent=True) or {}
+        rule = service.create_rule(data)
+        return jsonify({"ok": True, "rule": rule})
+    except Exception as e:  # noqa: BLE001
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+
+@bp.route("/rules/<string:rule_id>", methods=["PUT"])
+def update_rule_route(rule_id):
+    """编辑规则（MVP3.5，需 admin / operator）。"""
+    deny = _require_rule_writer()
+    if deny:
+        return deny
+    try:
+        data = request.get_json(force=True, silent=True) or {}
+        rule = service.update_rule(rule_id, data)
+        return jsonify({"ok": True, "rule": rule})
+    except Exception as e:  # noqa: BLE001
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+
+@bp.route("/rules/<string:rule_id>", methods=["DELETE"])
+def delete_rule_route(rule_id):
+    """删除规则（MVP3.5，需 admin / operator）。"""
+    deny = _require_rule_writer()
+    if deny:
+        return deny
+    try:
+        n = service.delete_rule(rule_id)
+        if n == 0:
+            return jsonify({"ok": False, "error": "规则不存在"}), 404
+        return jsonify({"ok": True, "deleted": n})
+    except Exception as e:  # noqa: BLE001
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+
+@bp.route("/rules/<string:rule_id>/toggle", methods=["POST"])
+def toggle_rule_route(rule_id):
+    """启停规则（MVP3.5，需 admin / operator）。请求体 {enabled: bool}。"""
+    deny = _require_rule_writer()
+    if deny:
+        return deny
+    try:
+        data = request.get_json(force=True, silent=True) or {}
+        enabled = bool(data.get("enabled", True))
+        rule = service.toggle_rule(rule_id, enabled)
+        return jsonify({"ok": True, "rule": rule})
+    except Exception as e:  # noqa: BLE001
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+
 @bp.route("/instances", methods=["GET"])
 def instances():
     try:

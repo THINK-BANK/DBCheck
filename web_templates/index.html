@@ -4972,7 +4972,8 @@ function formatBytes(bytes) {
         const trustServerCertificate = document.getElementById('ds-trust-server-cert')?.checked || false;
         const gbaseServer = document.getElementById('ds-gbase-server')?.value.trim() || '';
         const jdbcUrl = (document.getElementById('ds-jdbc-url')?.value || '').trim();
-        const connectionMode = document.getElementById('ds-connection-mode')?.value || 'odbc';
+        // sqlserver_jdbc 类型连接模式缺省必须为 'jdbc'，否则静默变 'odbc' 走 pyodbc 报 ODBC 错误
+        const connectionMode = document.getElementById('ds-connection-mode')?.value || (dbType === 'sqlserver_jdbc' ? 'jdbc' : 'odbc');
         const mongoConnectMode = document.getElementById('ds-connect-mode')?.value || 'standard';
         const mongoAuthSource = document.getElementById('ds-auth-source')?.value.trim() || 'admin';
         const mongoAuthMechanism = document.getElementById('ds-auth-mechanism')?.value.trim() || '';
@@ -5034,7 +5035,8 @@ function formatBytes(bytes) {
           if (jdbcUrl) payload.jdbc_url = jdbcUrl;
         }
         if (payload.db_type === 'sqlserver_jdbc') {
-          const cm = document.getElementById('ds-connection-mode')?.value || 'odbc';
+          // sqlserver_jdbc 类型连接模式缺省必须为 'jdbc'，否则静默变 'odbc' 走 pyodbc 报 ODBC 错误
+          const cm = document.getElementById('ds-connection-mode')?.value || (payload.db_type === 'sqlserver_jdbc' ? 'jdbc' : 'odbc');
           payload.connection_mode = cm;
           payload.encrypt = document.getElementById('ds-encrypt')?.checked ? 1 : 0;
           payload.trust_server_certificate = document.getElementById('ds-trust-server-cert')?.checked ? 1 : 0;
@@ -6239,6 +6241,17 @@ function formatBytes(bytes) {
             <div style="text-align:center;color:var(--text-muted);padding:32px">加载中...</div>
           </div>
           <div id="sa-detail" style="display:none;margin-top:16px"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-title"><span>📐</span> 审核规则管理
+            <span class="badge" style="margin-left:8px;font-size:11px">MVP3.5 · 运维在线调规则</span>
+            <button id="sa-rule-refresh" class="btn btn-ghost" style="margin-left:auto;padding:6px 12px;font-size:12px" onclick="loadSqlAuditRules()">↻ 刷新</button>
+            <button id="sa-rule-add" class="btn btn-primary" style="margin-left:8px;padding:6px 14px;font-size:12px;display:none" onclick="openRuleModal()">+ 新增规则</button>
+          </div>
+          <div class="reports-list" id="sa-rules-list">
+            <div style="text-align:center;color:var(--text-muted);padding:32px">加载中...</div>
+          </div>
         </div>
       </div>
 
@@ -10794,6 +10807,8 @@ async function loadSqlAudit() {
     const list = document.getElementById('sa-task-list');
     if (list) list.innerHTML = `<div class="status-banner err">加载失败: ${escHtml(e.message)}</div>`;
   }
+  // MVP3.5：进入 SQL 审核页时一并加载规则列表
+  loadSqlAuditRules().catch(e => console.error('loadSqlAuditRules failed', e));
 }
 
 function renderSqlAuditTasks() {
@@ -10820,6 +10835,219 @@ function renderSqlAuditTasks() {
         <button class="btn btn-ghost" style="font-size:12px;padding:6px 12px;color:#ef4444" onclick="event.stopPropagation();deleteSqlAuditTask(${t.id})">删除</button>
       </div>
     </div>`).join('');
+}
+
+// ───────────────────────────────────────────── MVP3.5 规则在线管理（运维自调规则，无需改种子代码） ─────────────────────────────────────────────
+let saRules = [];
+const SA_RULE_WRITER = ['admin', 'operator'];
+const isRuleWriter = () => SA_RULE_WRITER.includes((window.__userRole || '').toLowerCase());
+
+const saSeverityTag = (lv) => {
+  const map = {block:['#ef4444','🔴 阻断'], high:['#f97316','🟠 高危'], mid:['#eab308','🟡 中'], low:['#22c55e','🟢 低']};
+  const m = map[lv] || map.low;
+  return `<span style="font-size:11px;padding:2px 7px;border-radius:999px;background:${m[0]}22;color:${m[0]};border:1px solid ${m[0]}55">${m[1]}</span>`;
+};
+const saCategoryLabel = (c) => ({forbidden:'⛔ 禁用类', performance:'⚡ 性能类', security:'🔒 安全类', naming:'🏷️ 命名类'}[c] || c);
+const saLogicDesc = (logic) => {
+  if (!logic || !logic.kind) return '（无 logic）';
+  const k = logic.kind;
+  if (['op_in','op_in_without_where','op_in_without_limit'].includes(k)) {
+    let extra = '';
+    if (k === 'op_in_without_where') extra = ' 且缺 WHERE';
+    if (k === 'op_in_without_limit') extra = ' 且缺 LIMIT';
+    return `匹配操作 ${(logic.ops||[]).join('/')}${extra}`;
+  }
+  if (k === 'regex') return `正则: ${logic.pattern || ''}`;
+  return ({select_star:'SELECT *', full_scan:'全表扫描', naming_table:'表命名规范', naming_index:'索引命名规范'})[k] || k;
+};
+
+async function loadSqlAuditRules() {
+  try {
+    const rt = await fetch('/api/sql-audit/rules');
+    const dt = await rt.json();
+    saRules = dt.rules || [];
+    renderSqlAuditRules();
+    const addBtn = document.getElementById('sa-rule-add');
+    if (addBtn) addBtn.style.display = isRuleWriter() ? '' : 'none';
+  } catch(e) {
+    const list = document.getElementById('sa-rules-list');
+    if (list) list.innerHTML = `<div style="text-align:center;color:#ef4444;padding:32px">加载失败: ${escHtml(e.message)}</div>`;
+  }
+}
+
+function renderSqlAuditRules() {
+  const list = document.getElementById('sa-rules-list');
+  if (!list) return;
+  if (!saRules.length) {
+    list.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:32px">暂无规则</div>';
+    return;
+  }
+  const writer = isRuleWriter();
+  list.innerHTML = saRules.map(r => {
+    const disabled = !r.enabled;
+    return `<div class="report-item" style="opacity:${disabled ? 0.55 : 1}">
+      <div class="ri-icon">${disabled ? '⏸️' : '📐'}</div>
+      <div class="ri-info" style="min-width:0">
+        <div class="ri-name">${escHtml(r.name)} ${saSeverityTag(r.severity)} <span style="font-size:11px;color:var(--text-muted)">${escHtml(r.db_type || 'all')} · ${saCategoryLabel(r.category)}</span>${disabled ? ' <span style="font-size:11px;color:#f59e0b">已禁用</span>' : ''}</div>
+        <div class="ri-meta">${escHtml(r.rule_id)} · ${escHtml(saLogicDesc(r.logic))}</div>
+        ${r.description ? `<div class="ri-meta" style="margin-top:2px">${escHtml(r.description)}</div>` : ''}
+      </div>
+      <div style="flex-shrink:0;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+        ${writer ? `<button class="btn btn-ghost" style="font-size:12px;padding:6px 10px" onclick="toggleSqlRule('${escHtml(r.rule_id)}', ${disabled})">${disabled ? '启用' : '禁用'}</button>` : ''}
+        ${writer ? `<button class="btn btn-ghost" style="font-size:12px;padding:6px 10px" onclick="openRuleModal('${escHtml(r.rule_id)}')">编辑</button>` : ''}
+        ${writer ? `<button class="btn btn-ghost" style="font-size:12px;padding:6px 10px;color:#ef4444" onclick="deleteSqlRule('${escHtml(r.rule_id)}')">删除</button>` : ''}
+        ${!writer ? '<span style="font-size:11px;color:var(--text-muted)">仅 admin/operator 可管理</span>' : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function toggleSqlRule(ruleId, enable) {
+  try {
+    const res = await fetch('/api/sql-audit/rules/' + encodeURIComponent(ruleId) + '/toggle', {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({enabled: enable})
+    });
+    const data = await res.json();
+    if (!data.ok) { toastError('操作失败: ' + (data.error || '未知错误')); return; }
+    toastSuccess(enable ? '已启用' : '已禁用');
+    loadSqlAuditRules();
+  } catch(e) { toastError('操作失败: ' + e.message); }
+}
+
+async function deleteSqlRule(ruleId) {
+  const ok = await showConfirmDialog('删除规则', '确定删除规则「' + ruleId + '」吗？删除后该规则不再参与 SQL 审核。');
+  if (!ok) return;
+  try {
+    const res = await fetch('/api/sql-audit/rules/' + encodeURIComponent(ruleId), {method: 'DELETE'});
+    const data = await res.json();
+    if (!data.ok) { toastError('删除失败: ' + (data.error || '未知错误')); return; }
+    toastSuccess('已删除');
+    loadSqlAuditRules();
+  } catch(e) { toastError('删除失败: ' + e.message); }
+}
+
+function openSaRuleModal(html) {
+  closeSaRuleModal();
+  const wrap = document.createElement('div');
+  wrap.id = 'sa-rule-modal-overlay';
+  wrap.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.55);z-index:999998;display:flex;align-items:center;justify-content:center';
+  wrap.addEventListener('click', (e) => { if (e.target === wrap) closeSaRuleModal(); });
+  const card = document.createElement('div');
+  card.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:22px;max-width:580px;width:92%;max-height:calc(100vh - 40px);overflow-y:auto;color:var(--text);box-shadow:0 16px 48px rgba(0,0,0,0.35)';
+  card.innerHTML = html;
+  wrap.appendChild(card);
+  document.documentElement.appendChild(wrap);
+  document.addEventListener('keydown', saRuleModalKey);
+}
+function saRuleModalKey(e) { if (e.key === 'Escape') closeSaRuleModal(); }
+function closeSaRuleModal() {
+  const wrap = document.getElementById('sa-rule-modal-overlay');
+  if (wrap) wrap.remove();
+  document.removeEventListener('keydown', saRuleModalKey);
+}
+
+function openRuleModal(ruleId) {
+  const isEdit = !!ruleId;
+  const r = isEdit ? (saRules.find(x => x.rule_id === ruleId) || {}) : {};
+  const logic = r.logic || {};
+  const kind = logic.kind || 'op_in';
+  const opsVal = (logic.ops || []).join(', ');
+  const opsKinds = ['op_in','op_in_without_where','op_in_without_limit'];
+  const html = `
+    <div style="font-size:16px;font-weight:600;margin-bottom:14px;color:var(--text)">${isEdit ? '编辑规则' : '新增规则'}</div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div><label style="font-size:12px;color:var(--text-muted)">规则 ID${isEdit ? '（不可修改）' : ''}</label>
+        <input id="rm-rule-id" value="${escHtml(r.rule_id || '')}" ${isEdit ? 'readonly' : ''} placeholder="留空自动生成 custom_ 前缀" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px" /></div>
+      <div><label style="font-size:12px;color:var(--text-muted)">规则名称 *</label>
+        <input id="rm-name" value="${escHtml(r.name || '')}" placeholder="如：禁止 TRUNCATE TABLE" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px" /></div>
+      <div style="display:flex;gap:12px">
+        <div style="flex:1"><label style="font-size:12px;color:var(--text-muted)">数据库类型</label>
+          <select id="rm-dbtype" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">
+            ${['all','mysql','postgresql','oracle','sqlserver','dm'].map(d => `<option value="${d}" ${d === (r.db_type || 'all') ? 'selected' : ''}>${d}</option>`).join('')}
+          </select></div>
+        <div style="flex:1"><label style="font-size:12px;color:var(--text-muted)">类别</label>
+          <select id="rm-category" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">
+            ${[['forbidden','禁用类'],['performance','性能类'],['security','安全类'],['naming','命名类']].map(c => `<option value="${c[0]}" ${c[0] === (r.category || 'forbidden') ? 'selected' : ''}>${c[1]}</option>`).join('')}
+          </select></div>
+        <div style="flex:1"><label style="font-size:12px;color:var(--text-muted)">严重度</label>
+          <select id="rm-severity" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">
+            ${['low','mid','high','block'].map(s => `<option value="${s}" ${s === (r.severity || 'low') ? 'selected' : ''}>${s}</option>`).join('')}
+          </select></div>
+      </div>
+      <div style="display:flex;gap:12px;align-items:flex-end">
+        <div style="flex:2"><label style="font-size:12px;color:var(--text-muted)">匹配类型 logic.kind</label>
+          <select id="rm-kind" onchange="onRuleKindChange()" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">
+            ${[['op_in','操作在列表(op_in)'],['op_in_without_where','操作且无 WHERE'],['op_in_without_limit','操作且无 LIMIT'],['select_star','SELECT *'],['full_scan','全表扫描'],['regex','正则匹配'],['naming_table','表命名'],['naming_index','索引命名']].map(k => `<option value="${k[0]}" ${k[0] === kind ? 'selected' : ''}>${k[1]}</option>`).join('')}
+          </select></div>
+        <label style="font-size:12px;color:var(--text-muted);display:inline-flex;align-items:center;gap:6px;cursor:pointer;margin-bottom:8px">
+          <input type="checkbox" id="rm-enabled" ${r.enabled !== false ? 'checked' : ''} style="width:15px;height:15px" /> 启用</label>
+      </div>
+      <div id="rm-ops-wrap" style="display:${opsKinds.includes(kind) ? 'block' : 'none'}">
+        <label style="font-size:12px;color:var(--text-muted)">操作列表 ops（逗号分隔，如 DROP, TRUNCATE, UPDATE, DELETE）</label>
+        <input id="rm-ops" value="${escHtml(opsVal)}" placeholder="DROP, TRUNCATE" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px" />
+      </div>
+      <div id="rm-pattern-wrap" style="display:${kind === 'regex' ? 'block' : 'none'}">
+        <label style="font-size:12px;color:var(--text-muted)">正则 pattern（忽略大小写）</label>
+        <input id="rm-pattern" value="${escHtml(logic.pattern || '')}" placeholder="GRANT\\s+ALL" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:monospace" />
+      </div>
+      <div><label style="font-size:12px;color:var(--text-muted)">说明 description</label>
+        <textarea id="rm-desc" rows="2" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;resize:vertical">${escHtml(r.description || '')}</textarea></div>
+      <div><label style="font-size:12px;color:var(--text-muted)">建议 suggestion</label>
+        <textarea id="rm-suggest" rows="2" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;resize:vertical">${escHtml(r.suggestion || '')}</textarea></div>
+      <div id="rm-err" style="color:#ef4444;font-size:12px;display:none"></div>
+    </div>
+    <div style="margin-top:18px;display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="closeSaRuleModal()">取消</button>
+      <button class="btn btn-primary" onclick="saveRule('${escHtml(ruleId || '')}')">${isEdit ? '保存' : '创建'}</button>
+    </div>`;
+  openSaRuleModal(html);
+}
+
+function onRuleKindChange() {
+  const kind = document.getElementById('rm-kind').value;
+  const opsKinds = ['op_in','op_in_without_where','op_in_without_limit'];
+  document.getElementById('rm-ops-wrap').style.display = opsKinds.includes(kind) ? 'block' : 'none';
+  document.getElementById('rm-pattern-wrap').style.display = (kind === 'regex') ? 'block' : 'none';
+}
+
+async function saveRule(ruleId) {
+  const kind = document.getElementById('rm-kind').value;
+  const logic = {kind};
+  if (['op_in','op_in_without_where','op_in_without_limit'].includes(kind)) {
+    logic.ops = document.getElementById('rm-ops').value.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+  } else if (kind === 'regex') {
+    logic.pattern = document.getElementById('rm-pattern').value;
+  }
+  const payload = {
+    rule_id: document.getElementById('rm-rule-id').value.trim(),
+    name: document.getElementById('rm-name').value.trim(),
+    db_type: document.getElementById('rm-dbtype').value,
+    category: document.getElementById('rm-category').value,
+    severity: document.getElementById('rm-severity').value,
+    enabled: document.getElementById('rm-enabled').checked,
+    description: document.getElementById('rm-desc').value,
+    suggestion: document.getElementById('rm-suggest').value,
+    logic
+  };
+  const errEl = document.getElementById('rm-err');
+  errEl.style.display = 'none';
+  try {
+    const url = ruleId ? ('/api/sql-audit/rules/' + encodeURIComponent(ruleId)) : '/api/sql-audit/rules';
+    const method = ruleId ? 'PUT' : 'POST';
+    const res = await fetch(url, {method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)});
+    const data = await res.json();
+    if (!data.ok) {
+      errEl.textContent = '保存失败: ' + (data.error || '未知错误');
+      errEl.style.display = 'block';
+      return;
+    }
+    closeSaRuleModal();
+    toastSuccess(ruleId ? '已更新规则' : '已创建规则');
+    loadSqlAuditRules();
+  } catch(e) {
+    errEl.textContent = '保存失败: ' + e.message;
+    errEl.style.display = 'block';
+  }
 }
 
 async function submitSqlAudit() {

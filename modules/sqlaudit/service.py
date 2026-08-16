@@ -16,6 +16,8 @@ MVP2：支持多库方言（MySQL/PostgreSQL/Oracle 兼容）+ 可选执行计�
 执行计划分析失败仅降级标记，绝不阻断审核本身。
 """
 import json
+import re
+from datetime import datetime, timezone
 
 from . import models
 from .parser import split_statements, analyze_statement
@@ -370,3 +372,128 @@ def delete_task(task_id: int) -> int:
 def list_rules() -> list:
     """返回全部审核规则（含 logic 解析）。"""
     return models.list_rules()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MVP3.5：规则在线 CRUD（运维自调规则）
+# 枚举白名单与前端表单 / 种子规则对齐；logic 结构须能被 rules._rule_applies 识别。
+# ─────────────────────────────────────────────────────────────────────────────
+
+DB_TYPE_WHITELIST = {"all", "mysql", "postgresql", "oracle", "sqlserver", "dm"}
+CATEGORY_WHITELIST = {"forbidden", "performance", "security", "naming"}
+SEVERITY_WHITELIST = {"low", "mid", "high", "block"}
+LOGIC_KIND_WHITELIST = {
+    "op_in", "op_in_without_where", "op_in_without_limit",
+    "select_star", "full_scan", "regex", "naming_table", "naming_index",
+}
+# 需要 ops 列表的 kind
+_OPS_KINDS = {"op_in", "op_in_without_where", "op_in_without_limit"}
+
+
+def _validate_rule_payload(payload: dict):
+    """校验规则 CRUD 入参，返回 (cleaned_dict, error)。error 非空表示校验失败。
+
+    cleaned_dict 含 name/db_type/category/severity/logic/enabled/description/suggestion。
+    """
+    if not isinstance(payload, dict):
+        return None, "请求体必须为 JSON 对象"
+    name = (payload.get("name") or "").strip()
+    if not name:
+        return None, "规则名称 name 不能为空"
+    db_type = (payload.get("db_type") or "all").lower()
+    if db_type not in DB_TYPE_WHITELIST:
+        return None, f"db_type 非法：{db_type}（可选 {sorted(DB_TYPE_WHITELIST)}）"
+    category = (payload.get("category") or "").lower()
+    if category not in CATEGORY_WHITELIST:
+        return None, f"category 非法：{category}（可选 {sorted(CATEGORY_WHITELIST)}）"
+    severity = (payload.get("severity") or "low").lower()
+    if severity not in SEVERITY_WHITELIST:
+        return None, f"severity 非法：{severity}（可选 {sorted(SEVERITY_WHITELIST)}）"
+    # logic：允许字符串形式的 JSON（前端直接传 JSON 对象或文本）
+    logic = payload.get("logic")
+    if isinstance(logic, str):
+        try:
+            logic = json.loads(logic)
+        except Exception:
+            return None, "logic 不是合法 JSON"
+    if not isinstance(logic, dict):
+        return None, "logic 必须为对象（dict）"
+    kind = logic.get("kind")
+    if kind not in LOGIC_KIND_WHITELIST:
+        return None, f"logic.kind 非法：{kind}（可选 {sorted(LOGIC_KIND_WHITELIST)}）"
+    if kind in _OPS_KINDS:
+        ops = logic.get("ops")
+        if not isinstance(ops, list) or not ops:
+            return None, f"logic.kind={kind} 必须提供非空的 ops 列表"
+    if kind == "regex":
+        pattern = logic.get("pattern")
+        if not (isinstance(pattern, str) and pattern.strip()):
+            return None, "logic.kind=regex 必须提供非空的 pattern 字符串"
+    enabled = bool(payload.get("enabled", True))
+    return {
+        "name": name,
+        "db_type": db_type,
+        "category": category,
+        "severity": severity,
+        "logic": logic,
+        "enabled": enabled,
+        "description": (payload.get("description") or "").strip(),
+        "suggestion": (payload.get("suggestion") or "").strip(),
+    }, None
+
+
+def create_rule(payload: dict) -> dict:
+    """新增规则。rule_id 由调用方指定（校验唯一+合法），缺省自动生成 custom_ 前缀。"""
+    models.init_db()
+    cleaned, err = _validate_rule_payload(payload)
+    if err:
+        raise ValueError(err)
+    rid = (payload.get("rule_id") or "").strip()
+    if rid:
+        if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", rid):
+            raise ValueError("rule_id 只能包含字母/数字/下划线，且以字母开头")
+    else:
+        rid = "custom_" + datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")
+    if models.get_rule(rid):
+        raise ValueError(f"rule_id={rid} 已存在")
+    models.insert_rule(
+        rule_id=rid, name=cleaned["name"], db_type=cleaned["db_type"],
+        category=cleaned["category"], severity=cleaned["severity"],
+        logic=cleaned["logic"], enabled=cleaned["enabled"],
+        description=cleaned["description"], suggestion=cleaned["suggestion"],
+    )
+    return models.get_rule(rid)
+
+
+def update_rule(rule_id: str, payload: dict) -> dict:
+    """更新规则（全字段覆盖，等同保存）。"""
+    models.init_db()
+    if not models.get_rule(rule_id):
+        raise ValueError(f"规则不存在：{rule_id}")
+    cleaned, err = _validate_rule_payload(payload)
+    if err:
+        raise ValueError(err)
+    models.update_rule(
+        rule_id, name=cleaned["name"], db_type=cleaned["db_type"],
+        category=cleaned["category"], severity=cleaned["severity"],
+        logic=cleaned["logic"], enabled=cleaned["enabled"],
+        description=cleaned["description"], suggestion=cleaned["suggestion"],
+    )
+    return models.get_rule(rule_id)
+
+
+def delete_rule(rule_id: str) -> int:
+    """删除规则，返回被删除行数。"""
+    models.init_db()
+    if not models.get_rule(rule_id):
+        raise ValueError(f"规则不存在：{rule_id}")
+    return models.delete_rule(rule_id)
+
+
+def toggle_rule(rule_id: str, enabled: bool) -> dict:
+    """启停规则，返回更新后的规则。"""
+    models.init_db()
+    if not models.get_rule(rule_id):
+        raise ValueError(f"规则不存在：{rule_id}")
+    models.update_rule(rule_id, enabled=enabled)
+    return models.get_rule(rule_id)
