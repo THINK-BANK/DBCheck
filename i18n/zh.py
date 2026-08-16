@@ -3206,12 +3206,13 @@ ZI = {
 
 # ── 菜单 i18n key（menu.*，第一阶段结构性对齐；值为原中文菜单名）──
 ZI.update({
-    "menu.about": "关于DBCheck",
+    "menu.about": "关于RaccoonX",
     "menu.ai": "AI助手",
     "menu.apikey": "API密钥",
     "menu.awr": "AWR报告",
     "menu.baseline-config": "基线配置",
     "menu.data-management": "数据管理",
+    "menu.doc-kb": "官方文档知识库",
     "menu.datasources": "数据源管理",
     "menu.diag-history": "诊断历史",
     "menu.disaster-recovery": "容灾备份",
@@ -3235,8 +3236,12 @@ ZI.update({
     "menu.server-thresholds": "阈值设置",
     "menu.shares": "共享管理",
     "menu.sql-editor": "SQL编辑器",
+    "menu.sql-audit": "SQL审计",
     "menu.trend": "趋势分析",
     "menu.wizard": "数据库巡检",
+    "webui.doc_kb_nav": "官方文档知识库",
+    "webui.doc_kb_title": "官方文档知识库",
+    "webui.doc_kb_desc": "维护 AI 诊断引用的官方事实与来源（事实/来源增删改查）",
     "webui.account_desc": "管理账户信息和安全设置",
     "webui.apikey_desc": "创建和管理 API 访问密钥",
     "webui.backup_desc": "",

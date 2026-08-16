@@ -38,6 +38,7 @@ menus_data = [
     ('server-thresholds','menu.server-thresholds',0, 34),
     ('rules',            'menu.rules',           0, 35),
     ('rag',              'menu.rag',             0, 36),
+    ('doc-kb',           'menu.doc-kb',          0, 37),
     ('plugin-market',    'menu.plugin-market',   0, 41),
     ('sql-editor',       'menu.sql-editor',      0, 42),
     ('remote-shell',     'menu.remote-shell',    0, 43),

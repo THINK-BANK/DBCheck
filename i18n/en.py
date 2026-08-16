@@ -3176,12 +3176,13 @@ EN = {
 
 # ── 菜单 i18n 翻译（menu.*，第一阶段补齐；草稿待人工校对）──
 EN.update({
-    "menu.about": "About DBCheck",
+    "menu.about": "About RaccoonX",
     "menu.ai": "AI Assistant",
     "menu.apikey": "API Keys",
     "menu.awr": "AWR Report",
     "menu.baseline-config": "Baseline Configuration",
     "menu.data-management": "Data Management",
+    "menu.doc-kb": "Official Docs KB",
     "menu.datasources": "Data Source Management",
     "menu.diag-history": "Diagnosis History",
     "menu.disaster-recovery": "Disaster Recovery",
@@ -3205,8 +3206,12 @@ EN.update({
     "menu.server-thresholds": "Threshold Settings",
     "menu.shares": "Share Management",
     "menu.sql-editor": "SQL Editor",
+    "menu.sql-audit": "SQL Audit",
     "menu.trend": "Trend Analysis",
     "menu.wizard": "Database Inspection",
+    "webui.doc_kb_nav": "Official Docs KB",
+    "webui.doc_kb_title": "Official Documentation KB",
+    "webui.doc_kb_desc": "Maintain official facts and sources referenced by AI diagnosis (CRUD facts/sources)",
     "cli.batch_menu_invalid": "❌ Invalid selection.",
     "cli.batch_menu_opt0": "0. Return to main menu",
     "cli.batch_menu_prompt": "Please select [0-3]:",
