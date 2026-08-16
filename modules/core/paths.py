@@ -63,6 +63,8 @@ SCHEDULER_JOBS = DATA_DIR / "scheduler_jobs.json"
 DB_KEY_PATH = DATA_DIR / ".db_key"
 DB_KEY_PATH_LEGACY = PROJECT_ROOT / ".db_key"
 INSPECTION_DB = DATA_DIR / "inspection.db"
+# 官方数据库文档知识库（DocKB）结构化事实库，存 data/ 不进 git
+DOC_KB_DB = DATA_DIR / "doc_kb.db"
 LOGO_PATH = ASSETS_DIR / "brand" / "dbcheck_logo.png"
 AWR_UPLOADS_DIR = DATA_DIR / "awr_uploads"
 

@@ -5390,6 +5390,9 @@ function formatBytes(bytes) {
     <div class="nav-item" onclick="showPage('rag')" id="nav-rag">
       <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-5a4 4 0 0 0-4 4 4 4 0 0 0-4-4H3Z"/></svg></span> <span data-i18n="webui.rag_nav">RAG 知识库</span>
     </div>
+    <div class="nav-item" onclick="showPage('doc-kb')" id="nav-doc-kb">
+      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span> <span data-i18n="webui.doc_kb_nav">官方文档知识库</span>
+    </div>
     <div class="nav-item" onclick="showPage('plugin-market')" id="nav-plugin-market">
       <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg></span> <span data-i18n="webui.nav_plugin_market">插件市场</span>
     </div>
@@ -7269,6 +7272,129 @@ curl -H "X-API-Key: YOUR_API_KEY" http://localhost:5003/api/v1/inspect/{task_id}
         </div>
       </div><!-- /page-rag -->
 
+      <!-- ══ Page: DocKB（官方文档知识库）══ -->
+      <div class="page" id="page-doc-kb" style="display:none;">
+        <!-- 概览卡 -->
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-title"><span>📚</span> <span>官方文档知识库（DocKB）</span>
+            <span class="badge" style="margin-left:8px;font-size:11px">让 AI 诊断引官方事实说话</span>
+          </div>
+          <div style="font-size:12px;color:var(--text-muted);line-height:1.6">
+            这里维护经过策展的官方文档事实（参数默认值、基线、规则、已知 BUG + 官方链接）。AI 诊断时会通过纯 SQL 召回并注入提示词，零 embedding 依赖。
+          </div>
+        </div>
+
+        <!-- 筛选栏 + 操作按钮 -->
+        <div class="card" style="margin-bottom:16px">
+          <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+            <div>
+              <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">数据库类型</label>
+              <select id="dk-db-type" onchange="loadDocKb()" style="padding:7px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">
+                <option value="">全部</option>
+                <option value="mysql">MySQL</option>
+                <option value="oracle">Oracle</option>
+                <option value="pg">PostgreSQL</option>
+                <option value="sqlserver">SQL Server</option>
+                <option value="dm">达梦 DM8</option>
+                <option value="tidb">TiDB</option>
+                <option value="all">全部类型(all)</option>
+              </select>
+            </div>
+            <div>
+              <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">类别</label>
+              <select id="dk-category" onchange="loadDocKb()" style="padding:7px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">
+                <option value="">全部</option>
+                <option value="param">参数</option>
+                <option value="baseline">基线</option>
+                <option value="rule">规则</option>
+                <option value="bug">BUG</option>
+              </select>
+            </div>
+            <div>
+              <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">版本</label>
+              <input id="dk-version" type="text" placeholder="如 8.0 / 19c" onkeydown="if(event.key==='Enter')loadDocKb()" style="padding:7px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;width:120px" />
+            </div>
+            <div style="flex:1;min-width:200px">
+              <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">关键词（key/value/excerpt）</label>
+              <input id="dk-q" type="text" placeholder="搜索关键词" onkeydown="if(event.key==='Enter')loadDocKb()" style="width:100%;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px" />
+            </div>
+            <button class="btn btn-ghost" style="padding:7px 14px;font-size:12px" onclick="loadDocKb()">🔍 搜索</button>
+            <button class="btn btn-ghost" style="padding:7px 14px;font-size:12px" onclick="resetDocKbFilters()">↺ 重置</button>
+            <button id="dk-add-btn" class="btn btn-primary" style="display:none;padding:7px 14px;font-size:12px" onclick="openDocKbFactModal()">+ 新增事实</button>
+            <button id="dk-import-btn" class="btn btn-primary" style="display:none;padding:7px 14px;font-size:12px" onclick="openDocKbImport()">⇪ 批量导入</button>
+          </div>
+          <div id="dk-perm-hint" style="display:none;font-size:12px;color:var(--text-muted);margin-top:10px;padding:6px 10px;background:var(--surface2);border-radius:6px">
+            🔒 当前角色为只读，新增 / 编辑 / 删除 / 导入需 admin 或 operator 权限。
+          </div>
+        </div>
+
+        <!-- 事实列表 -->
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-title"><span>📋</span> 官方事实列表
+            <button class="btn btn-ghost" style="margin-left:auto;padding:6px 12px;font-size:12px" onclick="loadDocKb()">↻ 刷新</button>
+          </div>
+          <div class="table-wrap" style="overflow-x:auto">
+            <table class="table" style="width:100%;font-size:13px;min-width:920px">
+              <thead><tr>
+                <th style="white-space:nowrap">ID</th>
+                <th style="white-space:nowrap">库类型</th>
+                <th style="white-space:nowrap">版本</th>
+                <th style="white-space:nowrap">类别</th>
+                <th style="white-space:nowrap">Key</th>
+                <th>Value</th>
+                <th style="white-space:nowrap">严重度</th>
+                <th style="white-space:nowrap">官方链接</th>
+                <th style="white-space:nowrap">操作</th>
+              </tr></thead>
+              <tbody id="dk-facts-body"><tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:24px">加载中...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 来源列表 -->
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-title"><span>🔗</span> 官方来源（Sources）
+            <button class="btn btn-ghost" style="margin-left:auto;padding:6px 12px;font-size:12px" onclick="loadDocKbSources()">↻ 刷新</button>
+            <button id="dk-src-add-btn" class="btn btn-primary" style="display:none;padding:6px 12px;font-size:12px" onclick="openDocKbSourceModal()">+ 新增来源</button>
+          </div>
+          <div class="table-wrap" style="overflow-x:auto">
+            <table class="table" style="width:100%;font-size:13px;min-width:760px">
+              <thead><tr>
+                <th style="white-space:nowrap">ID</th>
+                <th style="white-space:nowrap">库类型</th>
+                <th style="white-space:nowrap">版本</th>
+                <th>标题</th>
+                <th style="white-space:nowrap">官方链接</th>
+                <th>许可证说明</th>
+              </tr></thead>
+              <tbody id="dk-sources-body"><tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:20px">加载中...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 批量导入面板 -->
+        <div class="card">
+          <div class="card-title"><span>⇪</span> 批量导入事实（JSON 数组）
+            <button class="btn btn-ghost" style="margin-left:auto;padding:6px 12px;font-size:12px" onclick="openDocKbImport()">展开 / 收起</button>
+          </div>
+          <div id="dk-import-body" style="display:none">
+            <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:6px">
+              粘贴事实 JSON 数组，每个元素字段：<code>db_type</code>(必填) · <code>version</code>(默认 all) · <code>category</code>(必填: param|baseline|rule|bug) · <code>key</code>(必填) · <code>value</code> · <code>excerpt</code> · <code>official_url</code> · <code>severity</code>(low|mid|high|block) · <code>lang</code>(zh|en|both) · <code>source_id</code>
+            </label>
+            <textarea id="dk-import-json" rows="10" style="width:100%;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-family:monospace;resize:vertical" placeholder='[{"db_type":"mysql","category":"param","key":"innodb_buffer_pool_size","value":"默认 128MB","official_url":"https://dev.mysql.com/doc/refman/8.0/en/"}]'></textarea>
+            <div style="margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+              <button class="btn btn-primary" style="padding:7px 16px;font-size:13px" onclick="importDocKbFacts()">导入</button>
+            </div>
+            <div style="margin-top:12px;padding:10px 12px;background:var(--surface2);border:1px dashed var(--border);border-radius:8px;">
+              <div style="font-size:12px;color:var(--text-muted);line-height:1.6">
+                🤖 <b>AI 抽取官方文档页</b>为事实草稿属于 <b>Phase 2 能力</b>，当前版本尚未实现；请手动粘贴事实 JSON 后点击「导入」。
+              </div>
+            </div>
+            <div id="dk-import-result" style="margin-top:10px;font-size:13px;white-space:pre-wrap"></div>
+          </div>
+        </div>
+      </div><!-- /page-doc-kb -->
+
       <!-- ══ Page: Plugin Market ══ -->
       <div class="page" id="page-plugin-market" style="display:none;">
         <div class="card" style="margin-bottom:12px;">
@@ -8875,6 +9001,7 @@ function showPage(name) {
     'oracle-client': [i18n('webui.oracle_client_title') || '数据库驱动设置', ''],
     'plugin-market': [i18n('webui.plugin_market_title') || '插件市场', ''],
     'rag': [i18n('webui.rag_page_title') || 'RAG 知识库', ''],
+    'doc-kb': [i18n('webui.doc_kb_title') || '官方文档知识库', i18n('webui.doc_kb_desc') || '维护 AI 诊断引用的官方事实与来源（事实/来源增删改查）'],
     'dm8-offline': [i18n('webui.dm8_offline_title') || '💿 DM8 离线存储健康检查', i18n('webui.dm8_offline_desc_short') || '扫描 DM8 数据文件目录，检查存储完整性'],
 
     'intelligence': [i18n('webui.nav_intelligence') || '智能诊断中心', i18n('intelligence.subtitle') || '多专业能力协同，主动发现、定位与处置数据库风险。'],
@@ -8895,6 +9022,7 @@ function showPage(name) {
   if (name === 'notifier') loadNotifierConfig();
   if (name === 'ai') loadAIConfig();
   if (name === 'rag') showRagPage();
+  if (name === 'doc-kb') loadDocKb();
   if (name === 'home') loadHomeStats();
   if (name === 'shares') loadShares();
   if (name === 'data-management') loadDataManagement();
@@ -10842,6 +10970,9 @@ let saRules = [];
 const SA_RULE_WRITER = ['admin', 'operator'];
 const isRuleWriter = () => SA_RULE_WRITER.includes((window.__userRole || '').toLowerCase());
 
+const DOCKB_WRITER_ROLES = ['admin', 'operator'];
+const isDocKbWriter = () => DOCKB_WRITER_ROLES.includes((window.__userRole || '').toLowerCase());
+
 const saSeverityTag = (lv) => {
   const map = {block:['#ef4444','🔴 阻断'], high:['#f97316','🟠 高危'], mid:['#eab308','🟡 中'], low:['#22c55e','🟢 低']};
   const m = map[lv] || map.low;
@@ -11047,6 +11178,342 @@ async function saveRule(ruleId) {
   } catch(e) {
     errEl.textContent = '保存失败: ' + e.message;
     errEl.style.display = 'block';
+  }
+}
+
+// ═════════════════════════════════════════ DocKB（官方文档知识库）前端 ═══════════════════════════════════════
+// 与后端 /api/doc-kb 契约对齐；枚举白名单严格对齐 modules/doc_kb/service.py。
+const DOCKB_DB_TYPES = ['all', 'mysql', 'oracle', 'pg', 'sqlserver', 'dm', 'tidb'];
+const DOCKB_CATEGORIES = ['param', 'baseline', 'rule', 'bug'];
+const DOCKB_SEVERITIES = ['low', 'mid', 'high', 'block'];
+const DOCKB_LANGS = ['zh', 'en', 'both'];
+
+const dkDbLabel = (d) => ({mysql: 'MySQL', oracle: 'Oracle', pg: 'PostgreSQL', postgresql: 'PostgreSQL', sqlserver: 'SQL Server', dm: 'DM8', tidb: 'TiDB', all: '全部'}[d] || d);
+const dkCategoryLabel = (c) => ({param: '参数', baseline: '基线', rule: '规则', bug: 'BUG'}[c] || c);
+const dkSeverityLabel = (s) => ({block: '阻断 block', high: '高危 high', mid: '中 mid', low: '低 low'}[s] || s);
+const dkSeverityTag = (lv) => {
+  const map = {block: ['#ef4444', '🔴 阻断'], high: ['#f97316', '🟠 高危'], mid: ['#eab308', '🟡 中'], low: ['#22c55e', '🟢 低']};
+  const m = map[lv] || map.low;
+  return `<span style="font-size:11px;padding:2px 7px;border-radius:999px;background:${m[0]}22;color:${m[0]};border:1px solid ${m[0]}55">${m[1]}</span>`;
+};
+
+let dkFacts = [];
+let dkSources = [];
+
+// ── 入口：进入页面时加载事实与来源，并刷新写权限按钮 ──
+async function loadDocKb() {
+  await Promise.allSettled([loadDocKbFacts(), loadDocKbSources()]);
+  applyDocKbWriterUI();
+}
+
+// ── 事实列表 ──
+async function loadDocKbFacts() {
+  const db_type = document.getElementById('dk-db-type').value;
+  const category = document.getElementById('dk-category').value;
+  const q = document.getElementById('dk-q').value.trim();
+  const version = document.getElementById('dk-version').value.trim();
+  const params = new URLSearchParams();
+  if (db_type) params.set('db_type', db_type);
+  if (category) params.set('category', category);
+  if (q) params.set('q', q);
+  if (version) params.set('version', version);
+  const body = document.getElementById('dk-facts-body');
+  if (body) body.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:24px">加载中...</td></tr>';
+  try {
+    const res = await fetch('/api/doc-kb/facts?' + params.toString());
+    if (res.status === 401) { if (body) body.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--danger);padding:24px">请先登录后查看事实列表</td></tr>'; return; }
+    if (res.status === 403) { if (body) body.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--danger);padding:24px">权限不足，无法查看事实列表</td></tr>'; return; }
+    const data = await res.json();
+    if (!data.ok) { if (body) body.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--danger);padding:24px">加载失败：${escHtml(data.error || '未知错误')}</td></tr>`; return; }
+    dkFacts = data.data || [];
+    renderDocKbFacts();
+  } catch (e) {
+    if (body) body.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--danger);padding:24px">加载失败：${escHtml(e.message)}</td></tr>`;
+  }
+}
+
+function renderDocKbFacts() {
+  const body = document.getElementById('dk-facts-body');
+  if (!body) return;
+  if (!dkFacts.length) {
+    body.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:24px">暂无事实（点击「+ 新增事实」或「批量导入」）</td></tr>';
+    return;
+  }
+  const writer = isDocKbWriter();
+  body.innerHTML = dkFacts.map(f => `
+    <tr>
+      <td style="white-space:nowrap">${f.id}</td>
+      <td style="white-space:nowrap">${escHtml(dkDbLabel(f.db_type))}</td>
+      <td style="white-space:nowrap">${escHtml(f.version || 'all')}</td>
+      <td style="white-space:nowrap">${escHtml(dkCategoryLabel(f.category))}${f.lang && f.lang !== 'both' ? ' <span style="font-size:10px;color:var(--text-muted)">' + escHtml(f.lang) + '</span>' : ''}</td>
+      <td><code style="font-size:12px;color:var(--accent)">${escHtml(f.key || '')}</code></td>
+      <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(f.value || '')}">${escHtml(f.value || '')}</td>
+      <td style="white-space:nowrap">${f.severity ? dkSeverityTag(f.severity) : '<span style="color:var(--text-muted)">-</span>'}</td>
+      <td style="white-space:nowrap">${f.official_url ? `<a href="${escHtml(f.official_url)}" target="_blank" rel="noopener" style="color:var(--accent)">链接↗</a>` : (f.src_url ? `<a href="${escHtml(f.src_url)}" target="_blank" rel="noopener" style="color:var(--accent)">来源↗</a>` : '<span style="color:var(--text-muted)">-</span>')}</td>
+      <td style="white-space:nowrap">
+        ${writer ? `<button class="btn btn-ghost" style="font-size:12px;padding:4px 10px" onclick="openDocKbFactModal(${f.id})">编辑</button>` : ''}
+        ${writer ? `<button class="btn btn-ghost" style="font-size:12px;padding:4px 10px;color:var(--danger)" onclick="deleteDocKbFact(${f.id})">删除</button>` : ''}
+        ${!writer ? '<span style="font-size:11px;color:var(--text-muted)">只读</span>' : ''}
+      </td>
+    </tr>`).join('');
+}
+
+async function deleteDocKbFact(fid) {
+  const ok = await showConfirmDialog('删除事实', '确定删除事实 #' + fid + ' 吗？此操作不可撤销。');
+  if (!ok) return;
+  try {
+    const res = await fetch('/api/doc-kb/facts/' + fid, {method: 'DELETE'});
+    if (res.status === 401) { toastError('请先登录后再删除。'); return; }
+    if (res.status === 403) { toastError('权限不足（需要 admin/operator）。'); return; }
+    const data = await res.json();
+    if (!data.ok) { toastError('删除失败：' + (data.error || '未知错误')); return; }
+    toastSuccess('已删除');
+    loadDocKbFacts();
+  } catch (e) {
+    toastError('删除失败：' + e.message);
+  }
+}
+
+// ── 来源列表 ──
+async function loadDocKbSources() {
+  const body = document.getElementById('dk-sources-body');
+  if (body) body.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:20px">加载中...</td></tr>';
+  try {
+    const db_type = document.getElementById('dk-db-type') ? document.getElementById('dk-db-type').value : '';
+    const url = '/api/doc-kb/sources' + (db_type ? ('?db_type=' + encodeURIComponent(db_type)) : '');
+    const res = await fetch(url);
+    if (res.status === 401) { if (body) body.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--danger);padding:20px">请先登录后查看来源</td></tr>'; return; }
+    if (res.status === 403) { if (body) body.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--danger);padding:20px">权限不足</td></tr>'; return; }
+    const data = await res.json();
+    if (!data.ok) { if (body) body.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--danger);padding:20px">${escHtml(data.error || '加载失败')}</td></tr>`; return; }
+    dkSources = data.data || [];
+    renderDocKbSources();
+  } catch (e) {
+    if (body) body.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--danger);padding:20px">加载失败：${escHtml(e.message)}</td></tr>`;
+  }
+}
+
+function renderDocKbSources() {
+  const body = document.getElementById('dk-sources-body');
+  if (!body) return;
+  if (!dkSources.length) {
+    body.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:20px">暂无来源</td></tr>';
+    return;
+  }
+  body.innerHTML = dkSources.map(s => `
+    <tr>
+      <td style="white-space:nowrap">${s.id}</td>
+      <td style="white-space:nowrap">${escHtml(dkDbLabel(s.db_type))}</td>
+      <td style="white-space:nowrap">${escHtml(s.version || '')}</td>
+      <td>${escHtml(s.title || '')}</td>
+      <td style="white-space:nowrap">${s.official_url ? `<a href="${escHtml(s.official_url)}" target="_blank" rel="noopener" style="color:var(--accent)">链接↗</a>` : '<span style="color:var(--text-muted)">-</span>'}</td>
+      <td style="color:var(--text-muted);font-size:12px">${escHtml(s.license_note || '')}</td>
+    </tr>`).join('');
+}
+
+// ── 写权限按钮显隐 + 只读提示 ──
+function applyDocKbWriterUI() {
+  const writer = isDocKbWriter();
+  const addBtn = document.getElementById('dk-add-btn');
+  const importBtn = document.getElementById('dk-import-btn');
+  const srcAddBtn = document.getElementById('dk-src-add-btn');
+  const hint = document.getElementById('dk-perm-hint');
+  if (addBtn) addBtn.style.display = writer ? '' : 'none';
+  if (importBtn) importBtn.style.display = writer ? '' : 'none';
+  if (srcAddBtn) srcAddBtn.style.display = writer ? '' : 'none';
+  if (hint) hint.style.display = writer ? 'none' : '';
+}
+
+function resetDocKbFilters() {
+  document.getElementById('dk-db-type').value = '';
+  document.getElementById('dk-category').value = '';
+  document.getElementById('dk-version').value = '';
+  document.getElementById('dk-q').value = '';
+  loadDocKb();
+}
+
+// ── 轻量 modal（复用 sqlaudit 自带 overlay 范式）──
+function openDocKbModal(html) {
+  closeDocKbModal();
+  const wrap = document.createElement('div');
+  wrap.id = 'doc-kb-modal-overlay';
+  wrap.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.55);z-index:999998;display:flex;align-items:center;justify-content:center';
+  wrap.addEventListener('click', (e) => { if (e.target === wrap) closeDocKbModal(); });
+  const card = document.createElement('div');
+  card.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:22px;max-width:620px;width:94%;max-height:calc(100vh - 40px);overflow-y:auto;color:var(--text);box-shadow:0 16px 48px rgba(0,0,0,0.35)';
+  card.innerHTML = html;
+  wrap.appendChild(card);
+  document.documentElement.appendChild(wrap);
+  document.addEventListener('keydown', docKbModalKey);
+}
+function docKbModalKey(e) { if (e.key === 'Escape') closeDocKbModal(); }
+function closeDocKbModal() {
+  const wrap = document.getElementById('doc-kb-modal-overlay');
+  if (wrap) wrap.remove();
+  document.removeEventListener('keydown', docKbModalKey);
+}
+
+// ── 事实 新增 / 编辑 modal ──
+function openDocKbFactModal(fid) {
+  const isEdit = !!fid;
+  const f = isEdit ? (dkFacts.find(x => x.id === fid) || {}) : {};
+  const dbOpts = DOCKB_DB_TYPES.map(d => `<option value="${d}" ${d === (f.db_type || 'all') ? 'selected' : ''}>${escHtml(dkDbLabel(d))}</option>`).join('');
+  const catOpts = DOCKB_CATEGORIES.map(c => `<option value="${c}" ${c === (f.category || 'param') ? 'selected' : ''}>${escHtml(dkCategoryLabel(c))}（${c}）</option>`).join('');
+  const sevOpts = ['', 'low', 'mid', 'high', 'block'].map(s => `<option value="${s}" ${s === (f.severity || '') ? 'selected' : ''}>${s ? escHtml(dkSeverityLabel(s)) : '（空）'}</option>`).join('');
+  const langOpts = DOCKB_LANGS.map(l => `<option value="${l}" ${l === (f.lang || 'both') ? 'selected' : ''}>${l}</option>`).join('');
+  const srcOpts = '<option value="">（无）</option>' + dkSources.map(s => `<option value="${s.id}" ${s.id === (f.source_id || '') ? 'selected' : ''}>#${s.id} ${escHtml(s.title || s.db_type)}</option>`).join('');
+  const fieldLabel = 'font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px';
+  const inputStyle = 'width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px';
+  const html = `
+    <div style="font-size:16px;font-weight:600;margin-bottom:14px;color:var(--text)">${isEdit ? '编辑事实' : '新增事实'}</div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <div style="flex:1;min-width:160px"><label style="${fieldLabel}">数据库类型 *</label><select id="dkf-db_type" style="${inputStyle}">${dbOpts}</select></div>
+        <div style="flex:1;min-width:160px"><label style="${fieldLabel}">版本（默认 all）</label><input id="dkf-version" value="${escHtml(f.version || 'all')}" style="${inputStyle}"></div>
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <div style="flex:1;min-width:140px"><label style="${fieldLabel}">类别 *</label><select id="dkf-category" style="${inputStyle}">${catOpts}</select></div>
+        <div style="flex:1;min-width:140px"><label style="${fieldLabel}">严重度（可选）</label><select id="dkf-severity" style="${inputStyle}">${sevOpts}</select></div>
+        <div style="flex:1;min-width:140px"><label style="${fieldLabel}">语言</label><select id="dkf-lang" style="${inputStyle}">${langOpts}</select></div>
+      </div>
+      <div><label style="${fieldLabel}">Key（必填，唯一标识）*</label><input id="dkf-key" value="${escHtml(f.key || '')}" placeholder="如 innodb_buffer_pool_size" style="${inputStyle}"></div>
+      <div><label style="${fieldLabel}">Value（事实值，如「默认 128MB」）</label><textarea id="dkf-value" rows="2" style="${inputStyle}">${escHtml(f.value || '')}</textarea></div>
+      <div><label style="${fieldLabel}">Excerpt（官方摘录，可留空）</label><textarea id="dkf-excerpt" rows="2" style="${inputStyle}">${escHtml(f.excerpt || '')}</textarea></div>
+      <div><label style="${fieldLabel}">官方链接 official_url</label><input id="dkf-official_url" value="${escHtml(f.official_url || '')}" placeholder="https://..." style="${inputStyle}"></div>
+      <div><label style="${fieldLabel}">来源 Source</label><select id="dkf-source_id" style="${inputStyle}">${srcOpts}</select></div>
+      <div id="dkf-err" style="color:var(--danger);font-size:12px;display:none"></div>
+    </div>
+    <div style="margin-top:18px;display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="closeDocKbModal()">取消</button>
+      <button class="btn btn-primary" onclick="saveDocKbFact(${isEdit ? fid : 0})">${isEdit ? '保存' : '创建'}</button>
+    </div>`;
+  openDocKbModal(html);
+}
+
+async function saveDocKbFact(fid) {
+  const errEl = document.getElementById('dkf-err');
+  errEl.style.display = 'none';
+  const payload = {
+    db_type: document.getElementById('dkf-db_type').value,
+    version: document.getElementById('dkf-version').value.trim() || 'all',
+    category: document.getElementById('dkf-category').value,
+    severity: document.getElementById('dkf-severity').value || null,
+    lang: document.getElementById('dkf-lang').value || 'both',
+    key: document.getElementById('dkf-key').value.trim(),
+    value: document.getElementById('dkf-value').value.trim() || null,
+    excerpt: document.getElementById('dkf-excerpt').value.trim() || null,
+    official_url: document.getElementById('dkf-official_url').value.trim() || null,
+    source_id: document.getElementById('dkf-source_id').value ? parseInt(document.getElementById('dkf-source_id').value, 10) : null,
+  };
+  if (!payload.key) { errEl.textContent = 'Key 不能为空'; errEl.style.display = 'block'; return; }
+  try {
+    const url = fid ? ('/api/doc-kb/facts/' + fid) : '/api/doc-kb/facts';
+    const method = fid ? 'PUT' : 'POST';
+    const res = await fetch(url, {method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)});
+    if (res.status === 401) { errEl.textContent = '请先登录后再保存。'; errEl.style.display = 'block'; return; }
+    if (res.status === 403) { errEl.textContent = '权限不足（需要 admin/operator）。'; errEl.style.display = 'block'; return; }
+    const data = await res.json();
+    if (!data.ok) { errEl.textContent = '保存失败：' + (data.error || '未知错误'); errEl.style.display = 'block'; return; }
+    closeDocKbModal();
+    toastSuccess(fid ? '已更新事实' : '已创建事实');
+    loadDocKbFacts();
+  } catch (e) {
+    errEl.textContent = '保存失败：' + e.message;
+    errEl.style.display = 'block';
+  }
+}
+
+// ── 来源 新增 modal ──
+function openDocKbSourceModal() {
+  const dbOpts = DOCKB_DB_TYPES.filter(d => d !== 'all').map(d => `<option value="${d}" ${d === 'mysql' ? 'selected' : ''}>${escHtml(dkDbLabel(d))}</option>`).join('');
+  const fieldLabel = 'font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px';
+  const inputStyle = 'width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px';
+  const html = `
+    <div style="font-size:16px;font-weight:600;margin-bottom:14px;color:var(--text)">新增官方来源</div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <div style="flex:1;min-width:160px"><label style="${fieldLabel}">数据库类型 *</label><select id="dks-db_type" style="${inputStyle}">${dbOpts}</select></div>
+        <div style="flex:1;min-width:160px"><label style="${fieldLabel}">版本 *（如 8.0 / 19c / 14）</label><input id="dks-version" value="" style="${inputStyle}"></div>
+      </div>
+      <div><label style="${fieldLabel}">标题（可选）</label><input id="dks-title" placeholder="如 MySQL 8.0 官方文档" style="${inputStyle}"></div>
+      <div><label style="${fieldLabel}">官方链接 official_url *</label><input id="dks-official_url" placeholder="https://dev.mysql.com/doc/refman/8.0/en/" style="${inputStyle}"></div>
+      <div><label style="${fieldLabel}">许可证说明（可选）</label><input id="dks-license_note" placeholder="如 CC BY 4.0" style="${inputStyle}"></div>
+      <div><label style="${fieldLabel}">备注（可选）</label><textarea id="dks-note" rows="2" style="${inputStyle}"></textarea></div>
+      <div id="dks-err" style="color:var(--danger);font-size:12px;display:none"></div>
+    </div>
+    <div style="margin-top:18px;display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="closeDocKbModal()">取消</button>
+      <button class="btn btn-primary" onclick="saveDocKbSource()">保存</button>
+    </div>`;
+  openDocKbModal(html);
+}
+
+async function saveDocKbSource() {
+  const errEl = document.getElementById('dks-err');
+  errEl.style.display = 'none';
+  const payload = {
+    db_type: document.getElementById('dks-db_type').value,
+    version: document.getElementById('dks-version').value.trim(),
+    official_url: document.getElementById('dks-official_url').value.trim(),
+    title: document.getElementById('dks-title').value.trim() || null,
+    license_note: document.getElementById('dks-license_note').value.trim() || null,
+    note: document.getElementById('dks-note').value.trim() || null,
+  };
+  if (!payload.version || !payload.official_url) { errEl.textContent = '版本与官方链接为必填'; errEl.style.display = 'block'; return; }
+  try {
+    // 来源 version 必填、不可为空；db_type 不允许 all
+    if (payload.db_type === 'all') { errEl.textContent = '来源 db_type 不可用 all，请选择具体库类型'; errEl.style.display = 'block'; return; }
+    const res = await fetch('/api/doc-kb/sources', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)});
+    if (res.status === 401) { errEl.textContent = '请先登录后再保存。'; errEl.style.display = 'block'; return; }
+    if (res.status === 403) { errEl.textContent = '权限不足（需要 admin/operator）。'; errEl.style.display = 'block'; return; }
+    const data = await res.json();
+    if (!data.ok) { errEl.textContent = '保存失败：' + (data.error || '未知错误'); errEl.style.display = 'block'; return; }
+    closeDocKbModal();
+    toastSuccess('已新增来源');
+    loadDocKbSources();
+  } catch (e) {
+    errEl.textContent = '保存失败：' + e.message;
+    errEl.style.display = 'block';
+  }
+}
+
+// ── 批量导入 ──
+function openDocKbImport() {
+  const el = document.getElementById('dk-import-body');
+  if (el) el.style.display = (el.style.display === 'none' || !el.style.display) ? 'block' : 'none';
+}
+
+async function importDocKbFacts() {
+  const raw = (document.getElementById('dk-import-json').value || '').trim();
+  const resultEl = document.getElementById('dk-import-result');
+  if (!raw) { resultEl.style.color = 'var(--text-muted)'; resultEl.textContent = '请粘贴事实 JSON 数组。'; return; }
+  let facts;
+  try {
+    facts = JSON.parse(raw);
+  } catch (e) {
+    resultEl.style.color = 'var(--danger)'; resultEl.textContent = 'JSON 解析失败：' + e.message; return;
+  }
+  if (!Array.isArray(facts)) { resultEl.style.color = 'var(--danger)'; resultEl.textContent = '顶层应为 JSON 数组 [...]'; return; }
+  resultEl.style.color = 'var(--text-muted)'; resultEl.textContent = '导入中...';
+  try {
+    const res = await fetch('/api/doc-kb/import', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({facts})});
+    if (res.status === 401) { resultEl.style.color = 'var(--danger)'; resultEl.textContent = '请先登录后再导入。'; return; }
+    if (res.status === 403) { resultEl.style.color = 'var(--danger)'; resultEl.textContent = '权限不足（需要 admin/operator）。'; return; }
+    const data = await res.json();
+    if (data.ok) {
+      let msg = '✅ 导入成功：新增 ' + (data.created || 0) + ' 条';
+      if (data.errors && data.errors.length) {
+        msg += '\n\n⚠️ ' + data.errors.length + ' 条失败：';
+        msg += '\n' + data.errors.map(e => '  #' + e.index + (e.key ? ' (' + e.key + ')' : '') + ': ' + e.error).join('\n');
+      }
+      resultEl.style.color = 'var(--success)'; resultEl.textContent = msg;
+      loadDocKbFacts();
+    } else {
+      // 含 Phase 2 AI 抽取占位分支（ok:false + error 提示），统一以警告色呈现，不让用户以为坏了
+      resultEl.style.color = 'var(--warn)'; resultEl.textContent = (data.error || '导入失败');
+    }
+  } catch (e) {
+    resultEl.style.color = 'var(--danger)'; resultEl.textContent = '导入失败：' + e.message;
   }
 }
 

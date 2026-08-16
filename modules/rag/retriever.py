@@ -22,57 +22,60 @@ class RAGRetriever:
         self.embedding_model = embedding_model or OllamaEmbedding()
 
     def retrieve_for_diagnosis(self, db_type: str, metrics: dict,
-                               issues: list, top_k: int = 3) -> str:
-        """
-        为数据库诊断场景检索相关文档片段
+                               issues: list, top_k: int = 3) -> list:
+        """为数据库诊断场景检索参考文档（向量召回 + DocKB 官方事实合并）。
 
         检索策略：
-        1. 从 issues 提取风险关键词（col1/col2/col3）
-        2. 从 metrics 提取异常指标名称
-        3. 构建多路查询: ["{db_type} {关键词}", "{db_type} {指标名}", ...]
-        4. 合并去重各查询结果，取 TopK
-
-        Args:
-            db_type: 数据库类型（mysql/pg/oracle/dm/sqlserver/tidb）
-            metrics: 巡检指标字典
-            issues: 风险项列表
-            top_k: 返回结果数量
+        1. DocKB 结构化召回（零 embedding 依赖，始终优先，官方事实权威）：
+           from modules.doc_kb import lookup_for_diagnosis
+        2. 向量召回（依赖 embedding，失败则静默降级）：
+           从 issues/metrics 提炼查询 → embedding → vector_store.search
+        3. 合并去重（DocKB 优先），返回 list[dict] 供 format_rag_context 渲染。
 
         Returns:
-            格式化的 RAG 上下文文本（供注入 Prompt），空字符串表示无结果
+            结构化结果列表（对齐 vector_store.search schema + DocKB 专属字段）；
+            无结果返回 []。注意：本方法只返回原始结果列表，由调用方
+            format_rag_context() 渲染——不再在此二次格式化（修复既有 double-format bug）。
         """
-        # 构建检索查询
+        # 1. DocKB 结构化召回（零 embedding 依赖，始终可用，官方事实优先）
+        dockb_results = []
+        try:
+            from modules.doc_kb import lookup_for_diagnosis
+            dockb_results = lookup_for_diagnosis(db_type, metrics, issues, top_k=top_k)
+        except Exception:
+            dockb_results = []
+
+        # 2. 向量召回（依赖 embedding；失败则静默降级）
+        vector_results = []
         query_texts = self._build_diagnosis_queries(db_type, metrics, issues)
-        if not query_texts:
-            return ''
+        if query_texts and self.embedding_model is not None:
+            seen_ids = set()
+            for query_text in query_texts[:3]:  # 最多 3 个查询
+                try:
+                    query_emb = self.embedding_model.embed_text(query_text)
+                    results = self.vector_store.search(
+                        query_emb, db_type=db_type, top_k=top_k
+                    )
+                    for res in results:
+                        key = f"{res['doc_id']}_{res['chunk_index']}"
+                        if key not in seen_ids:
+                            seen_ids.add(key)
+                            vector_results.append(res)
+                except Exception:
+                    # 单次查询失败不影响整体
+                    continue
+            vector_results.sort(key=lambda x: x.get('score', 0), reverse=True)
 
-        # 多路检索，收集所有结果
-        all_results = []
-        seen_ids = set()
-
-        for query_text in query_texts[:3]:  # 最多 3 个查询
-            try:
-                query_emb = self.embedding_model.embed_text(query_text)
-                results = self.vector_store.search(
-                    query_emb, db_type=db_type, top_k=top_k
-                )
-                for res in results:
-                    key = f"{res['doc_id']}_{res['chunk_index']}"
-                    if key not in seen_ids:
-                        seen_ids.add(key)
-                        all_results.append(res)
-            except Exception:
-                # 单次查询失败不影响整体
+        # 3. 合并去重（DocKB 官方事实优先，向量结果补全），统一 schema
+        merged = []
+        seen = set()
+        for res in (dockb_results + vector_results):
+            key = f"{res.get('doc_id')}_{res.get('chunk_index')}"
+            if key in seen:
                 continue
-
-        if not all_results:
-            return ''
-
-        # 按相似度排序取 TopK
-        all_results.sort(key=lambda x: x['score'], reverse=True)
-        top_results = all_results[:top_k]
-
-        return self.format_rag_context(top_results, lang='zh')
+            seen.add(key)
+            merged.append(res)
+        return merged[:max(top_k, 5)]
 
     def _build_diagnosis_queries(self, db_type: str, metrics: dict,
                                   issues: list) -> list[str]:
@@ -147,44 +150,71 @@ class RAGRetriever:
         return unique_queries
 
     def format_rag_context(self, results: list[dict], lang: str = 'zh') -> str:
-        """
-        将检索结果格式化为 Prompt 可用的上下文
+        """将检索结果格式化为 Prompt 可用的上下文。
+
+        results 来自 vector_store.search（向量片段）或 doc_kb.lookup_for_diagnosis
+        （官方事实），二者 schema 兼容：均含 doc_id/chunk_index/content/source/title/
+        db_type/score；DocKB 结果额外含 official_url/category/key/value/severity。
 
         Args:
-            results: vector_store.search() 返回的结果列表
+            results: 结构化结果列表（list[dict]）
             lang: 'zh' 或 'en'
 
         Returns:
-            格式化的上下文文本
+            格式化的上下文文本；空列表返回 ''
         """
         if not results:
             return ''
 
         if lang == 'zh':
-            header = ["## 参考文档知识库\n"]
-            header.append(f"（检索到 {len(results)} 条相关文档片段，请优先参考）\n")
+            header = ["## 参考文档知识库（官方文档 + 向量片段）\n"]
+            header.append(f"（共检索到 {len(results)} 条相关参考，请优先参考并标注来源）\n")
         else:
-            header = ["## Reference Documentation Knowledge Base\n"]
-            header.append(f"(Found {len(results)} relevant fragments, please refer first)\n\n")
+            header = ["## Reference Documentation (official docs + vector fragments)\n"]
+            header.append(f"({len(results)} relevant references found)\n\n")
 
         lines = []
         for i, res in enumerate(results, 1):
-            title = res.get('title', '未知来源')
-            source = res.get('source', '')
             db_type = res.get('db_type', '')
+            category = res.get('category', '')
+            key = res.get('key', '')
+            value = res.get('value', '')
+            title = res.get('title') or key or res.get('source', '未知来源')
+            source = res.get('source', '')
+            official_url = res.get('official_url') or source
             score = res.get('score', 0)
+            severity = res.get('severity', '')
             content = res.get('content', '')
 
             # 截断每块内容（避免 Prompt 过长，单块最多 300 字）
-            if len(content) > 300:
+            if content and len(content) > 300:
                 content = content[:300] + '...'
 
-            lines.append(f"### 片段 {i}｜{title}｜相关度 {score:.2f}｜{db_type}")
+            # 标签行（中文/英文）
             if lang == 'zh':
-                lines.append(f"来源: {source or '未知'}")
+                tag = f"片段 {i}｜{db_type}" + (f"｜{category}" if category else "")
+                tag += (f"｜{key}" if key else "")
+                if isinstance(score, (int, float)):
+                    tag += f"｜相关度 {score:.2f}"
+                if severity:
+                    tag += f"｜严重度 {severity}"
             else:
-                lines.append(f"Source: {source or 'Unknown'}")
-            lines.append(content)
+                tag = f"Fragment {i}｜{db_type}" + (f"｜{category}" if category else "")
+                tag += (f"｜{key}" if key else "")
+                if isinstance(score, (int, float)):
+                    tag += f"｜relevance {score:.2f}"
+                if severity:
+                    tag += f"｜severity {severity}"
+
+            lines.append(f"### {tag}")
+            if value:
+                lines.append(f"官方事实: {value}")
+            if official_url:
+                lines.append(f"来源: {official_url}")
+            elif source:
+                lines.append(f"来源: {source}")
+            if content and content != value:
+                lines.append(content)
             lines.append("")  # 空行分隔
 
         return '\n'.join(header + lines)

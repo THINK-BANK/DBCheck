@@ -765,6 +765,14 @@ try:
 except Exception as e:
     print(f"  [WARN] SQL 审核模块加载失败: {e}")
 
+# ── DocKB 官方文档知识库（内置模块，AI 诊断参考数据源）──
+try:
+    from modules.doc_kb import register_doc_kb
+    register_doc_kb(app)
+    print("  [OK] DocKB 官方文档知识库已加载")
+except Exception as e:
+    print(f"  [WARN] DocKB 模块加载失败: {e}")
+
 # ── 工具函数 ───────────────────────────────────────────────
 def _ts():
     return datetime.datetime.now().strftime('%H:%M:%S')
