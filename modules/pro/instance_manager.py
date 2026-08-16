@@ -324,9 +324,12 @@ class InstanceManager:
                     # sysdba / ssh_enabled / enabled / encrypt / trust_server_certificate 从 INTEGER 还原为 bool
                     for bool_field in ('sysdba', 'ssh_enabled', 'enabled', 'encrypt', 'trust_server_certificate'):
                         d[bool_field] = bool(d.get(bool_field, False))
-                    # 存量行 connection_mode 可能为 NULL/''，归一化为 'odbc'（向后兼容）
+                    # 存量行 connection_mode 可能为 NULL/''，按类型归一化：
+                    # sqlserver_jdbc 语义即 JDBC，缺省必须归 'jdbc'，否则会被固化成
+                    # 'odbc'，测试连接时错误走到 pyodbc 报 "ODBC Driver 17" 错误；
+                    # 其余类型保持 'odbc'（向后兼容）。须与保存路径(下方 save)一致。
                     if not d.get('connection_mode'):
-                        d['connection_mode'] = 'odbc'
+                        d['connection_mode'] = 'jdbc' if d.get('db_type') == 'sqlserver_jdbc' else 'odbc'
                     inst = DatabaseInstance.from_dict(d)
                     self._instances[inst.id] = inst
                 conn.close()
