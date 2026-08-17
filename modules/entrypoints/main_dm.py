@@ -8,6 +8,9 @@ from modules.config.version import __version__ as VER
 from i18n import get_lang, t as _t
 from modules.inspection.engine import BaseInspectionEngine
 from modules.core import entry
+from modules.core.paths import PROJECT_ROOT
+import os
+import glob as _glob
 
 """
 达梦 DM8 数据库自动化健康巡检工具 {VER}
@@ -91,6 +94,77 @@ except ImportError:
     DM_DRIVER = None
 
 
+# ── JDBC 支持（优先 JDBC，回退 dmPython）────────────────────────────
+# 与「测试连接」(/api/test_db、/api/pro/datasources/test-connection) 策略一致：
+# 优先用 drivers/dm8/DmJdbcDriver*.jar 走纯 Java JDBC，规避 -70089。
+def _detect_java_home():
+    """自动探测 JAVA_HOME（按常见安装路径），与 gbase 巡检保持一致。"""
+    candidates = [
+        os.environ.get('JAVA_HOME', ''),
+        # Windows
+        'C:\\Program Files\\Java\\jdk-11',
+        'C:\\Program Files\\Java\\jdk-17',
+        'C:\\Program Files\\Java\\jdk-1.8',
+        'C:\\Program Files\\Eclipse Adoptium\\jdk-11',
+        'C:\\Program Files\\Eclipse Adoptium\\jdk-17',
+        # Linux (Debian/Ubuntu Docker 镜像)
+        '/usr/lib/jvm/java-17-openjdk-amd64',
+        '/usr/lib/jvm/java-11-openjdk-amd64',
+        '/usr/lib/jvm/default-java',
+        '/usr/lib/jvm/java-1.17.0-openjdk-amd64',
+        '/usr/lib/jvm/java-1.11.0-openjdk-amd64',
+    ]
+    for path in candidates:
+        if path and os.path.isdir(path):
+            return path
+    try:
+        _jvm_dirs = sorted(_glob.glob('/usr/lib/jvm/java-*'))
+        for d in _jvm_dirs:
+            if os.path.isdir(d):
+                return d
+    except Exception:
+        pass
+    return None
+
+
+def _setup_jvm_for_dm(jar_path):
+    """确保 JVM 已启动，并把达梦 JDBC 驱动 jar 加入 classpath。"""
+    import jpype
+    _java_home = _detect_java_home()
+    if _java_home:
+        os.environ['JAVA_HOME'] = _java_home
+        _jvm_dir = os.path.join(_java_home, 'bin', 'server')
+        if os.path.isdir(_jvm_dir):
+            os.environ['PATH'] = _jvm_dir + os.pathsep + os.environ.get('PATH', '')
+    if not jpype.isJVMStarted():
+        try:
+            jpype.addClassPath(jar_path)
+            jpype.startJVM()
+        except Exception:
+            pass
+    else:
+        # JVM 已被其它巡检类型启动，尝试补加 classpath（兼容多库同进程）
+        try:
+            jpype.addClassPath(jar_path)
+        except Exception:
+            pass
+
+
+def _find_dm_jdbc_jar():
+    """定位 <项目根>/drivers/dm8/DmJdbcDriver*.jar，按版本号降序取最高版。"""
+    _dm_dir = os.path.join(str(PROJECT_ROOT), 'drivers', 'dm8')
+    if not os.path.isdir(_dm_dir):
+        return None
+
+    def _ver(name):
+        _m = __import__('re').search(r'(\d+)', name)
+        return int(_m.group(1)) if _m else 0
+
+    _jars = sorted(_glob.glob(os.path.join(_dm_dir, 'DmJdbcDriver*.jar')),
+                   key=_ver, reverse=True)
+    return _jars[0] if _jars else None
+
+
 class DmInspector(BaseInspectionEngine):
     """
     达梦 DM8 巡检引擎
@@ -104,15 +178,48 @@ class DmInspector(BaseInspectionEngine):
         
     def connect(self):
         """
-        连接达梦 DM8 数据库
-        使用 dmPython 驱动
-        注意：dmPython.connect() 不支持单独的 port 参数，
-             必须将 host:port 合并到 server 参数中
+        连接达梦 DM8 数据库。
+
+        优先使用 JDBC 驱动（纯 Java，无需达梦原生客户端 libdmcrypt.so），
+        驱动 jar 置于 <项目根>/drivers/dm8/DmJdbcDriver*.jar；JDBC 不可用时
+        回退 dmPython（需本机安装达梦客户端原生库）。与「测试连接」策略一致，
+        从根本上规避 -70089 Encryption module failed to load。
         """
+        # ── 优先 JDBC ──────────────────────────────────────────────
+        try:
+            _jar = _find_dm_jdbc_jar()
+        except Exception:
+            _jar = None
+
+        if _jar:
+            try:
+                import jaydebeapi
+                _setup_jvm_for_dm(_jar)
+                _url = 'jdbc:dm://%s:%d' % (self.host, int(self.port))
+                self.conn = jaydebeapi.connect(
+                    'dm.jdbc.driver.DmDriver', _url,
+                    [self.user, self.password], [_jar])
+                self.cursor = self.conn.cursor()
+                try:
+                    self.cursor.execute("SELECT VERSION$ FROM V$VERSION")
+                    version = self.cursor.fetchone()[0]
+                except Exception:
+                    try:
+                        self.cursor.execute("SELECT BANNER FROM V$VERSION WHERE ROWNUM=1")
+                        version = self.cursor.fetchone()[0]
+                    except Exception:
+                        version = 'Unknown'
+                self.context['version'] = [{'VERSION': version}]
+                print(_t("dm8_connect_success").format(host=self.host, port=self.port))
+                return True, version
+            except Exception as e:  # noqa: BLE001 - JDBC 失败回退 dmPython
+                print("DM8 JDBC 连接失败，回退 dmPython:", e)
+
+        # ── 回退 dmPython ──────────────────────────────────────────
         try:
             if dm_driver is None:
-                return False, "达梦数据库驱动未安装，请执行: pip install dmpython"
-            
+                return False, "达梦数据库驱动未安装，请执行: pip install dmpython（或将 JDBC 驱动放入 drivers/dm8/）"
+
             # 正确写法：server='host:port'（参考 instance_manager.py 第 448-449 行）
             dsn = '%s:%d' % (self.host, int(self.port))
             self.conn = dm_driver.connect(
@@ -121,7 +228,7 @@ class DmInspector(BaseInspectionEngine):
                 server=dsn  # 正确：'host:port' 格式
             )
             self.cursor = self.conn.cursor()
-            
+
             # 获取达梦版本号
             try:
                 self.cursor.execute("SELECT VERSION$ FROM V$VERSION")
@@ -133,10 +240,10 @@ class DmInspector(BaseInspectionEngine):
                 except Exception:
                     version = 'Unknown'
             self.context['version'] = [{'VERSION': version}]
-            
+
             print(_t("dm8_connect_success").format(host=self.host, port=self.port))
             return True, version
-            
+
         except Exception as e:
             err_msg = str(e)
             print(_t("dm8_connect_fail").format(error=err_msg))

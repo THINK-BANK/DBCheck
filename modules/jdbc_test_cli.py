@@ -53,8 +53,8 @@ import sys
 # 结果行前缀：主进程按此前缀从 stdout 中提取唯一结果行
 RESULT_PREFIX = "__DBCHECK_JDBC_TEST_RESULT__"
 
-# 本 CLI 支持隔离执行的数据库类型（均为进程内 JVM/JPype 实现）
-SUPPORTED_DB_TYPES = ('hgdb', 'db2', 'sqlserver_jdbc')
+# 本 CLI 支持隔离执行的数据库类型（均为进程内 JVM/JPype 实现，或纯 Java JDBC）
+SUPPORTED_DB_TYPES = ('hgdb', 'db2', 'sqlserver_jdbc', 'dm')
 
 
 def _ensure_project_root_on_path():
@@ -168,6 +168,129 @@ def _tcp_preflight(host, port, timeout=8):
                 f'请确认数据库服务已启动并在该端口监听。')
 
 
+def _find_dm_jdbc_jar():
+    """定位 <项目根>/drivers/dm8/ 下的达梦 JDBC 驱动 jar。
+
+    选择优先级：DmJdbcDriver18.jar（达梦官方推荐 DM8 驱动）>
+    其余按版本号降序取最高版本（如 DmJdbcDriver11 > 8 > 7 > 6）。
+
+    Returns:
+        jar 绝对路径；未找到返回 None。
+    """
+    import glob
+    import re
+    _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    _dm_dir = os.path.join(_root, 'drivers', 'dm8')
+    if not os.path.isdir(_dm_dir):
+        return None
+    _jars = glob.glob(os.path.join(_dm_dir, 'DmJdbcDriver*.jar'))
+    if not _jars:
+        return None
+
+    def _ver(p):
+        m = re.search(r'DmJdbcDriver(\d+)', os.path.basename(p))
+        return int(m.group(1)) if m else 0
+
+    _sorted = sorted(_jars, key=_ver, reverse=True)
+    for _j in _sorted:
+        if os.path.basename(_j) == 'DmJdbcDriver18.jar':
+            return _j
+    return _sorted[0]
+
+
+def _test_dm_jdbc(payload):
+    """DM8（达梦）JDBC 连接测试——纯 Java 驱动，无需达梦原生客户端。
+
+    驱动 jar 置于 <项目根>/drivers/dm8/DmJdbcDriver*.jar。不依赖 dmPython /
+    达梦客户端原生库（libdmcrypt.so），从根本上规避
+    ``-70089 Encryption module failed to load``。不另做插件，直接复用本隔离
+    子进程（JVM 在 monkey-patch 之外执行，避免钉死 gevent hub）。
+    """
+    _jar = _find_dm_jdbc_jar()
+    if _jar is None:
+        return False, ('drivers/dm8/ 下未找到 DmJdbcDriver*.jar。请从达梦官网下载 '
+                       'DM8 JDBC 驱动（推荐 DmJdbcDriver18.jar）并放入该目录。')
+
+    _host = payload.get('host')
+    try:
+        _port = int(payload.get('port') or 5236)
+    except (TypeError, ValueError):
+        _port = 5236
+    _user = payload.get('user') or ''
+    _pw = payload.get('password') or ''
+
+    # TCP 预检：主机不可达时几秒内给出准确原因，不必启 JVM
+    _err = _tcp_preflight(_host, _port)
+    if _err:
+        return False, _err
+
+    try:
+        import jaydebeapi
+    except Exception as e:  # noqa: BLE001
+        # JDBC 后端（jaydebeapi）缺失 → 回退 dmPython（需本机达梦客户端原生库）。
+        # 本子进程未被 gevent monkey-patch，dmPython 在此执行安全。
+        return _test_dm_dmpython(payload, jdbc_reason=e)
+
+    # DM8 JDBC：驱动类 dm.jdbc.driver.DmDriver，URL jdbc:dm://host:port
+    _url = f'jdbc:dm://{_host}:{_port}'
+    try:
+        _conn = jaydebeapi.connect('dm.jdbc.driver.DmDriver', _url,
+                                   [_user, _pw], _jar)
+        _cur = _conn.cursor()
+        try:
+            _cur.execute('SELECT 1')
+            _cur.fetchall()
+        finally:
+            _cur.close()
+            _conn.close()
+        return True, f'DM8 连接成功（JDBC 驱动：{os.path.basename(_jar)}）'
+    except Exception as e:  # noqa: BLE001
+        return False, f'DM8 JDBC 连接失败：{e}'
+
+
+def _test_dm_dmpython(payload, jdbc_reason=None):
+    """DM8 回退方案：dmPython（需本机安装达梦客户端原生库 libdmcrypt.so）。
+
+    仅在 jaydebeapi / JPype1 / JDK 缺失时使用。若达梦客户端也未安装，
+    给出明确的双路径修复指引，而不是笼统报一个 import 错。本函数运行在
+    未被 gevent monkey-patch 的隔离子进程内，dmPython 原生调用安全。
+    """
+    _host = payload.get('host')
+    try:
+        _port = int(payload.get('port') or 5236)
+    except (TypeError, ValueError):
+        _port = 5236
+    _user = payload.get('user') or ''
+    _pw = payload.get('password') or ''
+
+    try:
+        import dmPython  # 无达梦客户端时 import 即失败
+    except Exception as e:  # noqa: BLE001
+        _hint = (f'JDBC 后端不可用（{jdbc_reason}）；dmPython 亦不可用（{e}）。\n'
+                 f'请二选一：① 安装 JDBC 依赖：pip install jaydebeapi JPype1，'
+                 f'并确保运行环境有 JDK/JRE；② 安装达梦客户端后 pip install dmPython。')
+        return False, _hint
+
+    # TCP 预检：主机不可达时几秒内给出准确原因
+    _err = _tcp_preflight(_host, _port)
+    if _err:
+        return False, _err
+
+    try:
+        _dsn = '%s:%d' % (_host, _port)
+        _conn = dmPython.connect(user=_user, password=_pw, server=_dsn)
+        _cur = _conn.cursor()
+        try:
+            _cur.execute('SELECT 1')
+            _cur.fetchall()
+        finally:
+            _cur.close()
+            _conn.close()
+        return True, 'DM8 连接成功（dmPython 驱动，依赖本机达梦客户端原生库）'
+    except Exception as e:  # noqa: BLE001
+        return False, f'DM8（dmPython）连接失败：{e}'
+
+
 def run_test(payload):
     """执行一次 JDBC 连接测试。
 
@@ -203,6 +326,12 @@ def run_test(payload):
         except Exception as e:  # noqa: BLE001
             return False, f'Oracle 连接测试异常: {e}'
         return bool(r.get('ok')), str(r.get('message') or r.get('error') or '')
+
+    # DM8（达梦）JDBC 连接测试：纯 Java 驱动，无需达梦原生客户端（libdmcrypt.so）。
+    # 驱动 jar 置于 <项目根>/drivers/dm8/DmJdbcDriver*.jar；不依赖 dmPython，
+    # 从根上规避 -70089 Encryption module failed to load。
+    if db_type == 'dm':
+        return _test_dm_jdbc(payload)
 
     # 自定义 jdbc_url 可能指向别的地址（含多主机/故障转移），此时不做预检
     _kw = payload.get('kwargs') or {}

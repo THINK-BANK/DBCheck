@@ -57,7 +57,7 @@ RESULT_PREFIX = "__DBCHECK_INSP_EVENT__"
 DONE_PREFIX = "__DBCHECK_INSP_DONE__"
 
 # 本 CLI 需要隔离执行的 JVM 数据库类型
-JVM_INSPECTION_DB_TYPES = ('hgdb', 'db2', 'sqlserver_jdbc', 'oracle_jdbc')
+JVM_INSPECTION_DB_TYPES = ('hgdb', 'db2', 'sqlserver_jdbc', 'oracle_jdbc', 'dm')
 
 
 def _ensure_project_root_on_path():

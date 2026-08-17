@@ -50,6 +50,8 @@ a = Analysis(
         'psycopg2', 'psycopg2._psycopg',
         'oracledb',
         'pyodbc',
+        'jaydebeapi',       # DM8 / GBase 8s JDBC 连接（DM8 巡检与测试连接现已走 jaydebeapi）
+        'JPype1',           # jaydebeapi 的 JVM 后端；SQL Server/DB2/HGDB/DM8 JDBC 驱动均依赖
         'redis',  # Redis / Redis Cluster 插件动态 import，需显式 hiddenimport 才能打进冻结版
         'paramiko', 'paramiko.transport', 'paramiko.auth_handler',
         'jinja2', 'jinja2.ext',

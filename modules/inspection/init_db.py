@@ -2730,7 +2730,11 @@ DM8_DEFAULT_CHAPTERS = [
         'chapter_title_en': 'Lock & Wait Analysis',
         'description': '锁等待和长事务检查',
         'queries': [
-            {'key': 'lock_wait', 'sql': "SELECT * FROM V$LOCK ORDER BY TABLE_ID;",
+            {'key': 'lock_wait', 'sql': """
+                SELECT ADDR, TRX_ID, LTYPE, LMODE, BLOCKED, TABLE_ID, TID
+                FROM V$LOCK
+                ORDER BY TABLE_ID;
+            """,
              'desc_zh': '锁等待会话', 'desc_en': 'Lock waiting sessions'},
             {'key': 'long_trx', 'sql': "SELECT trx.ID AS trx_id, trx.SESS_ID, trx.STATUS, sess.USER_NAME, sess.CLNT_IP, DATEDIFF(SS, sess.CREATE_TIME, SYSDATE) AS duration_sec FROM V$TRX trx JOIN V$SESSIONS sess ON trx.SESS_ID=sess.SESS_ID WHERE DATEDIFF(SS, sess.CREATE_TIME, SYSDATE) > 60 ORDER BY duration_sec DESC;",
              'desc_zh': '运行超过 60 秒的长事务', 'desc_en': 'Long transactions > 60s'},
@@ -2742,8 +2746,13 @@ DM8_DEFAULT_CHAPTERS = [
         'chapter_title_en': 'Buffer Pool Status',
         'description': '数据缓冲池使用状态',
         'queries': [
-            {'key': 'buffer_pool', 'sql': "SELECT * FROM V$BUFFERPOOL;",
-             'desc_zh': '缓冲池状态', 'desc_en': 'Buffer pool status'},
+            {'key': 'buffer_pool', 'sql': """
+                SELECT NAME, PAGE_SIZE, N_PAGES, N_TOTAL_PAGES, N_MAX_PAGES,
+                       FREE, N_DIRTY, N_LOGIC_READS, N_PHY_READS, N_PHY_M_READS, RAT_HIT
+                FROM V$BUFFERPOOL
+                ORDER BY NAME;
+            """,
+             'desc_zh': '缓冲池状态（关键指标）', 'desc_en': 'Buffer pool status (key metrics)'},
         ]
     },
     {
@@ -2763,7 +2772,7 @@ DM8_DEFAULT_CHAPTERS = [
              'desc_zh': '最大的 20 张表', 'desc_en': 'Top 20 largest tables'},
             {'key': 'index_status', 'sql': """
                 SELECT OWNER, INDEX_NAME, INDEX_TYPE, TABLE_OWNER, TABLE_NAME,
-                       UNIQUENESS, STATUS, NUM_ROWS, LAST_ANALYZED
+                       UNIQUENESS, STATUS
                 FROM DBA_INDEXES
                 WHERE OWNER NOT IN ('SYS','SYSTEM')
                 ORDER BY OWNER, TABLE_NAME;
@@ -2838,13 +2847,19 @@ DM8_DEFAULT_CHAPTERS = [
         'description': 'SQL 语句执行统计',
         'queries': [
             {'key': 'top_sql_elapsed', 'sql': """
-                SELECT * FROM V$SQL_HISTORY
+                SELECT SEQ_NO, SQL_ID, SESS_ID, SESS_SEQ, TRX_ID, THREAD_ID,
+                       TOP_SQL_TEXT, START_TIME, TIME_USED, N_LOGIC_READ, N_PHY_READ,
+                       AFFECTED_ROWS, IS_OVER, EXEC_ID
+                FROM V$SQL_HISTORY
                 ORDER BY TIME_USED DESC
                 LIMIT 10;
             """,
              'desc_zh': 'TOP SQL（耗时）', 'desc_en': 'Top SQL by elapsed time'},
             {'key': 'top_sql_cpu', 'sql': """
-                SELECT * FROM V$SQL_HISTORY
+                SELECT SEQ_NO, SQL_ID, SESS_ID, SESS_SEQ, TRX_ID, THREAD_ID,
+                       TOP_SQL_TEXT, START_TIME, TIME_USED, N_LOGIC_READ, N_PHY_READ,
+                       AFFECTED_ROWS, IS_OVER, EXEC_ID
+                FROM V$SQL_HISTORY
                 ORDER BY START_TIME DESC
                 LIMIT 10;
             """,

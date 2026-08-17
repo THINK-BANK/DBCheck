@@ -5001,7 +5001,7 @@ function formatBytes(bytes) {
           });
           const data = await res.json();
           msgEl.style.color = data.ok ? 'var(--success)' : 'var(--danger)';
-          msgEl.textContent = (data.ok ? '✅ ' : '❌ ') + (data.message || data.error || '连接失败');
+          msgEl.textContent = (data.ok ? '✅ ' : '❌ ') + (data.msg || data.message || data.error || (data.ok ? '连接成功' : '连接失败'));
         } catch(e) {
           msgEl.style.color = 'var(--danger)';
           msgEl.textContent = '❌ ' + e.message;
@@ -5240,7 +5240,7 @@ function formatBytes(bytes) {
             })
           });
           const data = await res.json();
-          if (data.ok) { toastSuccess('连接成功'); }
+          if (data.ok) { toastSuccess(data.msg || '连接成功'); }
           else { toastError((data.error || data.message || '连接失败')); }
         } catch(e) { toastError(e.message); }
       }
@@ -5391,7 +5391,7 @@ function formatBytes(bytes) {
       <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-5a4 4 0 0 0-4 4 4 4 0 0 0-4-4H3Z"/></svg></span> <span data-i18n="webui.rag_nav">RAG 知识库</span>
     </div>
     <div class="nav-item" onclick="showPage('doc-kb')" id="nav-doc-kb">
-      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span> <span data-i18n="webui.doc_kb_nav">官方文档知识库</span>
+      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span> <span data-i18n="webui.doc_kb_nav">官方文档知识库</span> <span style="margin-left:6px;background:#f59e0b;color:#1f2937;font-size:10px;font-weight:600;padding:1px 6px;border-radius:999px;vertical-align:middle">开发中</span>
     </div>
     <div class="nav-item" onclick="showPage('plugin-market')" id="nav-plugin-market">
       <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg></span> <span data-i18n="webui.nav_plugin_market">插件市场</span>
@@ -10620,7 +10620,10 @@ function pollStatus() {
         const ai = data.ai_advice;
         // 友好处理：区分真实诊断内容与错误提示
         if (ai && ai.trim()) {
-          const isError = /^⚠/i.test(ai.trim()) || /(timed out|timeout|Traceback|error.*occurred)/i.test(ai.trim());
+          // 仅当文本以系统错误签名开头/包含时才判定为错误，避免把正常诊断里出现的
+          // timeout / error 等词误判为「诊断失败」（PG/HGDB 诊断常讨论 statement_timeout 等）。
+          const isError = /^⚠/i.test(ai.trim())
+            || /(AI 诊断调用失败|Traceback \(most recent call last\)|timed out|connection (refused|error)|HTTP Error \d+)/i.test(ai.trim());
           if (isError) {
             aiHtml = `<div style="padding:12px 16px;background:#fff3cd;border:1px solid #ffc107;border-radius:8px;font-size:13px;color:#856404">
               🤖 ${i18n('webui.ai_error_title')}<br>

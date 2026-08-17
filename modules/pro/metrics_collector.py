@@ -24,6 +24,7 @@ pro/metrics_collector.py — 实时监控采集器（v2.10）
 import os
 import re
 import json
+import sys
 import time
 import socket
 import sqlite3
@@ -37,6 +38,13 @@ DEFAULT_MAX_POINTS = 2000      # 每实例保留的快照数（环形裁剪）
 CIRCUIT_FAIL_THRESHOLD = 5     # 连续失败多少次进入退避
 CIRCUIT_COOLDOWN = 60          # 退避时长（秒）
 CONNECT_TIMEOUT = 3            # 连接超时（秒）
+
+# JVM 类型（oracle_jdbc / uxdb_jdbc）：依赖 JPype 在进程内启动 JVM。
+# 这类连接**绝不能在 gevent monkey-patch 的主进程内执行**（会冻结 hub → 整个界面卡死），
+# 必须隔离到干净子进程（modules/jdbc_metrics_cli.py）执行，与测试连接/巡检同源。
+JVM_METRICS_DB_TYPES = ('oracle_jdbc', 'uxdb_jdbc')
+# 子进程采集硬超时（秒）。Oracle thin 驱动连接不可达主机可能阻塞较久，超时就丢本轮。
+JVM_METRICS_SUBPROC_TIMEOUT = 50
 
 # 计数器型指标（用于差分算速率）——按 db_type 分派
 COUNTER_KEYS = {
@@ -1398,6 +1406,68 @@ class MetricsCollector:
     def _on_success(self, inst_id: str):
         self._fail[inst_id] = 0
 
+    # ── JVM 类型：隔离到干净子进程采集（规避主进程 startJVM 冻结 hub）──
+    def _collect_jvm_subprocess(self, inst: dict) -> dict:
+        """对 oracle_jdbc / uxdb_jdbc 等 JVM 类型，在干净子进程里执行连接 + 深采。
+
+        主进程只负责 spawn、读取 stdout 最后一个 JSON 行并取回指标字典；
+        JPype/JVM 完全在子进程内，绝不污染 gevent hub。
+        返回指标字典（含 available/error），失败返回 None。
+        """
+        import subprocess as _sp
+        from modules.core import paths
+
+        db_type = str(inst.get('db_type') or '').lower()
+        payload = {
+            'task_id': 'metrics-%s-%s' % (db_type, datetime.now().strftime('%Y%m%d%H%M%S')),
+            'db_type': db_type,
+            'db_info': {
+                'id': inst.get('id') or inst.get('instance_id'),
+                'instance_id': inst.get('id') or inst.get('instance_id'),
+                'name': inst.get('name') or '',
+                'host': inst.get('host'),
+                'port': int(inst.get('port') or 0),
+                'user': inst.get('user'),
+                'password': inst.get('password'),
+                'database': inst.get('database') or '',
+                'service_name': inst.get('service_name') or inst.get('database') or '',
+                'sysdba': bool(inst.get('sysdba', False)),
+                'jdbc_url': inst.get('jdbc_url') or None,
+            },
+        }
+        raw = json.dumps(payload, ensure_ascii=True)
+
+        if getattr(sys, 'frozen', False):
+            cmd = [sys.executable, '--jdbc-metrics-cli']
+        else:
+            cmd = [sys.executable,
+                   os.path.join(str(paths.PROJECT_ROOT), 'modules', 'jdbc_metrics_cli.py')]
+
+        env = os.environ.copy()
+        env['DBCheck_NO_GEVENT_PATCH'] = '1'
+        env['PYTHONIOENCODING'] = 'utf-8'
+
+        try:
+            proc = _sp.run(
+                cmd, input=raw.encode('utf-8'), capture_output=True,
+                timeout=JVM_METRICS_SUBPROC_TIMEOUT, env=env, cwd=str(paths.PROJECT_ROOT),
+            )
+        except _sp.TimeoutExpired:
+            return {'available': False, 'error': 'jvm metrics subprocess timeout'}
+        except Exception as e:  # noqa: BLE001
+            return {'available': False, 'error': 'jvm metrics spawn failed: %s' % str(e)[:200]}
+
+        out = (proc.stdout or b'').decode('utf-8', errors='replace').strip()
+        # 插件会向 stdout 打印 [Oracle JDBC] 调试信息；结构化结果在最后一行（以 { 开头）。
+        for ln in reversed(out.splitlines()):
+            ln = ln.strip()
+            if ln.startswith('{'):
+                try:
+                    return json.loads(ln)
+                except Exception:
+                    break
+        return None
+
     # ── 单实例采集 ──
     def collect_one(self, inst: dict) -> dict:
         inst_id = inst.get('id') or inst.get('instance_id')
@@ -1426,11 +1496,21 @@ class MetricsCollector:
 
         conn = None
         try:
-            conn = self._connect(inst)
-            if conn is not None:
-                metrics = self._collect_deep(db_type, conn)
-                snapshot.update(metrics)
-                self._compute_rates(inst_id, db_type, snapshot, metrics)
+            if db_type in JVM_METRICS_DB_TYPES:
+                # JVM 类型：连接 + 深采必须隔离到干净子进程（绝不在主进程 startJVM），
+                # 否则 gevent monkey-patch 下冻结整个 hub → 实时监视界面卡死。
+                metrics = self._collect_jvm_subprocess(inst)
+                if metrics:
+                    snapshot.update(metrics)
+                    self._compute_rates(inst_id, db_type, snapshot, metrics)
+                else:
+                    snapshot['error'] = 'jvm metrics subprocess returned nothing'
+            else:
+                conn = self._connect(inst)
+                if conn is not None:
+                    metrics = self._collect_deep(db_type, conn)
+                    snapshot.update(metrics)
+                    self._compute_rates(inst_id, db_type, snapshot, metrics)
         except Exception as e:
             snapshot['error'] = str(e)[:200]
         finally:

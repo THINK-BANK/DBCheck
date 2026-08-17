@@ -2314,6 +2314,10 @@ class BaseInspectionEngine:
             
             doc = Document()
             
+            # 这些查询始终以横向表格渲染（不转置为「字段:值」卡片），避免宽表行转列后页数爆炸。
+            # 适用于列数多、但每条记录应一行展示的章节（索引列表 / 缓冲池 / 锁等待等）。
+            force_horizontal_table_keys = {'index_status', 'buffer_pool', 'lock_wait'}
+            
             def _set_cell_bg(cell, hex_color):
                 from docx.oxml.ns import nsdecls
                 from docx.oxml import parse_xml
@@ -2340,7 +2344,81 @@ class BaseInspectionEngine:
                 if color:
                     run.font.color.rgb = color
                 return p
-            
+
+            def _set_table_col_widths(table, widths):
+                """固定表格各列宽度（单位 cm），防止单格长文本撑宽整列。"""
+                from docx.oxml import OxmlElement
+                table.autofit = False
+                tblGrid = table._tbl.find(qn('w:tblGrid'))
+                if tblGrid is not None:
+                    for gridCol, width in zip(tblGrid.findall(qn('w:gridCol')), widths):
+                        gridCol.set(qn('w:w'), str(int(Cm(width).twips)))
+                for row in table.rows:
+                    for cell, width in zip(row.cells, widths):
+                        tcPr = cell._tc.get_or_add_tcPr()
+                        tcW = tcPr.find(qn('w:tcW'))
+                        if tcW is None:
+                            tcW = OxmlElement('w:tcW')
+                            tcPr.append(tcW)
+                        tcW.set(qn('w:w'), str(int(Cm(width).twips)))
+                        tcW.set(qn('w:type'), 'dxa')
+
+            def _calc_pg_settings_widths(headers):
+                """为 pg_settings 类表格计算列宽。
+
+                精简三列版（name/setting/unit）：name 5cm，setting 8cm，unit 2.5cm。
+                若仍保留其它列，则 setting 固定 4cm，name 2.5cm，其余均分剩余宽度。
+                """
+                headers_lower = [str(h).lower() for h in headers]
+                setting_idx = next((i for i, h in enumerate(headers_lower) if h == 'setting'), -1)
+                name_idx = next((i for i, h in enumerate(headers_lower) if h == 'name'), -1)
+                unit_idx = next((i for i, h in enumerate(headers_lower) if h == 'unit'), -1)
+                total_width = 15.5
+
+                # 精简为最常用的 name/setting/unit 三列时，给 setting 更多空间
+                if len(headers) == 3 and setting_idx >= 0 and name_idx >= 0 and unit_idx >= 0:
+                    return [5.0, 8.0, 2.5]
+
+                fixed = 0.0
+                if setting_idx >= 0:
+                    fixed += 4.0
+                if name_idx >= 0:
+                    fixed += 2.5
+                rest_count = len(headers) - (1 if setting_idx >= 0 else 0) - (1 if name_idx >= 0 else 0)
+                rest_width = (total_width - fixed) / rest_count if rest_count > 0 else 1.5
+                widths = []
+                for i in range(len(headers)):
+                    if i == setting_idx:
+                        widths.append(4.0)
+                    elif i == name_idx:
+                        widths.append(2.5)
+                    else:
+                        widths.append(rest_width)
+                return widths
+
+            def _calc_compact_widths(headers, sample_rows):
+                """按表头和样本数据长度估算紧凑列宽，总宽不超过 15.5cm。
+
+                规则：
+                - 每列宽度 = max(0.8, min(4.0, max_char_len * 0.35 + 0.4))
+                - 样本数据只取前 5 行，超长值按 20 字符截断估算
+                - 若总宽超出 15.5cm，整体等比压缩
+                """
+                widths = []
+                for h in headers:
+                    hl = len(str(h))
+                    dl = [len(str(row.get(h, ''))) for row in sample_rows]
+                    max_dl = max(dl) if dl else 0
+                    char_len = max(hl, min(max_dl, 20))
+                    # 文本列至少 1.2cm，数值列最小 0.8cm
+                    w = max(1.2 if char_len > 4 else 0.8, min(4.0, char_len * 0.35 + 0.4))
+                    widths.append(w)
+                total = sum(widths)
+                if total > 15.5:
+                    scale = 15.5 / total
+                    widths = [max(0.7, w * scale) for w in widths]
+                return widths
+
             # ── 封面 ────────────────────────────────────────
             logo_path = str(paths.LOGO_PATH)
             if os.path.exists(logo_path):
@@ -2413,9 +2491,26 @@ class BaseInspectionEngine:
             report_time = self.context.get('report_time', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
             health = self.context.get('health_status', 'Unknown')
 
-            # 获取实例启动时间
-            sys_info = self.context.get('system_info', {})
-            boot_time = sys_info.get('boot_time', 'Unknown') if isinstance(sys_info, dict) else 'Unknown'
+            # 获取实例启动时间：优先数据库实例级（v$instance 等），其次宿主机 boot_time
+            boot_time = 'Unknown'
+            for _ik in ('instance_status', 'pg_instance', 'dm_instance', 'mysql_instance'):
+                _rows = self.context.get(_ik) or []
+                if isinstance(_rows, list) and _rows and isinstance(_rows[0], dict):
+                    for _col in ('STARTUP_TIME', 'startup_time', 'Startup_Time',
+                                 'STARTUP', 'STARTUP_T', 'startup_at'):
+                        _v = _rows[0].get(_col)
+                        if _v:
+                            boot_time = (_v.strftime('%Y-%m-%d %H:%M:%S')
+                                         if hasattr(_v, 'strftime') else str(_v))
+                            break
+                    if boot_time != 'Unknown':
+                        break
+            if boot_time == 'Unknown':
+                _sys = self.context.get('system_info') or {}
+                if isinstance(_sys, dict):
+                    _v = _sys.get('boot_time')
+                    if _v and _v != '未知':
+                        boot_time = str(_v)
 
             cover_labels = {
                 'zh': ['服务器地址', '实例启动时间', '巡检结果', '巡检人员', '报告生成时间'],
@@ -2478,8 +2573,8 @@ class BaseInspectionEngine:
                         if q_data and isinstance(q_data, list) and len(q_data) > 0:
                             if isinstance(q_data[0], dict):
                                 headers = list(q_data[0].keys())
-                                # 宽表（>8列）采用卡片式垂直布局
-                                if len(headers) > 8:
+                                # 宽表（>8列）默认采用卡片式垂直布局；指定章节强制横向表格
+                                if len(headers) > 8 and q_key not in force_horizontal_table_keys:
                                     for ri, row_data in enumerate(q_data):
                                         card_title = f"{'条目' if is_zh else 'Item'} {ri+1}"
                                         cp = doc.add_paragraph()
@@ -2504,12 +2599,19 @@ class BaseInspectionEngine:
                                         doc.add_paragraph()
                                 else:
                                     qt = doc.add_table(rows=1+len(q_data), cols=len(headers), style='Table Grid')
+                                    # 宽表采用紧凑列宽 + 8pt 字号，避免均分列宽导致表头/数值被拆成单字母
+                                    is_wide = len(headers) > 6
+                                    if any(str(h).lower() == 'setting' for h in headers):
+                                        _set_table_col_widths(qt, _calc_pg_settings_widths(headers))
+                                    elif is_wide:
+                                        _set_table_col_widths(qt, _calc_compact_widths(headers, q_data[:5]))
+                                    font_size = Pt(8) if is_wide else Pt(9)
                                     for j, h in enumerate(headers):
                                         cell = qt.rows[0].cells[j]
                                         cell.text = self._clean_xml_str(h, max_len=100)
                                         _set_cell_bg(cell, '336699')
                                         for run in cell.paragraphs[0].runs:
-                                            run.font.size = Pt(9)
+                                            run.font.size = font_size
                                             run.font.name = '微软雅黑'
                                             run._element.rPr.rFonts.set(qn('w:eastAsia'), '微软雅黑')
                                             run.font.bold = True
@@ -2518,7 +2620,7 @@ class BaseInspectionEngine:
                                         for j, (k, v) in enumerate(row_data.items()):
                                             qt.rows[i+1].cells[j].text = self._clean_xml_str(v)
                                             for run in qt.rows[i+1].cells[j].paragraphs[0].runs:
-                                                run.font.size = Pt(9)
+                                                run.font.size = font_size
                                                 run.font.name = '微软雅黑'
                                                 run._element.rPr.rFonts.set(qn('w:eastAsia'), '微软雅黑')
                                     doc.add_paragraph()

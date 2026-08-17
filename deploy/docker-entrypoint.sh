@@ -33,9 +33,12 @@ init_database()
 print('inspection.db tables ready.')
 " 2>&1 || echo "WARNING: inspection.db init failed"
 
-# Initialize default inspection templates (skip if already exist)
+# Initialize default inspection templates (skip if already exist).
+# NOTE: 巡检模板由 modules/inspection/init_db.py 提供；旧路径 /app/inspection/init_db.py
+#       已在 root restructure 后废弃，改用模块式调用以兼容路径变动。
+#       首次运行（data 卷为空）时，web_ui 启动时 dal.py 也会自动 init_default_templates(force=False) 播种新 SQL。
 echo "==> Initializing default inspection templates..."
-python /app/inspection/init_db.py 2>&1 || echo "WARNING: inspection_init_db.py failed"
+python -m modules.inspection.init_db 2>&1 || echo "WARNING: inspection templates init failed"
 
 # Check drivers status
 DRIVER_COUNT=$(find /app/drivers -type f 2>/dev/null | wc -l)

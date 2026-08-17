@@ -1955,6 +1955,20 @@ def test_oracle_connection(host, port, user, password, service_name='ORCL', sysd
         return False, str(e)
 
 def test_dm_connection(host, port, user, password):
+    # 优先使用 JDBC 驱动（纯 Java，无需达梦原生客户端 libdmcrypt），
+    # 驱动 jar 置于 <项目根>/drivers/dm8/DmJdbcDriver*.jar。无原生客户端依赖，
+    # 从根本上规避 -70089 Encryption module failed to load。
+    try:
+        from modules.jdbc_test_cli import _find_dm_jdbc_jar
+        _jar = _find_dm_jdbc_jar()
+    except Exception:  # noqa: BLE001 - 导入失败则按无 JDBC 处理，走 dmPython 回退
+        _jar = None
+    if _jar:
+        return run_jdbc_test_subprocess('dm', {
+            'host': host, 'port': port, 'user': user, 'password': password,
+        })
+
+    # 回退：dmPython（需要本机安装达梦客户端原生库 libdmcrypt.so）
     try:
         import dmPython
         conn = dmPython.connect(user=user, password=password, server=host, port=int(port))
@@ -1965,7 +1979,18 @@ def test_dm_connection(host, port, user, password):
         conn.close()
         return True, ver
     except Exception as e:
-        return False, str(e)
+        err = str(e)
+        if 'No module named' in err and 'dmPython' in err:
+            return False, ('未安装 dmPython 驱动，且 drivers/dm8/ 下未找到 JDBC 驱动'
+                           '（DmJdbcDriver*.jar），无法测试达梦连接。请将达梦 JDBC 驱动'
+                           '放入 drivers/dm8/（推荐，免装客户端）。')
+        if '-70089' in err or 'Encryption module' in err or 'dmCrypt' in err:
+            return False, ('达梦客户端原生库(dmCrypt)未加载，无法用 dmPython 连接。推荐将达梦 JDBC '
+                           '驱动 DmJdbcDriver*.jar 放入 drivers/dm8/（免装客户端即可测试）；'
+                           '或在运行本服务的机器安装 DM8 客户端（与数据库同大版本），并将其 bin 目录加入 '
+                           'LD_LIBRARY_PATH(Linux)/PATH(Windows)后重启服务。'
+                           f'（原始错误：{err}）')
+        return False, err
 
 
 def test_yashandb_connection(host, port, user, password):
@@ -2495,6 +2520,19 @@ def _ct_dm(data, flavor):
     if flavor == 'regular':
         ok, msg = test_dm_connection(data['host'], data['port'], data['user'], data['password'])
         return {'ok': ok, 'msg': msg}
+    # pro flavor：优先 JDBC（免达梦原生客户端），回退 dmPython
+    try:
+        from modules.jdbc_test_cli import _find_dm_jdbc_jar
+        _jar = _find_dm_jdbc_jar()
+    except Exception:  # noqa: BLE001
+        _jar = None
+    if _jar:
+        ok, msg = run_jdbc_test_subprocess('dm', data)
+        # 前端数据源测试读取 data.msg；必须用 msg 携带 JDBC 驱动信息，
+        # 不能用 _conn_ok('pro')（其返回 message='连接成功'，会被前端丢弃）。
+        if ok:
+            return {'ok': True, 'msg': msg}
+        return {'ok': False, 'error': msg}
     import dmPython
     try:
         conn = dmPython.connect(server=data['host'], port=int(data['port']),
@@ -2663,7 +2701,7 @@ JDBC_SUBPROCESS_DB_TYPES = ('hgdb', 'db2', 'sqlserver_jdbc', 'oracle_jdbc', 'ora
 JDBC_TEST_TIMEOUT = 30  # 秒；需覆盖 JVM 冷启动(3~10s) + JDBC 登录超时(10~15s)
 
 # 需要整条巡检任务隔离到子进程的数据库类型（均依赖进程内 JVM/JPype）
-JVM_INSPECTION_DB_TYPES = ('hgdb', 'db2', 'sqlserver_jdbc', 'oracle_jdbc')
+JVM_INSPECTION_DB_TYPES = ('hgdb', 'db2', 'sqlserver_jdbc', 'oracle_jdbc', 'dm')
 JDBC_INSPECTION_TIMEOUT = 3600  # 巡检任务整体硬超时（秒）
 
 
@@ -3046,6 +3084,17 @@ def _plugin_conn_fallback(data, flavor):
     _kwargs = dict(service_name=data.get('service_name', ''),
                    sysdba=bool(data.get('sysdba', False)),
                    jdbc_url=data.get('jdbc_url') or None)
+    # 防御性守卫：任何 *_jdbc 类型若未注册到 CONNECTION_TESTERS，绝不在主进程
+    # 调插件的 test_connection——那会在 gevent 进程内 startJVM，原生线程钉死 hub
+    # 导致整个 Web 界面卡死。一律降级到子进程隔离测试：jdbc_test_cli 按 db_type
+    # 分发，未知类型返回干净的错误 JSON，主进程始终保持响应，绝不冻结。
+    if db_type and db_type.endswith('_jdbc') and db_type not in CONNECTION_TESTERS:
+        ok, msg = run_jdbc_test_subprocess(db_type, data, _kwargs)
+        if flavor == 'regular':
+            result = {'ok': ok, 'msg': msg}
+            result.update(_parse_plugin_conn_result(db_type, ok, msg))
+            return result
+        return {'ok': ok, 'message': msg} if ok else {'ok': False, 'error': msg}
     if flavor == 'regular':
         ok, msg = test_plugin_connection(db_type, data['host'], data['port'], data['user'],
                                          data['password'], **_kwargs)

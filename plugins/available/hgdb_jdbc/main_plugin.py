@@ -241,7 +241,7 @@ class HgdbJdbcInspector(BaseInspectionEngine):
         ('hgdb_conn_summary', 'SELECT state, count(*) AS conn_count FROM pg_stat_activity GROUP BY state ORDER BY conn_count DESC'),
         ('hgdb_connections', 'SELECT pid, usename, application_name, client_addr, state, query FROM pg_stat_activity'),
         # 3. 配置参数
-        ('hgdb_settings', 'SELECT name, setting, unit, category, short_desc, context, source FROM pg_settings ORDER BY category, name'),
+        ('hgdb_settings', 'SELECT name, setting, unit FROM pg_settings ORDER BY name'),
         ('hgdb_shared_buffers', 'SHOW shared_buffers'),
         # 4. 资源与性能
         ('hgdb_database_size', 'SELECT datname, pg_size_pretty(pg_database_size(datname)) AS size_pretty, pg_database_size(datname) AS size_bytes FROM pg_database ORDER BY size_bytes DESC'),

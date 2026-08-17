@@ -48,6 +48,8 @@ drivers/oracle_client/windows_x64
 drivers/oracle_client/linux_x64
 drivers/oracle_client/macos_x64
 drivers/oracle_client/darwin_x64
+# 达梦 DM8 JDBC 驱动（DmJdbcDriver*.jar）：专有二进制，由用户自行放入 drivers/dm8/，不进版本库
+drivers/dm8/
 awr_uploads/
 data/*.db
 data/agreement_violation.json

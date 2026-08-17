@@ -455,11 +455,23 @@ def load_plugin_with_error(plugin_dir: str) -> tuple:
 
 def load_plugins(plugins_dir: str = None) -> int:
     """加载所有插件，返回成功加载的数量"""
+    from . import loader as plugin_loader
+    from pathlib import Path
     dirs = find_plugins(plugins_dir)
     count = 0
     for d in dirs:
         if load_plugin(d):
             count += 1
+            # 启动自动同步已启用插件的巡检模板：使插件 template_data.json 的改动
+            # 在重启 Web 时自动生效，无需手动 --force 重建或跑刷新脚本。
+            # 仅对 enabled/ 下的插件目录生效，避免误初始化未启用插件。
+            try:
+                if os.path.normpath(d).startswith(
+                    os.path.normpath(str(plugin_loader.ENABLED_DIR))
+                ):
+                    plugin_loader._init_plugin_data(Path(d), auto_init=True)
+            except Exception as e:
+                logger.warning(f"插件 {d} 启动模板同步失败（已忽略）: {e}")
     logger.info(f"插件加载完成: {count}/{len(dirs)} 成功")
     return count
 

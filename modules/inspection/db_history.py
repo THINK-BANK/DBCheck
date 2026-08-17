@@ -24,6 +24,23 @@ from contextlib import contextmanager
 IGNORE_MOUNTS = {'/mnt/iso', '/media', '/run/media', '/iso', '/cdrom'}
 
 
+def _to_native(v):
+    """把 JDBC/jaydebeapi 返回的 Java 装箱类型（java.lang.String / Integer / Double /
+    BigDecimal 等）转成 Python 原生类型，避免 sqlite3 参数绑定报
+    'Error binding parameter N: type java.lang.String is not supported'。
+
+    DM8/SQLServer 等走 JDBC 子进程巡检时，collect_data 取回的结果值是 JVM 包装对象，
+    会被原样塞进 context 并透传到快照保存；sqlite3 只接受原生类型，必须在此强转。
+    """
+    if v is None:
+        return None
+    # Python 原生标量无需处理
+    if isinstance(v, (str, int, float, bool, bytes)):
+        return v
+    # JPype/JVM 包装对象（java.lang.String 等）：统一转 str，sqlite3 才能绑定
+    return str(v)
+
+
 def _db_key(db_type: str, host: str, port) -> str:
     """生成数据库实例唯一键"""
     raw = f"{db_type}:{host}:{port}"
@@ -151,14 +168,14 @@ class SQLiteHistoryManager:
                     max_tablespace_pct, connection_usage_pct, db_version,
                     context_json
                 ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-            """, (
+            """, tuple(_to_native(x) for x in (
                 key, snap['ts'], snap['report_time'], snap['risk_count'], snap['health_status'],
                 snap.get('cpu_usage'), snap.get('mem_usage'), snap.get('disk_usage_max'),
                 snap.get('connections'), snap.get('max_connections'), snap.get('max_used_connections'),
                 snap.get('queries_total'), snap.get('cache_hit_ratio'), snap.get('sga_total_mb'),
                 snap.get('max_tablespace_pct'), snap.get('connection_usage_pct'), snap.get('version'),
                 context_json
-            ))
+            )))
             # 保留最近 30 条
             conn.execute("""
                 DELETE FROM snapshots WHERE instance_key=? AND id NOT IN (

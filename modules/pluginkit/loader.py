@@ -181,6 +181,60 @@ def _plugin_db_type(plugin_dir: Path) -> str:
     return plugin_dir.name
 
 
+def _sync_plugin_queries(template_id: int, chapters: list) -> None:
+    """对已存在的插件模板做增量同步：章节按需新建、查询按差异 UPSERT。
+
+    仅覆盖同 db_type 的默认模板，不影响用户复制出的自定义模板；
+    query_sql 未变化则跳过，避免每次启动都写 inspection_history 产生噪声。
+    """
+    from modules.inspection.dal import (
+        get_db_connection, create_chapter, create_query, update_query,
+    )
+    for ch in chapters:
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT id FROM inspection_chapter "
+                "WHERE template_id = ? AND chapter_number = ?",
+                (template_id, ch['number']),
+            )
+            row = cur.fetchone()
+        finally:
+            conn.close()
+        if row:
+            chapter_id = row['id']
+        else:
+            chapter_id = create_chapter(
+                template_id, ch['number'], ch['title_zh'],
+                ch['title_en'], ch['desc'],
+            )
+            print(f"[Plugin]   已新建章节：{ch['title_zh']} (ID: {chapter_id})")
+        for q in ch['queries']:
+            if not q['key']:
+                continue
+            conn = get_db_connection()
+            try:
+                cur = conn.cursor()
+                cur.execute(
+                    "SELECT id, query_sql FROM inspection_query "
+                    "WHERE chapter_id = ? AND query_key = ?",
+                    (chapter_id, q['key']),
+                )
+                row = cur.fetchone()
+            finally:
+                conn.close()
+            if row is None:
+                create_query(chapter_id, q['key'], q['sql'], q['desc_zh'],
+                             q['desc_en'], sort_order=q['sort'])
+                print(f"[Plugin]   已新增查询：{q['key']}")
+            elif (row['query_sql'] or '') != (q['sql'] or ''):
+                update_query(row['id'], query_sql=q['sql'],
+                             query_description_zh=q['desc_zh'],
+                             query_description_en=q['desc_en'])
+                print(f"[Plugin]   已更新查询：{q['key']}")
+
+
 def _init_plugin_templates(plugin_dir: Path) -> None:
     """
     从插件模板文件初始化巡检模板。
@@ -264,12 +318,17 @@ def _init_plugin_templates(plugin_dir: Path) -> None:
     try:
         from modules.inspection.dal import (
             get_db_connection, create_template, create_chapter,
-            create_query, get_templates_by_db_type,
+            create_query, get_templates_by_db_type, update_query,
         )
 
         existing = get_templates_by_db_type(db_type)
         if existing:
-            print(f"[Plugin] 模板已存在（ID: {existing[0]['id']}），跳过")
+            # 模板已存在：增量同步 query_sql / 描述，使插件 template_data.json
+            # 的改动在启动时自动生效，无需手动 --force 重建或跑刷新脚本。
+            template_id = existing[0]['id']
+            print(f"[Plugin] 模板已存在（ID: {template_id}），增量同步查询 SQL…")
+            _sync_plugin_queries(template_id, chapters)
+            print(f"[Plugin] 模板查询同步完成：{template_name_zh}")
             return
 
         template_id = create_template(

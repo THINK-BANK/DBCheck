@@ -414,6 +414,7 @@ def get_task_config():
         'filename_key': 'webui.oracle_jdbc_report_filename',
         'history_db_type': 'oracle_jdbc',
         'instance_prefix': 'oracle_jdbc',
+        'smart_analyze': 'smart_analyze_oracle',  # 智能分析接入铁律（与 oracle 共用通用分析函数）
         'error_task_name': 'Oracle JDBC',
         'log_start_key': 'webui.log_oracle_jdbc_start',
         'err_module_key': 'webui.err_oracle_jdbc_module',

@@ -64,9 +64,12 @@ RUN python -m venv /opt/venv \
     && find /opt/venv -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true \
     && find /opt/venv -name "*.pyc" -delete 2>/dev/null || true
 
-# dmpython: install separately (requires DM8 client libs; non-fatal)
+# dmpython: optional FALLBACK for DM8. DM8 test connection now prefers the
+# pure-Java JDBC driver (drivers/dm8/DmJdbcDriver*.jar, no native client needed);
+# dmpython is only used when that jar is absent AND a DM8 client is installed.
+# Non-fatal: if it fails to build (no DM8 client headers), DM8 just uses JDBC.
 RUN /opt/venv/bin/pip install --no-cache-dir dmpython>=1.0.0 \
-    || echo "WARNING: dmpython installation failed (DM8 support disabled)."
+    || echo "WARNING: dmpython installation failed (DM8 will use JDBC driver if present)."
 
 # Download and extract drivers.zip from GitHub Releases (fatal if failed)
 # Provides: YashanDB wheel, Oracle client libs, etc. (all kept in the image)

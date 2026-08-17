@@ -107,7 +107,7 @@
         },
         {
           "query_key": "long_trx",
-          "query_sql": "\n                SELECT s.sid, s.serial#, s.username, s.machine, s.program,\n                       t.START_DATE, ROUND((SYSDATE - t.START_DATE) * 86400) AS seconds,\n                       t.USED_UBLK, t.USED_UREC\n                FROM v$transaction t\n                JOIN v$session s ON s.SADDR = t.SES_ADDR\n                ORDER BY t.START_DATE;\n            ",
+          "query_sql": "                SELECT s.sid, s.serial#, s.username, s.program,\n                       t.START_DATE, ROUND((SYSDATE - t.START_DATE) * 86400) AS seconds\n                FROM v$transaction t\n                JOIN v$session s ON s.SADDR = t.SES_ADDR\n                ORDER BY t.START_DATE;\n            ",
           "query_description_zh": "长事务列表",
           "query_description_en": "Long transactions"
         },
