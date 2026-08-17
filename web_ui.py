@@ -43,6 +43,17 @@ if '--intelligence-inspection-cli' in sys.argv[1:]:
     sys.exit(_intel_insp_main())
 
 
+# ── JDBC 实时指标采集隔离子进程入口（必须在单实例守卫之前）────────────────
+# oracle_jdbc / uxdb_jdbc 实时采集（metrics_collector 每 30s tick）依赖 JPype 在
+# 进程内启动 JVM；同样会把 gevent hub 钉死冻结整个界面。该 CLI 在干净子进程里
+# 完成连接 + 深采，结果以 JSON 返回 stdout，主进程只 spawn + 解析，绝不起 JVM。
+# frozen 模式下 metrics_collector._collect_jvm_subprocess 的 cmd 分支走此 flag。
+if '--jdbc-metrics-cli' in sys.argv[1:]:
+    from modules.jdbc_metrics_cli import main as _jdbc_metrics_main
+
+    sys.exit(_jdbc_metrics_main())
+
+
 def _acquire_single_instance():
     # 仅对 PyInstaller 冻结后的 exe 生效；开发态 `python web_ui.py` 不限制，便于多开调试。
     if not getattr(sys, 'frozen', False):

@@ -28,7 +28,9 @@ chmod 755 /app/data/pro_data
 # This ensures inspection_template and other tables exist even on first run
 echo "==> Initializing database tables..."
 python -c "
-from inspection_dal import init_database
+import sys
+sys.path.insert(0, '/app')
+from modules.inspection.dal import init_database
 init_database()
 print('inspection.db tables ready.')
 " 2>&1 || echo "WARNING: inspection.db init failed"
