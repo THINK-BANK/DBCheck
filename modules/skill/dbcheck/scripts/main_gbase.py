@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+# -*- coding:utf-8 -*-
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2025-2026 fiyo (Jack Ge) <sdfiyon@gmail.com>
 # Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
@@ -10,6 +10,12 @@ GBase 8s 数据库巡检模块
 连接方式：JDBC + jaydebeapi（无需 GBase SDK，需 JDK + JDBC 驱动 jar）
 JDBC 驱动默认路径：DBCheck 安装目录/drivers/gbase/jdbc-3.5.1.jar
 可通过环境变量 GBase_JDBC_DRIVER 指定自定义路径。
+
+⚠️ DEPRECATED：skill 包副本与 modules/entrypoints/main_gbase.py 功能重复。
+新代码请直接用 ``from modules.entrypoints.main_gbase import ...``（含
+connect_gbase_jdbc / resolve_gbase_driver 共享入口）。此处保留是为兼容
+已发布的 skill 调用路径；driver_version 已透传但本副本不走驱动管理
+（依赖 driver_registry 的 gevent 环境在 skill 内不成立，仍走 drivers/gbase/ 自动发现）。
 """
 
 
@@ -82,11 +88,12 @@ class GBaseInspector(BaseInspectionEngine):
     连接模式：JDBC（jaydebeapi），无需 GBase SDK
     """
 
-    def __init__(self, host, port, user, password, database=None, ssh_info=None, template_id=None, gbase_server_name=None):
+    def __init__(self, host, port, user, password, database=None, ssh_info=None, template_id=None, gbase_server_name=None, driver_version=''):
         super().__init__(host, port, user, password, database, ssh_info, template_id)
         self.db_type = 'gbase'
-        self.jdbc_driver_path = JDBC_DRIVER_PATH
+        self.jdbc_driver_path = JDBC_DRIVER_PATH  # 向后兼容；driver_version 仅形参保留以匹配 entrypoints 签名
         self.gbase_server_name = gbase_server_name or 'gbase01'
+        self.driver_version = driver_version
 
     def connect(self):
         """
@@ -169,7 +176,7 @@ class GBaseInspector(BaseInspectionEngine):
 
 
 # ── 供 web_ui.py 调用的连接测试函数 ────────────────────────────────────
-def test_gbase_jdbc_connection(host, port, user, password, database='gbase01', gbase_server_name='gbase01'):
+def test_gbase_jdbc_connection(host, port, user, password, database='gbase01', gbase_server_name='gbase01', driver_version=''):
     """
     测试 GBase 8s JDBC 连接（供 web_ui.py 调用）
     
@@ -242,14 +249,14 @@ def test_gbase_jdbc_connection(host, port, user, password, database='gbase01', g
         return False, f"GBase 连接失败: {err}\nJDBC URL: {jdbc_url}\n堆栈:\n{tb}"
 
 
-def getData(ip, port, user, password, database='testdb', ssh_info=None, label=None, template_id=None, gbase_server_name='gbase01'):
+def getData(ip, port, user, password, database='testdb', ssh_info=None, label=None, template_id=None, gbase_server_name='gbase01', driver_version=''):
     """
     原有 API - 创建 GBaseInspector 实例
 
     注意：这个函数在重构过程中保留，用于兼容 web_ui.py 中的旧代码。
     新代码应该直接使用 GBaseInspector 类。
     """
-    inspector = GBaseInspector(ip, port, user, password, database, ssh_info, template_id, gbase_server_name)
+    inspector = GBaseInspector(ip, port, user, password, database, ssh_info, template_id, gbase_server_name, driver_version=driver_version)
     ok, ver = inspector.connect()
     if not ok:
         return None

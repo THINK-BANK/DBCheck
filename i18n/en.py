@@ -83,6 +83,7 @@ EN = {
     "cli_ssh_key_path": "SSH private key file path: ",
     "cli_ssh_key_not_exist": "❌ Private key file not found: {path}",
     "cli_ssh_password": "SSH password: ",
+    "cli_driver_version": "JDBC driver version (blank = active driver): ",
     "cli_ssh_config_title": "🔐 SSH System Info Collection Configuration:",
     "cli_ssh_config_note": "To collect system info (CPU, memory, disk, etc.), configure SSH connection",
     "cli_ssh_success": "✅ SSH connection successful",

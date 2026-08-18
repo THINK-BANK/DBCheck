@@ -49,12 +49,57 @@ monkey-patch 的干净进程里**，主进程只做 ``subprocess`` 调用 + 超�
 import json
 import os
 import sys
+from modules.driver_registry import resolve_jdbc_driver_jars
 
 # 结果行前缀：主进程按此前缀从 stdout 中提取唯一结果行
 RESULT_PREFIX = "__DBCHECK_JDBC_TEST_RESULT__"
 
 # 本 CLI 支持隔离执行的数据库类型（均为进程内 JVM/JPype 实现，或纯 Java JDBC）
-SUPPORTED_DB_TYPES = ('hgdb', 'db2', 'sqlserver_jdbc', 'dm')
+SUPPORTED_DB_TYPES = ('hgdb', 'db2', 'sqlserver_jdbc', 'dm', 'gbase')
+
+
+def _test_gbase_jdbc(payload):
+    """GBase 8s JDBC 连接测试——驱动 jar 优先 driver_registry.resolve_jdbc_driver_jars，
+    否则回退 drivers/gbase/ 自动发现。走共享入口 main_gbase.connect_gbase_jdbc，
+    避免主进程启动 JVM 与 gevent 冲突。
+    """
+    _kw = payload.get('kwargs') or {}
+    _host = payload.get('host')
+    try:
+        _port = int(payload.get('port') or 9088)
+    except (TypeError, ValueError):
+        _port = 9088
+    # TCP 预检：避免启 JVM 才报主机不可达
+    _err = _tcp_preflight(_host, _port)
+    if _err:
+        return False, _err
+    try:
+        from modules.entrypoints.main_gbase import connect_gbase_jdbc
+    except Exception as e:  # noqa: BLE001
+        return False, f'导入 main_gbase 失败：{e}'
+    try:
+        conn, basename = connect_gbase_jdbc(
+            _host, _port, payload.get('user') or '', payload.get('password') or '',
+            database=_kw.get('database') or '',
+            gbase_server_name=_kw.get('gbase_server_name') or 'gbase01',
+            driver_version=_kw.get('driver_version') or '',
+        )
+    except Exception as e:  # noqa: BLE001
+        return False, f'GBase 8s JDBC 连接失败：{e}'
+    try:
+        cur = conn.cursor()
+        cur.execute('SELECT 1 FROM systables WHERE tabid = 1')
+        cur.fetchall()
+    finally:
+        try:
+            cur.close()
+        except Exception:
+            pass
+        try:
+            conn.close()
+        except Exception:
+            pass
+    return True, f'GBase 8s 连接成功（驱动：{basename}）'
 
 
 def _ensure_project_root_on_path():
@@ -213,12 +258,22 @@ def _find_dm_jdbc_jar():
 def _test_dm_jdbc(payload):
     """DM8（达梦）JDBC 连接测试——纯 Java 驱动，无需达梦原生客户端。
 
-    驱动 jar 置于 <项目根>/drivers/dm8/DmJdbcDriver*.jar。不依赖 dmPython /
+    驱动 jar 优先取「数据库驱动管理」中登记的指定版本（payload.driver_version），
+    否则回退 <项目根>/drivers/dm8/ 自动发现。不依赖 dmPython /
     达梦客户端原生库（libdmcrypt.so），从根本上规避
     ``-70089 Encryption module failed to load``。不另做插件，直接复用本隔离
     子进程（JVM 在 monkey-patch 之外执行，避免钉死 gevent hub）。
     """
-    _jar = _find_dm_jdbc_jar()
+    # 优先驱动管理：用户上传的指定版本 jar
+    _jar = None
+    try:
+        _resolved = resolve_jdbc_driver_jars('dm', (payload.get('kwargs') or {}).get('driver_version') or '')
+        if _resolved:
+            _jar = _resolved[0]
+    except Exception:
+        _jar = None
+    if _jar is None:
+        _jar = _find_dm_jdbc_jar()
     if _jar is None:
         return False, ('drivers/dm8/ 下未找到 DmJdbcDriver*.jar。请从达梦官网下载 '
                        'DM8 JDBC 驱动（推荐 DmJdbcDriver18.jar）并放入该目录。')
@@ -344,6 +399,13 @@ def run_test(payload):
     # 从根上规避 -70089 Encryption module failed to load。
     if db_type == 'dm':
         return _test_dm_jdbc(payload)
+
+    # GBase 8s 连接测试：走 modules.entrypoints.main_gbase 的共享连接函数，
+    # 使「测试连接」也在未 monkey-patch 的干净子进程内跑（避免 jaydebeapi 启动
+    # JVM 钉死 gevent hub）。驱动 jar 优先 driver_registry.resolve_jdbc_driver_jars，
+    # 否则回退 drivers/gbase/ 自动发现。
+    if db_type == 'gbase':
+        return _test_gbase_jdbc(payload)
 
     # 自定义 jdbc_url 可能指向别的地址（含多主机/故障转移），此时不做预检
     _kw = payload.get('kwargs') or {}

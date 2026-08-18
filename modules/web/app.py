@@ -1170,9 +1170,10 @@ def run_inspection_task(task_id, db_info, inspector_name, template_id=None, chap
         'dm': dict(
             module_name='main_dm',
             connect_test=test_dm_connection,
-            connect_test_args=lambda info: [info['ip'], info['port'], info['user'], info['password']],
+            connect_test_args=lambda info: [info['ip'], info['port'], info['user'], info['password'], info.get('driver_version','')],
             getdata_args=lambda info: ([info['ip'], info['port'], info['user'], info['password']],
-                                       {'ssh_info': {}, 'template_id': template_id, 'db_name': info.get('database', 'DAMENG')}),
+                                       {'ssh_info': {}, 'template_id': template_id, 'db_name': info.get('database', 'DAMENG'),
+                                        'driver_version': info.get('driver_version','')}),
             conn_attr='conn_db',
             smart_analyze='smart_analyze_dm',
             filename_key='webui.dm_report_filename',
@@ -1204,11 +1205,12 @@ def run_inspection_task(task_id, db_info, inspector_name, template_id=None, chap
         'gbase': dict(
             module_name='main_gbase',
             connect_test=test_gbase_connection,
-            connect_test_args=lambda info: [info['ip'], info['port'], info['user'], info['password'], info.get('database', 'testdb'), info.get('gbase_server_name', 'gbase01')],
+            connect_test_args=lambda info: [info['ip'], info['port'], info['user'], info['password'], info.get('database', 'testdb'), info.get('gbase_server_name', 'gbase01'), info.get('driver_version','')],
             getdata_args=lambda info: ([info['ip'], info['port'], info['user'], info['password']],
                                            {'ssh_info': {}, 'template_id': template_id,
                                             'database': info.get('database', 'testdb'),
-                                            'gbase_server_name': info.get('gbase_server_name', 'gbase01')}),
+                                            'gbase_server_name': info.get('gbase_server_name', 'gbase01'),
+                                            'driver_version': info.get('driver_version','')}),
             conn_attr='conn_db2',
             smart_analyze='smart_analyze_gbase',
             filename_key='webui.gbase_report_filename',
@@ -1966,9 +1968,10 @@ def test_oracle_connection(host, port, user, password, service_name='ORCL', sysd
     except Exception as e:
         return False, str(e)
 
-def test_dm_connection(host, port, user, password):
+def test_dm_connection(host, port, user, password, driver_version=''):
     # 优先使用 JDBC 驱动（纯 Java，无需达梦原生客户端 libdmcrypt），
-    # 驱动 jar 置于 <项目根>/drivers/dm8/DmJdbcDriver*.jar。无原生客户端依赖，
+    # 驱动 jar 优先「数据库驱动管理」中登记的指定版本，否则
+    # 置于 <项目根>/drivers/dm8/DmJdbcDriver*.jar。无原生客户端依赖，
     # 从根本上规避 -70089 Encryption module failed to load。
     try:
         from modules.jdbc_test_cli import _find_dm_jdbc_jar
@@ -1978,7 +1981,7 @@ def test_dm_connection(host, port, user, password):
     if _jar:
         return run_jdbc_test_subprocess('dm', {
             'host': host, 'port': port, 'user': user, 'password': password,
-        })
+        }, extra_kwargs={'driver_version': driver_version})
 
     # 回退：dmPython（需要本机安装达梦客户端原生库 libdmcrypt.so）
     try:
@@ -2019,11 +2022,11 @@ def test_yashandb_connection(host, port, user, password):
         return False, str(e)
 
 
-def test_gbase_connection(host, port, user, password, database='testdb', gbase_server_name='gbase01'):
+def test_gbase_connection(host, port, user, password, database='testdb', gbase_server_name='gbase01', driver_version=''):
     """测试 GBase 8s 连接（JDBC 模式，使用 jaydebeapi）"""
     try:
         from modules.entrypoints.main_gbase import test_gbase_jdbc_connection
-        return test_gbase_jdbc_connection(host, port, user, password, database, gbase_server_name)
+        return test_gbase_jdbc_connection(host, port, user, password, database, gbase_server_name, driver_version)
     except Exception as e:
         return False, f"导入 main_gbase 失败：{e}"
 
@@ -2529,8 +2532,10 @@ def _ct_oracle(data, flavor):
 
 
 def _ct_dm(data, flavor):
+    _dv = data.get('driver_version', '') or ''
     if flavor == 'regular':
-        ok, msg = test_dm_connection(data['host'], data['port'], data['user'], data['password'])
+        ok, msg = test_dm_connection(data['host'], data['port'], data['user'],
+                                     data['password'], _dv)
         return {'ok': ok, 'msg': msg}
     # pro flavor：优先 JDBC（免达梦原生客户端），回退 dmPython
     try:
@@ -2633,17 +2638,26 @@ def _ct_yashandb(data, flavor):
 
 
 def _ct_gbase(data, flavor):
+    _dv = data.get('driver_version', '') or ''
+    _gserver = data.get('gbase_server_name', 'gbase01') or 'gbase01'
+    _db = data.get('database', 'testdb') or 'testdb'
     if flavor == 'regular':
         ok, msg = test_gbase_connection(data['host'], data['port'], data['user'], data['password'],
-                                        data.get('database', 'testdb'),
-                                        data.get('gbase_server_name', 'gbase01'))
+                                        _db, _gserver, _dv)
         return {'ok': ok, 'msg': msg}
-    gbase_server = data.get('gbase_server_name', 'gbase01')
-    result = test_gbase_connection(data['host'], int(data['port']), data['user'], data['password'],
-                                    data.get('database', 'gbase01'), gbase_server)
-    if not result[0]:
-        return {'ok': False, 'error': result[1]}
-    return _conn_ok('pro')
+    # pro flavor：与 dm/sqlserver_jdbc 一样，把 JVM 隔离到子进程，避免钉死 gevent hub。
+    # 同时把 driver_version / database / server 透传给 jdbc_test_cli._test_gbase_jdbc。
+    _ok, _msg = run_jdbc_test_subprocess('gbase', {
+        'host': data['host'], 'port': data['port'],
+        'user': data['user'], 'password': data['password'],
+    }, extra_kwargs={
+        'database': _db,
+        'gbase_server_name': _gserver,
+        'driver_version': _dv,
+    })
+    if not _ok:
+        return {'ok': False, 'error': _msg}
+    return {'ok': True, 'msg': _msg}
 
 
 def _ct_redis(data, flavor):
@@ -3080,6 +3094,7 @@ def _ct_oracle_jdbc(data, flavor):
         sysdba=bool(data.get('sysdba', False)),
         jdbc_url=data.get('jdbc_url') or None,
         driver_version=data.get('driver_version') or None,
+        use_sid=bool(data.get('use_sid', False)),
     )
     ok, msg = run_jdbc_test_subprocess('oracle_jdbc', data, _kwargs)
     return _jdbc_conn_result(ok, msg, flavor, 'Oracle (JDBC)')
@@ -4341,6 +4356,12 @@ def api_start_inspection():
                 # 旧实例可能没有 connection_mode 字段：sqlserver_jdbc 类型缺省走 jdbc
                 if db_info.get('connection_mode') is None:
                     db_info['connection_mode'] = 'jdbc'
+            # JDBC 驱动管理：从数据源实例透传 驱动版本(driver_version) 与 Oracle SID 模式(use_sid)
+            if db_type in ('oracle_jdbc', 'sqlserver_jdbc', 'db2_jdbc', 'hgdb_jdbc', 'clickhouse_jdbc', 'uxdb_jdbc'):
+                if instance.get('driver_version') is not None:
+                    db_info['driver_version'] = instance.get('driver_version')
+                if db_type == 'oracle_jdbc':
+                    db_info['use_sid'] = bool(instance.get('use_sid', False))
         else:
             # 原有逻辑：使用手动输入的连接信息
             _meta = get_db_meta(db_type)
@@ -4386,6 +4407,12 @@ def api_start_inspection():
                 # 未显式传入 connection_mode 时：sqlserver_jdbc 类型缺省走 jdbc
                 if db_info.get('connection_mode') is None:
                     db_info['connection_mode'] = 'jdbc'
+            # JDBC 驱动管理：手动输入的 驱动版本(driver_version) 与 Oracle SID 模式(use_sid)
+            if db_type in ('oracle_jdbc', 'sqlserver_jdbc', 'db2_jdbc', 'hgdb_jdbc', 'clickhouse_jdbc', 'uxdb_jdbc'):
+                if data.get('driver_version') is not None:
+                    db_info['driver_version'] = data.get('driver_version')
+                if db_type == 'oracle_jdbc':
+                    db_info['use_sid'] = bool(data.get('use_sid', False))
 
         if data.get('ssh_host'):
             db_info.update({
@@ -6540,6 +6567,7 @@ def api_pro_datasource_add():
             encrypt=bool(data.get('encrypt', False)) if _db_type == 'sqlserver_jdbc' else False,
             trust_server_certificate=bool(data.get('trust_server_certificate', True)) if _db_type == 'sqlserver_jdbc' else True,
             driver_version=data.get('driver_version', '') or '',
+            use_sid=bool(data.get('use_sid', False)),
             tags=data.get('tags', []),
             group=data.get('group', 'default'),
             description=data.get('description', ''),
@@ -6834,18 +6862,17 @@ def api_ds_databases(ds_id):
             databases = [r[0] for r in cur.fetchall()]
             conn.close()
         elif db_type == 'gbase':
-            # GBase 8s 使用 JDBC 连接（jaydebeapi）
-            import jaydebeapi, os
-            _jdbc_driver = _get_gbase_driver()
-            print(f"[GBase] _get_gbase_driver() 返回: {_jdbc_driver}")
-            if not _jdbc_driver:
-                raise Exception('GBase 8s JDBC 驱动未找到，请将驱动 jar 文件放到 drivers/gbase/ 目录下')
+            # GBase 8s 使用 JDBC 连接（统一走 main_gbase.connect_gbase_jdbc 共享入口，与 Inspector 一致；避免内联 jaydebeapi 绕开驱管理）
+            from modules.entrypoints.main_gbase import connect_gbase_jdbc
             _db = inst.get('database', 'gbase01') or 'gbase01'
             _server = inst.get('gbase_server_name', 'gbase01') or 'gbase01'
-            _jdbc_url  = f"jdbc:gbasedbt-sqli://{host}:{int(port)}/{_db}:GBASEDBTSERVER={_server};"
-            print(f"[GBase] JDBC URL: {_jdbc_url}")
-            print(f"[GBase] jars 参数: {_jdbc_driver}")
-            conn = jaydebeapi.connect('com.gbasedbt.jdbc.Driver', _jdbc_url, [user, pwd], _jdbc_driver)
+            _drv = inst.get('driver_version', '') or ''
+            try:
+                conn, _jdbc_basename = connect_gbase_jdbc(host, int(port), user, pwd,
+                                                          database=_db, gbase_server_name=_server,
+                                                          driver_version=_drv)
+            except Exception as _e:
+                raise Exception(f'GBase 8s JDBC 内联连接失败：{_e}')
             cur = conn.cursor()
             # GBase 8s 用 sysmaster:sysdatabases 跨库查询所有数据库
             cur.execute("SELECT name FROM sysmaster:sysdatabases ORDER BY name")
@@ -7090,18 +7117,17 @@ def api_ds_objects(ds_id):
             views = [r[0] + '.' + r[1] if r[0] != 'public' else r[1] for r in cur.fetchall()]
             conn.close()
         elif db_type == 'gbase':
-            # GBase 8s 使用 JDBC 连接（jaydebeapi）
-            import jaydebeapi, os
-            _jdbc_driver = _get_gbase_driver()
-            print(f"[GBase] _get_gbase_driver() 返回: {_jdbc_driver}")
-            if not _jdbc_driver:
-                raise Exception('GBase 8s JDBC 驱动未找到，请将驱动 jar 文件放到 drivers/gbase/ 目录下')
+            # GBase 8s 使用 JDBC 连接（统一走 main_gbase.connect_gbase_jdbc 共享入口，与 Inspector 一致）
+            from modules.entrypoints.main_gbase import connect_gbase_jdbc
             _db = database or 'gbase01'
             _server = inst.get('gbase_server_name', 'gbase01') or 'gbase01'
-            _jdbc_url  = f"jdbc:gbasedbt-sqli://{host}:{int(port)}/{_db}:GBASEDBTSERVER={_server};"
-            print(f"[GBase] JDBC URL: {_jdbc_url}")
-            print(f"[GBase] jars 参数: {_jdbc_driver}")
-            conn = jaydebeapi.connect('com.gbasedbt.jdbc.Driver', _jdbc_url, [user, pwd], _jdbc_driver)
+            _drv = inst.get('driver_version', '') or ''
+            try:
+                conn, _jdbc_basename = connect_gbase_jdbc(host, int(port), user, pwd,
+                                                          database=_db, gbase_server_name=_server,
+                                                          driver_version=_drv)
+            except Exception as _e:
+                raise Exception(f'GBase 8s JDBC 内联连接失败：{_e}')
             cur = conn.cursor()
             # GBase 8s 用 systables 系统表获取表/视图列表
             cur.execute(
@@ -10173,9 +10199,9 @@ def _setup_driver_paths():
 
 def _get_gbase_driver():
     """
-    自动查找 GBase 8s JDBC 驱动 jar 文件。
-    查找 drivers/gbase/ 目录下的所有 .jar 文件，
-    返回路径列表（jaydebeapi 推荐用列表）。
+    ⚠️ DEPRECATED：保留仅作向下兼容。GBase JDBC 驱动解析已统一走到
+    modules.entrypoints.main_gbase.resolve_gbase_driver()(优先驱动管理，
+    否则回退 drivers/gbase/ 自动发现)。新代码请直接调用该函数。
     """
     import os, glob
     driver_dir = os.path.join(BASE_DIR, 'drivers', 'gbase')

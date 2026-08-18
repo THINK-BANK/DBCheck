@@ -472,6 +472,7 @@ JDBC_PLUGIN_TO_CATALOG = {
     'clickhouse_jdbc': 'clickhouse',
     'uxdb_jdbc': 'uxdb',
     'dm': 'dm',
+    'gbase': 'gbase8s',   # 核心内置 GBase 走 JDBC（com.gbasedbt.jdbc.Driver；同源也覆盖 gbase8a）
 }
 
 

@@ -137,7 +137,8 @@ def _append_to_classpath(jars: List[str]) -> None:
         print(f"[uxdb_jdbc.jvm] 已动态追加 {added} 个 jar 到运行中的 JVM classpath")
 
 
-def ensure_jvm(extra_jars: Optional[List[str]] = None) -> List[str]:
+def ensure_jvm(extra_jars: Optional[List[str]] = None,
+               specific_jars: Optional[List[str]] = None) -> List[str]:
     """确保 JVM 已启动且所有 JDBC 驱动 jar 在 classpath 中。
 
     幂等：多次调用安全。首次启动 JVM；若 JVM 已存在则只补充缺失的 jar。
@@ -150,7 +151,13 @@ def ensure_jvm(extra_jars: Optional[List[str]] = None) -> List[str]:
         实际置于 classpath 的全部 jar 绝对路径列表。
     """
     base_jars = _discover_driver_jars()
-    all_jars = _dedup_jars(base_jars, extra_jars)
+    # 指定版本驱动优先：驱动管理注册中心选中的版本 jar 若存在则仅用这些，
+    # 否则回退到 drivers/ 全量自动发现（向后兼容）。
+    specific = [j for j in (specific_jars or []) if j and os.path.isfile(j)]
+    if specific:
+        all_jars = _dedup_jars(specific, extra_jars)
+    else:
+        all_jars = _dedup_jars(base_jars, extra_jars)
 
     if not jpype.isJVMStarted():
         if not all_jars:

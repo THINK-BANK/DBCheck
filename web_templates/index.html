@@ -4740,6 +4740,9 @@ function formatBytes(bytes) {
               '<div id="ds-sysdba-wrap" style="display:none"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:6px 0">' +
                 '<input type="checkbox" id="ds-sysdba" style="width:16px;height:16px;accent-color:var(--accent)" />' +
                 '<span style="font-size:13px;color:var(--text-muted)">' + i18n('webui.checkbox_sysdba') + '</span></label></div>' +
+              '<div id="ds-use-sid-wrap" style="display:none"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:6px 0">' +
+                '<input type="checkbox" id="ds-use-sid" style="width:16px;height:16px;accent-color:var(--accent)" />' +
+                '<span style="font-size:13px;color:var(--text-muted)">使用 SID 连接（jdbc:oracle:thin:@host:port:SID，区别于默认的服务名格式）</span></label></div>' +
               '<div id="ds-jdbc-url-wrap" style="display:none"><label id="ds-jdbc-url-label" style="font-size:12px;color:var(--text-muted)">JDBC URL <span style="color:var(--text-muted);font-weight:normal">（可选，留空则使用上方主机/端口/服务名）</span></label>' +
                 '<input id="ds-jdbc-url" style="width:100%;margin-top:4px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px" placeholder="jdbc:oracle:thin:@//host:1521/ORCLCDB 或 @host:1521:ORCL"></div>' +
               '<div id="ds-connection-mode-wrap" style="display:none"><label style="font-size:12px;color:var(--text-muted)">连接模式 (connection_mode) <span style="color:var(--text-muted);font-weight:normal">（SQL Server 双轨驱动路由）</span></label>' +
@@ -4748,6 +4751,8 @@ function formatBytes(bytes) {
                   '<option value="odbc">odbc（pyodbc）</option>' +
                   '<option value="auto">auto（优先 JDBC，失败回退 ODBC）</option>' +
                 '</select></div>' +
+              '<div id="ds-driver-version-wrap" style="display:none"><label style="font-size:12px;color:var(--text-muted)">JDBC 驱动版本 <span style="color:var(--text-muted);font-weight:normal">（驱动管理登记；留空=用激活版本）</span></label>' +
+                '<select id="ds-driver-version" style="width:100%;margin-top:4px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px"><option value="">默认（激活版本）</option></select></div>' +
               '<div id="ds-encrypt-wrap" style="display:none;margin-top:6px"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:4px 0">' +
                 '<input type="checkbox" id="ds-encrypt" style="width:16px;height:16px;accent-color:var(--accent)" />' +
                 '<span style="font-size:13px;color:var(--text-muted)">启用 TLS 加密 (encrypt)</span></label>' +
@@ -4876,6 +4881,8 @@ function formatBytes(bytes) {
         document.getElementById('ds-tenant-wrap').style.display = (dbType === 'oceanbase') ? '' : 'none';
         document.getElementById('ds-service-wrap').style.display = (dbType === 'oracle' || dbType === 'oracle_jdbc') ? '' : 'none';
         document.getElementById('ds-sysdba-wrap').style.display = (dbType === 'oracle' || dbType === 'oracle_jdbc') ? '' : 'none';
+        document.getElementById('ds-use-sid-wrap').style.display = (dbType === 'oracle' || dbType === 'oracle_jdbc') ? '' : 'none';
+        if (dbType !== 'oracle' && dbType !== 'oracle_jdbc') document.getElementById('ds-use-sid').checked = false;
         // 原生 Oracle 与 Oracle(JDBC) 以及 DB2(JDBC) 均显示 JDBC URL 字段；标签随类型切换
         var _jdbcWrap = document.getElementById('ds-jdbc-url-wrap');
         if (_jdbcWrap) _jdbcWrap.style.display = (dbType === 'oracle' || dbType === 'oracle_jdbc' || dbType === 'db2' || dbType === 'clickhouse') ? '' : 'none';
@@ -4915,6 +4922,13 @@ function formatBytes(bytes) {
           var _cm = document.getElementById('ds-connection-mode');
           if (_cm) _cm.value = 'jdbc';
         }
+        // JDBC 驱动版本：仅 JDBC 类插件类型显示，并从驱动管理拉取版本列表
+        var _dvWrap = document.getElementById('ds-driver-version-wrap');
+        if (_dvWrap) {
+          var _isJdbc = isJdbcType(dbType);
+          _dvWrap.style.display = _isJdbc ? 'block' : 'none';
+          if (_isJdbc) _loadDriverVersions(dbType, undefined, 'ds-driver-version');
+        }
         var gbaseWrap = document.getElementById('ds-gbase-server-wrap');
         if (gbaseWrap) gbaseWrap.style.display = dbType === 'gbase' ? '' : 'none';
         var mongoWrap = document.getElementById('ds-mongo-wrap');
@@ -4934,6 +4948,48 @@ function formatBytes(bytes) {
         if (dbLabel) {
           dbLabel.textContent = (dbType === 'gbase') ? i18n('webui.pro_ds_database_gbase') : i18n('webui.pro_ds_database');
         }
+      }
+
+      // 插件 db_type → 驱动管理 catalog key 映射（与 driver_registry.JDBC_PLUGIN_TO_CATALOG 一致）
+      // ★ 单一注册源：新增 JDBC 类型只改这里。oracle_jdbc 等是 JDBC，oracle（原生）不是。
+      var _JDBC_CATALOG = {
+        'oracle_jdbc':     'oracle',
+        'sqlserver_jdbc':  'sqlserver',
+        'db2_jdbc':        'db2',
+        'hgdb_jdbc':       'highgo',
+        'clickhouse_jdbc': 'clickhouse',
+        'uxdb_jdbc':       'uxdb',
+        'dm':              'dm',         // 核心内置 JDBC（达梦）
+        'gbase':           'gbase8s'     // 核心内置 JDBC（GBase 8s/8t 驱动类）
+      };
+      var _JDBC_TYPES = Object.keys(_JDBC_CATALOG);     // 所有走 JDBC 的 plugin/核心 db_type
+      function isJdbcType(dbType) {                     // 统一判定入口（取代 4 处硬编码 indexOf/||）
+        return _JDBC_TYPES.indexOf(dbType) >= 0;
+      }
+      function jdbcCatalogOf(dbType) {                  // plugin-id → 驱动管理 catalog key
+        return _JDBC_CATALOG[dbType] || null;
+      }
+      async function _loadDriverVersions(dbType, selectedVersion, selectId) {
+        var sel = document.getElementById(selectId || 'ds-driver-version');
+        if (!sel) return;
+        // 保留当前选择（编辑回填时由 selectedVersion 覆盖）
+        var _cur = selectedVersion !== undefined ? selectedVersion : sel.value;
+        sel.innerHTML = '<option value="">默认（激活版本）</option>';
+        var catalogKey = _JDBC_CATALOG[dbType] || dbType;
+        try {
+          const r = await fetch('/api/drivers/list?db_type=' + encodeURIComponent(catalogKey));
+          const d = await r.json();
+          if (d.ok && d.drivers) {
+            d.drivers.forEach(function(drv) {
+              var opt = document.createElement('option');
+              opt.value = drv.version;
+              var _mark = drv.is_active ? ' ✓激活' : '';
+              opt.textContent = (drv.version || drv.jar_filename) + (_mark) + (drv.driver_class ? (' · ' + drv.driver_class) : '');
+              sel.appendChild(opt);
+            });
+          }
+        } catch (e) { /* 忽略：驱动管理无数据时不阻塞表单 */ }
+        if (_cur) sel.value = _cur;
       }
 
       function toggleDsSsh() {
@@ -4968,6 +5024,7 @@ function formatBytes(bytes) {
         if (!dbName && dbType === 'clickhouse') dbName = 'default';
         const tenant = (document.getElementById('ds-tenant')?.value || '').trim();
         const sysdba = document.getElementById('ds-sysdba')?.checked || false;
+        const useSid = document.getElementById('ds-use-sid')?.checked || false;
         const encrypt = document.getElementById('ds-encrypt')?.checked || false;
         const trustServerCertificate = document.getElementById('ds-trust-server-cert')?.checked || false;
         const gbaseServer = document.getElementById('ds-gbase-server')?.value.trim() || '';
@@ -4983,6 +5040,7 @@ function formatBytes(bytes) {
         const mongoTlsCertKeyFile = document.getElementById('ds-tls-cert-key-file')?.value.trim() || '';
         const mongoTlsAllowInvalid = document.getElementById('ds-tls-allow-invalid')?.checked || false;
         const redisSeedNodes = document.getElementById('ds-redis-seed-nodes')?.value.trim() || '';
+        const driverVersion = document.getElementById('ds-driver-version')?.value || '';
         const sshHost = document.getElementById('ds-ssh-host')?.value || '';
         const sshPort = document.getElementById('ds-ssh-port')?.value || 22;
         const sshUser = document.getElementById('ds-ssh-user')?.value || '';
@@ -4997,7 +5055,7 @@ function formatBytes(bytes) {
           const res = await fetch('/api/pro/datasources/test-connection', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ db_type: dbType, host, port: parseInt(port), user, password, service_name: svcName, database: dbName, tenant: tenant, sysdba, jdbc_url: jdbcUrl, connection_mode: connectionMode, encrypt, trust_server_certificate: trustServerCertificate, gbase_server_name: gbaseServer, ssh_host: sshHost, ssh_port: parseInt(sshPort), ssh_user: sshUser, ssh_password: sshPass, connect_mode: mongoConnectMode, auth_source: mongoAuthSource, auth_mechanism: mongoAuthMechanism, replica_set: mongoReplicaSet, tls: mongoTls, tls_ca_file: mongoTlsCaFile, tls_cert_key_file: mongoTlsCertKeyFile, tls_allow_invalid_certs: mongoTlsAllowInvalid, seed_nodes: redisSeedNodes })
+            body: JSON.stringify({ db_type: dbType, host, port: parseInt(port), user, password, service_name: svcName, database: dbName, tenant: tenant, sysdba, use_sid: useSid, jdbc_url: jdbcUrl, connection_mode: connectionMode, encrypt, trust_server_certificate: trustServerCertificate, gbase_server_name: gbaseServer, ssh_host: sshHost, ssh_port: parseInt(sshPort), ssh_user: sshUser, ssh_password: sshPass, connect_mode: mongoConnectMode, auth_source: mongoAuthSource, auth_mechanism: mongoAuthMechanism, replica_set: mongoReplicaSet, tls: mongoTls, tls_ca_file: mongoTlsCaFile, tls_cert_key_file: mongoTlsCertKeyFile, tls_allow_invalid_certs: mongoTlsAllowInvalid, seed_nodes: redisSeedNodes, driver_version: driverVersion })
           });
           const data = await res.json();
           msgEl.style.color = data.ok ? 'var(--success)' : 'var(--danger)';
@@ -5031,6 +5089,7 @@ function formatBytes(bytes) {
         if (payload.db_type === 'oracle' || payload.db_type === 'oracle_jdbc') {
           payload.service_name = document.getElementById('ds-service-name').value.trim();
           payload.sysdba = document.getElementById('ds-sysdba').checked;
+          payload.use_sid = document.getElementById('ds-use-sid').checked;
           const jdbcUrl = document.getElementById('ds-jdbc-url')?.value.trim();
           if (jdbcUrl) payload.jdbc_url = jdbcUrl;
         }
@@ -5040,6 +5099,11 @@ function formatBytes(bytes) {
           payload.connection_mode = cm;
           payload.encrypt = document.getElementById('ds-encrypt')?.checked ? 1 : 0;
           payload.trust_server_certificate = document.getElementById('ds-trust-server-cert')?.checked ? 1 : 0;
+        }
+        // JDBC 驱动版本（驱动管理登记；空=用激活版本）
+        if (['oracle_jdbc','sqlserver_jdbc','db2_jdbc','hgdb_jdbc','clickhouse_jdbc','uxdb_jdbc'].indexOf(payload.db_type) >= 0) {
+          const dv = document.getElementById('ds-driver-version')?.value || '';
+          if (dv) payload.driver_version = dv;
         }
         if (payload.db_type === 'gbase') {
           payload.gbase_server_name = document.getElementById('ds-gbase-server').value.trim();
@@ -5150,6 +5214,7 @@ function formatBytes(bytes) {
               if (ds.db_type === 'oracle' || ds.db_type === 'oracle_jdbc') {
                 document.getElementById('ds-service-name').value = ds.service_name || '';
                 document.getElementById('ds-sysdba').checked = ds.sysdba === true;
+                document.getElementById('ds-use-sid').checked = ds.use_sid === true;
                 if (ds.jdbc_url) document.getElementById('ds-jdbc-url').value = ds.jdbc_url;
               }
               if (ds.db_type === 'sqlserver_jdbc') {
@@ -5188,6 +5253,10 @@ function formatBytes(bytes) {
               }
               // 端口放在 onDsDbTypeChange 之后，避免被默认值覆盖
               document.getElementById('ds-port').value = ds.port ?? 3306;
+              // 回填 JDBC 驱动版本（延迟到类型切换拉取列表之后，确保选中项生效）
+              if (['oracle_jdbc','sqlserver_jdbc','db2_jdbc','hgdb_jdbc','clickhouse_jdbc','uxdb_jdbc'].indexOf(ds.db_type) >= 0) {
+                setTimeout(function(){ _loadDriverVersions(ds.db_type, ds.driver_version || ''); }, 250);
+              }
               // 添加隐藏字段存储ID
               const form = document.getElementById('datasource-modal-backdrop').querySelector('div[style*="min-width"]');
               const idInput = document.createElement('input');
@@ -5237,6 +5306,7 @@ function formatBytes(bytes) {
               ssh_port: ds.ssh_port || 22,
               ssh_user: ds.ssh_user || '',
               ssh_password: ds.ssh_password || '',
+              driver_version: ds.driver_version || '',
             })
           });
           const data = await res.json();
@@ -5914,9 +5984,21 @@ function formatBytes(bytes) {
                 <span style="font-size: 13px; color: var(--text-muted)" data-i18n="webui.checkbox_sysdba">以 SYSDBA 身份连接</span>
               </label>
             </div>
+            <div class="field full" id="f-use-sid-wrap" style="display:none">
+              <label>
+                <input type="checkbox" id="f-use-sid" />
+                <span style="font-size: 13px; color: var(--text-muted)">使用 SID 连接（jdbc:oracle:thin:@host:port:SID，区别于默认的服务名格式）</span>
+              </label>
+            </div>
             <div class="field full" id="f-jdbc-url-wrap" style="display:none">
               <label><span id="f-jdbc-url-label">JDBC URL</span> <span id="f-jdbc-url-hint" class="opt" style="font-weight:normal;color:var(--text-muted)">可选，留空则使用上方主机/端口/服务名</span></label>
               <input type="text" id="f-jdbc-url" placeholder="jdbc:oracle:thin:@//host:1521/ORCLCDB 或 @host:1521:ORCL" />
+            </div>
+            <div class="field full" id="f-driver-version-wrap" style="display:none">
+              <label><span>JDBC 驱动版本</span> <span class="opt">驱动管理</span></label>
+              <select id="f-driver-version" style="width:100%;margin-top:4px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">
+                <option value="">默认（激活版本）</option>
+              </select>
             </div>
             <div class="field full" id="f-sqlserver-jdbc-wrap" style="display:none">
               <label><span>SQL Server (JDBC) 连接参数</span> <span class="opt">JDBC</span></label>
@@ -6355,6 +6437,18 @@ function formatBytes(bytes) {
                 <input type="checkbox" id="job-sysdba" />
                 <span style="color:var(--text-muted)">使用 SYSDBA 连接</span>
               </label>
+            </div>
+            <div class="field" id="job-use-sid-wrap" style="display:none">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                <input type="checkbox" id="job-use-sid" />
+                <span style="color:var(--text-muted)">使用 SID 连接（jdbc:oracle:thin:@host:port:SID，区别于默认的服务名格式）</span>
+              </label>
+            </div>
+            <div class="field full" id="job-driver-version-wrap" style="display:none">
+              <label><span>JDBC 驱动版本</span> <span class="opt">驱动管理</span></label>
+              <select id="job-driver-version" style="width:100%;margin-top:4px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">
+                <option value="">默认（激活版本）</option>
+              </select>
             </div>
           </div>
 
@@ -6919,68 +7013,227 @@ curl -H "X-API-Key: YOUR_API_KEY" http://localhost:5003/api/v1/inspect/{task_id}
         </div>
       </div>
       <!-- ══ Page: Oracle Client Settings ══ -->
+      <!-- ══ Page: Database Drivers Management ══ -->
       <div class="page" id="page-oracle-client">
         <div class="card">
-          <div class="card-title"><span>🔧</span> <span data-i18n="webui.oracle_client_title">数据库驱动设置</span></div>
-          <div style="color:var(--text-muted);font-size:13px;margin-bottom:20px;line-height:1.7;white-space:pre-line">
-            配置数据库客户端库，用于连接需要本地驱动的数据库（Oracle、YashanDB）。<br/>
-            SQL Server 需要安装 Microsoft ODBC Driver（内置安装包可供使用）。<br/>
-            <strong style="color:var(--warn)">注意：</strong>修改后需要重启 {{ product_name }} 才能生效。
+          <div class="card-title">
+            <span>📦</span>
+            <span>数据库驱动管理</span>
+            <span style="font-size:12px;color:var(--text-muted);margin-left:8px;font-weight:400">统一管理 24 类数据库的 JDBC 驱动（上传 / 删除 / 版本切换）</span>
           </div>
 
-          <!-- 驱动自动配置 -->
-          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px;">
-            <div style="font-weight:600;font-size:14px;margin-bottom:10px;">⬇️ 驱动自动配置</div>
-            <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;line-height:1.6;">
-              一键下载并解压数据库客户端库到 {{ product_name }} 目录，无需手动前往官网下载。
-            </div>
-            <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;line-height:1.6;">
-              当前下载版本：Oracle Instant Client 23.26，支持 Windows / Linux / macOS。
-            </div>
-            <div style="background:rgba(255,152,0,0.08);border:1px solid rgba(255,152,0,0.2);border-radius:6px;padding:8px 12px;margin-bottom:14px;font-size:12px;color:var(--text-muted);line-height:1.7;">
-              <strong style="color:var(--warn)">⚠️ Linux 用户注意：</strong>YashanDB Linux 驱动下载后为 <code>.tar.gz</code> 压缩包，需要手动解压到 <code>drivers/yashandb/lib</code> 目录。
-            </div>
+          <!-- 两栏布局：左侧 24 类 db_type / 右侧驱动版本表 -->
+          <style>
+            .drivers-types-pane,.drivers-list-pane{
+              background:var(--surface2);border:1px solid var(--border);
+              border-radius:10px;display:flex;flex-direction:column;overflow:hidden
+            }
+            .drivers-pane-header{
+              padding:10px 14px;border-bottom:1px solid var(--border);
+              display:flex;align-items:center;justify-content:space-between;
+              font-weight:600;font-size:13px;background:var(--surface)
+            }
+            .drivers-types-list{flex:1;overflow-y:auto;max-height:560px}
+            .drivers-type-item{
+              padding:10px 14px;cursor:pointer;display:flex;align-items:center;gap:10px;
+              border-bottom:1px solid var(--border);transition:background .15s
+            }
+            .drivers-type-item:hover{background:var(--surface)}
+            .drivers-type-item.active{background:rgba(59,130,246,0.12);color:var(--text)}
+            .drivers-type-item.active .name{font-weight:600}
+            .drivers-type-item .order{color:var(--text-muted);font-size:11px;min-width:24px}
+            .drivers-type-item .name{flex:1;font-size:13px}
+            .drivers-type-item .badge{
+              background:var(--info,#3b82f6);color:#fff;font-size:10px;
+              padding:1px 8px;border-radius:999px;font-weight:600
+            }
+            .drivers-type-item .tag-native{
+              background:rgba(156,163,175,0.18);color:var(--text-muted);
+              font-size:9.5px;padding:1px 6px;border-radius:4px;font-weight:500
+            }
+            .drivers-table-wrap{flex:1;overflow:auto;max-height:560px}
+            .drivers-table{width:100%;border-collapse:collapse;font-size:12.5px}
+            .drivers-table thead th{
+              padding:10px 14px;text-align:left;background:var(--surface);
+              border-bottom:1px solid var(--border);font-weight:600;font-size:12px;color:var(--text-muted)
+            }
+            .drivers-table tbody td{
+              padding:12px 14px;border-bottom:1px solid var(--border);vertical-align:top
+            }
+            .drivers-table tbody tr:hover{background:var(--surface)}
+            .drivers-table tbody tr.is-active{background:rgba(16,185,129,0.06)}
+            .drivers-table .active-tag{
+              margin-left:6px;background:#10b981;color:#fff;
+              font-size:10px;padding:1px 7px;border-radius:999px;font-weight:600
+            }
+            .drivers-table code{font-size:11.5px;color:var(--text-muted);background:var(--surface);padding:2px 6px;border-radius:4px}
+            .drivers-actions{display:flex;gap:6px;align-items:center}
+            .drivers-actions .btn-xs{padding:3px 10px;font-size:11.5px;border-radius:6px}
+            .drivers-empty{text-align:center;color:var(--text-muted);padding:24px;font-size:13px}
+            .drivers-actions .muted{color:var(--text-muted);font-size:11.5px}
+            .drivers-type-item .del-type{
+              opacity:0;color:var(--danger);font-size:16px;line-height:1;
+              padding:0 4px;border-radius:4px;transition:opacity .15s,background .15s;
+              cursor:pointer;margin-left:auto
+            }
+            .drivers-type-item:hover .del-type{opacity:.7}
+            .drivers-type-item .del-type:hover{opacity:1;background:rgba(239,68,68,0.12)}
+            .drivers-type-item.hidden-type{opacity:.55;background:var(--surface)}
+            .drivers-type-item.hidden-type .order,.drivers-type-item.hidden-type .name{color:var(--text-muted)}
+            .drivers-type-item.hidden-type .restore-type{
+              color:var(--info,#3b82f6);font-size:12px;margin-left:auto;cursor:pointer
+            }
+            .drivers-type-item.hidden-type .restore-type:hover{text-decoration:underline}
+            #drivers-toggle-hidden-btn.active{background:rgba(59,130,246,0.12);color:var(--info,#3b82f6)}
+            .tag-custom{font-size:10px;color:#16a34a;background:rgba(22,163,74,0.12);border-radius:4px;padding:1px 5px;margin-left:4px}
+            .drivers-pane-actions{display:flex;gap:5px;align-items:center}
+            .drivers-icon-btn{
+              width:26px;height:26px;border-radius:6px;border:1px solid var(--border);
+              background:var(--surface);color:var(--text);font-size:13px;line-height:1;
+              display:inline-flex;align-items:center;justify-content:center;cursor:pointer;
+              transition:background .15s,border-color .15s,color .15s
+            }
+            .drivers-icon-btn:hover{background:var(--hover,#f3f4f6);border-color:var(--text-muted)}
+            .drivers-icon-btn#drivers-toggle-hidden-btn.active{background:rgba(59,130,246,0.12);border-color:rgba(59,130,246,0.35);color:var(--info,#3b82f6)}
+            .modal-backdrop-fix{position:fixed;inset:0;background:rgba(0,0,0,0.5);
+              display:flex;align-items:center;justify-content:center;z-index:9999;backdrop-filter:blur(2px)}
+          </style>
 
-            <!-- 下载进度 -->
-            <div id="all-drivers-download-progress" style="display:none;margin-bottom:12px;">
-              <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;height:8px;overflow:hidden;margin-bottom:6px;">
-                <div id="all-drivers-download-bar" style="height:100%;width:0%;background:linear-gradient(90deg,var(--success),#00C8A0);border-radius:6px;transition:width 0.3s;"></div>
+          <div style="display:grid;grid-template-columns:280px 1fr;gap:16px">
+            <!-- 左：db_type 类型列表 -->
+            <div class="drivers-types-pane">
+              <div class="drivers-pane-header">
+                <span>数据库/产品类型列表</span>
+                <span class="drivers-pane-actions">
+                  <button class="drivers-icon-btn" id="drivers-add-type-btn"
+                          onclick="openAddTypeDialog()" title="新增自定义类型">&#x2795;</button>
+                  <button class="drivers-icon-btn" id="drivers-toggle-hidden-btn"
+                          onclick="toggleDriversHiddenMode()" title="查看/恢复已删除类型">&#x1f5d1;</button>
+                </span>
               </div>
-              <div id="all-drivers-download-msg" style="font-size:12px;color:var(--text-muted);"></div>
+              <div id="drivers-types-list" class="drivers-types-list">
+                <div class="drivers-empty">加载中...</div>
+              </div>
             </div>
 
-            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
-              <button class="btn btn-primary" id="all-drivers-download-btn" onclick="downloadAllDrivers()" style="padding:8px 20px;">
-                📦 一键下载所有驱动
-              </button>
-              <button class="btn btn-ghost" onclick="checkAllDriverStatus()" style="padding:8px 16px;font-size:12px;">
-                🔍 检查安装状态
-              </button>
+            <!-- 右：当前类型驱动版本表 -->
+            <div class="drivers-list-pane">
+              <div class="drivers-pane-header">
+                <span id="drivers-current-type-name">请选择左侧类型</span>
+                <button class="drivers-icon-btn" onclick="openDriverUploadDialog()" id="drivers-new-btn" disabled
+                        title="上传驱动 JAR" style="color:var(--success,#10b981);border-color:var(--success,#10b981);font-size:14px">
+                  &#x2795;
+                </button>
+              </div>
+              <div class="drivers-table-wrap">
+                <table class="drivers-table">
+                  <thead>
+                    <tr>
+                      <th style="width:22%">驱动版本</th>
+                      <th style="width:30%">驱动类</th>
+                      <th>驱动 JAR 包</th>
+                      <th style="width:140px">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody id="drivers-tbody">
+                    <tr><td colspan="4" class="drivers-empty">请选择左侧类型查看驱动</td></tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
-
-            <!-- 合并状态显示 -->
-            <div id="all-driver-status" style="display:none;padding:12px 16px;border-radius:8px;font-size:13px;line-height:1.6;"></div>
           </div>
+        </div>
 
-          <!-- 手动配置（高级） -->
-          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:16px;">
-            <div style="font-weight:600;font-size:14px;margin-bottom:10px;">✏️ 手动配置（高级）</div>
-            <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.6;">
-              手动指定 Oracle Instant Client 路径，适用于已自行下载客户端库的场景。
+        <!-- 新增数据库/产品类型弹窗 -->
+        <div id="add-type-modal" class="modal-backdrop-fix" style="display:none">
+          <div class="card" style="width:460px;max-width:92vw;margin:0">
+            <div class="card-title" style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+              <span>➕ 新增数据库/产品类型</span>
+              <span style="cursor:pointer;font-size:22px;color:var(--text-muted);line-height:1" onclick="closeAddTypeDialog()">×</span>
             </div>
-            <div class="form-group">
-              <label data-i18n="webui.oracle_client_path">Oracle Instant Client 路径</label>
-              <input type="text" id="oracle-client-path" class="form-input" placeholder="例如：C:\oracle\instantclient_21_12 或 /usr/lib/oracle/21/client64/lib"/>
-              <div style="font-size:11.5px;color:var(--text-muted);margin-top:6px;white-space:pre-line">
-                 Windows 示例：C:\oracle\instantclient_21_12
-                 Linux 示例：/usr/lib/oracle/21/client64/lib
-                 留空则自动检测系统环境变量
+            <div style="padding:18px 16px">
+              <div class="form-group">
+                <label>类型标识 <span style="color:var(--warn)">*</span></label>
+                <input type="text" id="add-type-key" class="form-input" placeholder="小写字母/数字/下划线，如 mydb">
+                <div style="font-size:11px;color:var(--text-muted);margin-top:4px">唯一，不能与内置 25 类冲突，作为驱动归档目录名</div>
+              </div>
+              <div class="form-group">
+                <label>中文名 <span style="color:var(--warn)">*</span></label>
+                <input type="text" id="add-type-name-zh" class="form-input" placeholder="如 我的数据库">
+              </div>
+              <div class="form-group">
+                <label>英文名</label>
+                <input type="text" id="add-type-name-en" class="form-input" placeholder="如 MyDB">
+              </div>
+              <div class="form-group">
+                <label>驱动类（可选）</label>
+                <input type="text" id="add-type-driver-class" class="form-input" placeholder="如 com.example.jdbc.Driver">
+              </div>
+              <div class="form-group" style="display:flex;align-items:center;gap:8px">
+                <input type="checkbox" id="add-type-isjdbc" checked>
+                <label style="margin:0">标准 JDBC 类型</label>
+              </div>
+              <div id="add-type-err" style="color:var(--danger,#ef4444);font-size:12px;min-height:16px;margin-top:6px"></div>
+              <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:10px">
+                <button class="btn btn-ghost" onclick="closeAddTypeDialog()">取消</button>
+                <button class="btn btn-primary" onclick="submitAddType()">新增</button>
               </div>
             </div>
-            <div id="oracle-client-status" style="display:none;padding:8px 12px;border-radius:6px;font-size:12px;margin-bottom:12px"></div>
-            <div class="btn-row">
-              <button class="btn btn-ghost" onclick="loadOracleClientConfig()" data-i18n="webui.oracle_client_reload">↻ 重新加载</button>
-              <button class="btn btn-primary" onclick="saveOracleClientConfig()" data-i18n="webui.oracle_client_save_btn">💾 保存配置</button>
+          </div>
+        </div>
+
+        <!-- 删除类型确认弹窗（div 替代原生 alert/confirm） -->
+        <div id="delete-type-modal" class="modal-backdrop-fix" style="display:none">
+          <div class="card" style="width:420px;max-width:92vw;margin:0">
+            <div class="card-title" style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+              <span>&#x26a0;&#xfe0f; 删除数据库/产品类型</span>
+              <span style="cursor:pointer;font-size:22px;color:var(--text-muted);line-height:1" onclick="closeDeleteTypeDialog()">×</span>
+            </div>
+            <div style="padding:18px 16px">
+              <p id="delete-type-msg" style="margin:0 0 16px;font-size:13px;line-height:1.6;color:var(--text)"></p>
+              <div style="display:flex;justify-content:flex-end;gap:10px">
+                <button class="btn btn-ghost" onclick="closeDeleteTypeDialog()">取消</button>
+                <button class="btn btn-primary" style="background:var(--danger);border-color:var(--danger);" onclick="confirmDeleteType()">确认删除</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 上传驱动弹窗 -->
+        <div id="driver-upload-modal" class="modal-backdrop-fix" style="display:none">
+          <div class="card" style="width:480px;max-width:92vw;margin:0">
+            <div class="card-title" style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+              <span>📤 上传 JDBC 驱动</span>
+              <span style="cursor:pointer;font-size:22px;color:var(--text-muted);line-height:1" onclick="closeDriverUploadDialog()">×</span>
+            </div>
+            <div style="padding:18px 16px">
+              <div class="form-group">
+                <label>数据库类型</label>
+                <input type="text" id="driver-upload-db-type" class="form-input" readonly>
+              </div>
+              <div class="form-group">
+                <label>版本号 <span style="color:var(--warn)">*</span></label>
+                <input type="text" id="driver-upload-version" class="form-input" placeholder="例如 8.0.33 / 21.7.0.0 / 42.7.3">
+                <div style="font-size:11px;color:var(--text-muted);margin-top:4px">只能含字母/数字/._-+，长度 ≤ 32</div>
+              </div>
+              <div class="form-group">
+                <label>驱动类（可选，留空用建议值）</label>
+                <input type="text" id="driver-upload-class" class="form-input" placeholder="例如 com.mysql.cj.jdbc.Driver">
+              </div>
+              <div class="form-group">
+                <label>驱动 JAR 包 <span style="color:var(--warn)">*</span></label>
+                <input type="file" id="driver-upload-file" accept=".jar" class="form-input">
+                <div style="font-size:11px;color:var(--text-muted);margin-top:4px">最大 200MB。上传后自动归档到 drivers/&lt;db_type&gt;/&lt;version&gt;/</div>
+              </div>
+              <div class="form-group">
+                <label>备注（可选）</label>
+                <input type="text" id="driver-upload-note" class="form-input" placeholder="如：来自官网下载">
+              </div>
+              <div id="driver-upload-status" style="display:none;padding:10px;border-radius:6px;font-size:12.5px;margin-bottom:8px"></div>
+            </div>
+            <div style="padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end">
+              <button class="btn btn-ghost" onclick="closeDriverUploadDialog()">取消</button>
+              <button class="btn btn-primary" onclick="submitDriverUpload()">📤 上传</button>
             </div>
           </div>
         </div>
@@ -9032,7 +9285,7 @@ function showPage(name) {
   if (name === 'server-history') loadServerHistory();
   if (name === 'account') loadAccountPage();
   if (name === 'um-admin') loadUmAdminPage();
-  if (name === 'oracle-client') loadOracleClientConfig();
+  if (name === 'oracle-client') loadDrivers();
   if (name === 'plugin-market') loadMarketPlugins();
     if (name === 'remote-shell') {
         initRemoteShellPage();
@@ -9540,6 +9793,7 @@ async function onDatasourceChange() {
         console.log('[Oracle模板] onDatasourceChange: oracle branch entered, ds:', ds);
         document.getElementById('f-service-name').value = ds.service_name || '';
         document.getElementById('f-sysdba').checked = !!ds.sysdba;
+        document.getElementById('f-use-sid').checked = !!ds.use_sid;
         // 静默检测 Oracle 版本，自动选择对应模板
         try {
           console.log('[Oracle模板] Sending version detection request...');
@@ -9563,6 +9817,16 @@ async function onDatasourceChange() {
         } catch(e) { console.warn('[Oracle模板] Version detection error:', e); }
       } else {
         console.log('[Oracle模板] onDatasourceChange: db_type is', ds.db_type, ', not oracle/oracle_jdbc');
+      }
+      // JDBC 驱动管理：数据源回填 驱动版本（driver_version）；Oracle 额外回填 use_sid
+      if (isJdbcType(ds.db_type)) {
+        _loadDriverVersions(ds.db_type, ds.driver_version, 'f-driver-version');
+        if (ds.db_type === 'oracle_jdbc') {
+          document.getElementById('f-use-sid').checked = !!ds.use_sid;
+        }
+      } else {
+        var fdv0 = document.getElementById('f-driver-version');
+        if (fdv0) fdv0.value = '';
       }
       // 自动填充 SSH 配置
       if (ds.ssh_enabled || ds.ssh_host) {
@@ -9650,6 +9914,8 @@ async function selectDbType(type, skipReload) {
   // Oracle全面巡检：显示 SYSDBA 复选框
   var sysdbaWrap = document.getElementById('f-sysdba-wrap');
   if (sysdbaWrap) sysdbaWrap.style.display = (type === 'oracle' || type === 'oracle_jdbc') ? '' : 'none';
+  var useSidWrap = document.getElementById('f-use-sid-wrap');
+  if (useSidWrap) { useSidWrap.style.display = (type === 'oracle' || type === 'oracle_jdbc') ? '' : 'none'; if (type !== 'oracle' && type !== 'oracle_jdbc') document.getElementById('f-use-sid').checked = false; }
   // Oracle / Oracle(JDBC)：显示连接串字段，标签随类型切换
   var jdbcWrap = document.getElementById('f-jdbc-url-wrap');
   if (jdbcWrap) jdbcWrap.style.display = (type === 'oracle' || type === 'oracle_jdbc' || type === 'db2' || type === 'clickhouse') ? '' : 'none';
@@ -9685,6 +9951,18 @@ async function selectDbType(type, skipReload) {
     if (encEl) encEl.checked = false;
     const tcEl = document.getElementById('f-trust-server-cert');
     if (tcEl) tcEl.checked = true;
+  }
+  // JDBC 驱动管理：显示驱动版本下拉并加载版本列表（仅 JDBC 插件类型）
+  var dvWrap = document.getElementById('f-driver-version-wrap');
+  if (dvWrap) {
+    var _isJdbc = isJdbcType(type);
+    dvWrap.style.display = _isJdbc ? 'block' : 'none';
+    if (_isJdbc) {
+      _loadDriverVersions(type, undefined, 'f-driver-version');
+    } else {
+      var fdv = document.getElementById('f-driver-version');
+      if (fdv) fdv.value = '';
+    }
   }
   // 更新数据库名称输入框的 placeholder 并自动填写默认值
   const defaultDbMap = window.DEFAULT_DB_MAP;
@@ -9791,6 +10069,8 @@ async function testDb() {
         tenant:   (dbType === 'oceanbase') ? (document.getElementById('f-tenant').value.trim() || '') : '',
         service_name: document.getElementById('f-service-name') ? document.getElementById('f-service-name').value.trim() : null,
         sysdba: document.getElementById('f-sysdba').checked,
+        use_sid: document.getElementById('f-use-sid') ? document.getElementById('f-use-sid').checked : false,
+        driver_version: document.getElementById('f-driver-version')?.value || null,
         jdbc_url: document.getElementById('f-jdbc-url')?.value.trim() || null,
         connect_mode: document.getElementById('f-connect-mode')?.value || 'standard',
         auth_source: document.getElementById('f-auth-source')?.value.trim() || 'admin',
@@ -9905,10 +10185,13 @@ async function testJobDb() {
       password: document.getElementById('job-password').value,
       database: (dbType === 'pg' || dbType === 'ivorysql') ? (document.getElementById('job-database').value.trim() || (dbType === 'pg' ? 'postgres' : 'ivorysql')) : (dbType === 'kingbase') ? (document.getElementById('job-database').value.trim() || 'kingbase') : (dbType === 'gbase') ? (document.getElementById('job-database').value.trim() || 'sysmaster') : '',
     };
-    if (dbType === 'oracle') {
+    if (dbType === 'oracle' || dbType === 'oracle_jdbc') {
       body.service_name = document.getElementById('job-service-name').value.trim() || null;
       body.sysdba = document.getElementById('job-sysdba').checked;
+      body.use_sid = document.getElementById('job-use-sid').checked;
     }
+    // JDBC 驱动管理：驱动版本（手动/数据源均透传）
+    body.driver_version = document.getElementById('job-driver-version')?.value || null;
     if (dbType === 'mongodb') {
       body.database = document.getElementById('job-database').value.trim() || 'admin';
       body.connect_mode = 'standard';
@@ -10189,6 +10472,8 @@ async function executeFixSql(taskId, sql) {
 
 // ─── 模块级默认值（供 fillConfirmPanel / startInspection 共用） ───
 const userDefaults = { mysql: 'root', pg: 'postgres', oracle: 'system', dm: 'SYSDBA', sqlserver: 'sa', tidb: 'root', ivorysql: 'ivorysql', yashandb: 'sys' };
+// 纯密码/无密码 类型：startInspection 中强制空 user（不兜底 root，避免 redis-py 误发 AUTH）
+const NO_DEFAULT_USER_TYPES = new Set(['redis', 'redis-cluster', 'mongodb']);
 
 // ─── 巡检章节可选（T5 向导章节多选） ───
 // window._chapterMap: 章节 id -> {number, title}，供 Step5 与 startInspection 使用
@@ -10347,7 +10632,8 @@ async function startInspection() {
   const name = document.getElementById('f-name').value.trim() || (dbType==='mysql'?'MySQL_Server':dbType==='oracle'?'Oracle_Server':dbType==='dm'?'DM8_Server':dbType==='ivorysql'?'IvorySQL_Server':'PG_Server');
   const host = document.getElementById('f-host').value.trim() || 'localhost';
   const port = parseInt(document.getElementById('f-port').value) || (dbType==='mysql'?3306:dbType==='oracle'?1521:dbType==='dm'?5236:dbType==='ivorysql'?5432:5432);
-  const user = document.getElementById('f-user').value.trim() || (userDefaults[dbType]||'root');
+  const user = document.getElementById('f-user').value.trim() ||
+                (NO_DEFAULT_USER_TYPES.has(dbType) ? '' : (userDefaults[dbType] || 'root'));
   const password = document.getElementById('f-password').value;
   let database = document.getElementById('f-database').value.trim();
   if (!database) {
@@ -10367,7 +10653,7 @@ async function startInspection() {
   const datasourceId = document.getElementById('f-datasource').value;
   const payload = datasourceId
     ? { db_type: dbType, datasource_id: datasourceId, inspector_name: inspector, desensitize: document.getElementById('f-desensitize').checked }
-    : { db_type: dbType, name, host, port, user, password, database, tenant, service_name: svcName, jdbc_url: jdbcUrl, inspector_name: inspector, sysdba: document.getElementById('f-sysdba').checked, desensitize: document.getElementById('f-desensitize').checked,
+    : { db_type: dbType, name, host, port, user, password, database, tenant, service_name: svcName, jdbc_url: jdbcUrl, inspector_name: inspector, sysdba: document.getElementById('f-sysdba').checked, use_sid: document.getElementById('f-use-sid') ? document.getElementById('f-use-sid').checked : false, driver_version: document.getElementById('f-driver-version')?.value || null, desensitize: document.getElementById('f-desensitize').checked,
         connect_mode: document.getElementById('f-connect-mode')?.value || 'standard',
         auth_source: document.getElementById('f-auth-source')?.value.trim() || 'admin',
         auth_mechanism: document.getElementById('f-auth-mechanism')?.value.trim() || '',
@@ -13169,6 +13455,18 @@ async function onJobDbTypeChange() {
   if (jobSvcWrap) jobSvcWrap.style.display = (dbType === 'oracle' || dbType === 'oracle_jdbc') ? 'block' : 'none';
   var jobSysdbaWrap = document.getElementById('job-sysdba-wrap');
   if (jobSysdbaWrap) jobSysdbaWrap.style.display = (dbType === 'oracle' || dbType === 'oracle_jdbc') ? 'block' : 'none';
+  // JDBC 驱动管理：显示驱动版本下拉并加载版本列表（仅 JDBC 插件类型）
+  var jobDvWrap = document.getElementById('job-driver-version-wrap');
+  if (jobDvWrap) {
+    var _isJdbc = isJdbcType(dbType);
+    jobDvWrap.style.display = _isJdbc ? 'block' : 'none';
+    if (_isJdbc) {
+      _loadDriverVersions(dbType, undefined, 'job-driver-version');
+    } else {
+      var jdv = document.getElementById('job-driver-version');
+      if (jdv) jdv.value = '';
+    }
+  }
 
   // 更新数据源下拉框（仅显示匹配类型的数据源）
   loadJobDatasources(dbType);
@@ -13289,9 +13587,20 @@ async function onJobDatasourceChange() {
       var jobSysdbaWrap = document.getElementById('job-sysdba-wrap');
       if (jobSvcWrap) jobSvcWrap.style.display = (ds.db_type === 'oracle' || ds.db_type === 'oracle_jdbc') ? 'block' : 'none';
       if (jobSysdbaWrap) jobSysdbaWrap.style.display = (ds.db_type === 'oracle' || ds.db_type === 'oracle_jdbc') ? 'block' : 'none';
+      var jobUseSidWrap = document.getElementById('job-use-sid-wrap');
+      if (jobUseSidWrap) jobUseSidWrap.style.display = (ds.db_type === 'oracle' || ds.db_type === 'oracle_jdbc') ? 'block' : 'none';
       if (ds.db_type === 'oracle' || ds.db_type === 'oracle_jdbc') {
         document.getElementById('job-service-name').value = ds.service_name || '';
         document.getElementById('job-sysdba').checked = !!ds.sysdba;
+        document.getElementById('job-use-sid').checked = !!ds.use_sid;
+      }
+      // JDBC 驱动管理：数据源回填 驱动版本（driver_version）；Oracle 额外回填 use_sid
+      if (isJdbcType(ds.db_type)) {
+        document.getElementById('job-driver-version-wrap').style.display = 'block';
+        _loadDriverVersions(ds.db_type, ds.driver_version, 'job-driver-version');
+        if (ds.db_type === 'oracle_jdbc') document.getElementById('job-use-sid').checked = !!ds.use_sid;
+      } else {
+        document.getElementById('job-driver-version-wrap').style.display = 'none';
       }
       // 根据数据源的数据库类型加载巡检模板（等待完成）
       await loadInspectionTemplatesForSelect(ds.db_type || 'mysql', 'job-template');
@@ -13495,6 +13804,8 @@ async function saveJob() {
     user: document.getElementById('job-user').value || '',
     password: document.getElementById('job-password').value || '',
     database: document.getElementById('job-database').value || '',
+    driver_version: document.getElementById('job-driver-version')?.value || null,
+    use_sid: document.getElementById('job-use-sid')?.checked || false,
     notify_on_done: document.getElementById('job-notify').checked,
     cron: buildCronFromForm()
   };
@@ -19515,1184 +19826,362 @@ async function deleteBackupHistory(recordId) {
   <!-- Oracle Client Config -->
   <script>
   // ─── Oracle Client Config ──────────────────────
-  async function loadOracleClientConfig() {
-    try {
-      const res = await fetch('/api/config');
-      const data = await res.json();
-      document.getElementById('oracle-client-path').value = data.oracle_client_lib_dir || '';
-      const statusEl = document.getElementById('oracle-client-status');
-      statusEl.style.display = 'none';
-    } catch(e) {
-      console.error(e);
-      toastError('加载配置失败: ' + e.message);
-    }
-  }
-
-  async function saveOracleClientConfig() {
-    const path = document.getElementById('oracle-client-path').value.trim();
-    const statusEl = document.getElementById('oracle-client-status');
-    try {
-      const res = await fetch('/api/config', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ oracle_client_lib_dir: path })
-      });
-      const data = await res.json();
-      if (data.ok) {
-        statusEl.className = 'status-banner ok';
-        statusEl.textContent = '✅ 配置已保存，重启后生效';
-        statusEl.style.display = 'block';
-        setTimeout(() => { statusEl.style.display = 'none'; }, 4000);
-      } else {
-        statusEl.className = 'status-banner err';
-        statusEl.textContent = '❌ 保存失败: ' + (data.error || '未知错误');
-        statusEl.style.display = 'block';
-      }
-    } catch(e) {
-      console.error(e);
-      statusEl.className = 'status-banner err';
-      statusEl.textContent = '❌ 保存失败: ' + e.message;
-      statusEl.style.display = 'block';
-    }
-  }
-
-  // ─── SQL Server ODBC Driver Status ──────────────────────
-  async function checkSqlServerOdbcStatus() {
-    const el = document.getElementById('sqlserver-odbc-status');
-    el.style.display = 'block';
-    el.innerHTML = '⏳ 正在检测 ODBC 驱动...';
-    el.style.background = 'var(--surface2)';
-    el.style.border = '1px solid var(--border)';
-    el.style.color = 'var(--text)';
-
-    try {
-      const res = await fetch('/api/sqlserver_odbc_status');
-      const data = await res.json();
-
-      if (data.available && data.available.length > 0) {
-        el.innerHTML =
-          `✅ <strong>SQL Server ODBC 驱动已安装</strong><br/>` +
-          `已安装驱动: ${data.available.map(d => '<code>' + d + '</code>').join(' / ')}<br/>` +
-          `{{ product_name }} 将自动使用: <code>${data.using || data.available[0]}</code>`;
-        el.style.background = 'rgba(76,175,80,0.08)';
-        el.style.border = '1px solid rgba(76,175,80,0.3)';
-        el.style.color = '#00C8A0';
-      } else {
-        // 未安装 ODBC 驱动，根据系统架构和本地 MSI 情况给出提示
-        let installHint = '';
-        const arch = data.system_arch || '未知';
-        if (data.local_msi_available && data.local_msi_path) {
-          // 有本地 MSI 安装包
-          const msiFile = data.local_msi_path.split(/[\\/]/).pop();
-          installHint =
-            `❌ <strong>未检测到 SQL Server ODBC 驱动</strong><br/>` +
-            `系统架构: <code>${arch}</code><br/>` +
-            `可以使用内置安装包进行安装:<br/>` +
-            `<code>${msiFile}</code><br/>` +
-            `安装包路径: <code>${data.local_msi_path}</code><br/>` +
-            `请手动运行该 MSI 文件完成安装，安装后重新检测。`;
-        } else if (data.msi_name) {
-          // 没有本地 MSI，但知道需要哪个
-          installHint =
-            `❌ <strong>未检测到 SQL Server ODBC 驱动</strong><br/>` +
-            `系统架构: <code>${arch}</code><br/>` +
-            `请安装 <strong>${data.msi_name.replace('.msi','')}</strong> 驱动后重试。<br/>` +
-            `<a href="${data.download_url}" target="_blank" style="color:var(--primary);font-weight:600;">🔗 点击前往官方下载页面 →</a>`;
-        } else {
-          // 未知架构
-          installHint =
-            `❌ <strong>未检测到 SQL Server ODBC 驱动</strong><br/>` +
-            `系统架构: <code>${arch}</code>（暂不支持自动识别）<br/>` +
-            `请前往官方下载页面选择对应驱动安装。<br/>` +
-            `<a href="${data.download_url}" target="_blank" style="color:var(--primary);font-weight:600;">🔗 点击前往官方下载页面 →</a>`;
-        }
-        el.innerHTML = installHint;
-        el.style.background = 'rgba(244,67,54,0.08)';
-        el.style.border = '1px solid rgba(244,67,54,0.3)';
-        el.style.color = '#EF4444';
-      }
-    } catch(e) {
-      el.innerHTML = `❌ 检测失败: ${e.message}`;
-      el.style.background = 'rgba(255,152,0,0.08)';
-      el.style.border = '1px solid rgba(255,152,0,0.3)';
-      el.style.color = '#ff9800';
-    }
-  }
-
-  // ─── Oracle Client 自动下载 ──────────────────────
-  let _oracleDownloadPollTimer = null;
-
-  async function checkOracleClientStatus() {
-    const el = document.getElementById('oracle-client-detect-status');
-    el.style.display = 'block';
-    el.innerHTML = '⏳ 正在检查...';
-    el.style.background = 'var(--surface2)';
-    el.style.border = '1px solid var(--border)';
-    el.style.color = 'var(--text)';
-
-    try {
-      const res = await fetch('/api/oracle_client_status');
-      const data = await res.json();
-
-      if (data.installed) {
-        el.innerHTML =
-          `✅ <strong>Oracle Instant Client 已安装</strong><br/>` +
-          `版本: <code>${data.version}</code> · 平台: <code>${data.platform}</code><br/>` +
-          `路径: <code>${data.install_dir}</code>`;
-        el.style.background = 'rgba(76,175,80,0.08)';
-        el.style.border = '1px solid rgba(76,175,80,0.3)';
-        el.style.color = '#00C8A0';
-      } else {
-        el.innerHTML =
-          `❌ <strong>Oracle Instant Client 未安装</strong><br/>` +
-          `平台: <code>${data.platform}</code><br/>` +
-          `请点击上方"一键下载"按钮自动安装，或手动从 Oracle 官网下载后解压到 oracle_client/${data.platform}/ 目录。`;
-        el.style.background = 'rgba(244,67,54,0.08)';
-        el.style.border = '1px solid rgba(244,67,54,0.3)';
-        el.style.color = '#EF4444';
-      }
-    } catch(e) {
-      el.innerHTML = `❌ 检查失败: ${e.message}`;
-      el.style.background = 'rgba(244,67,54,0.08)';
-      el.style.border = '1px solid rgba(244,67,54,0.3)';
-      el.style.color = '#EF4444';
-    }
-  }
-
-  async function downloadOracleClient() {
-    const btn = document.getElementById('oracle-download-btn');
-    const progressEl = document.getElementById('oracle-download-progress');
-    const barEl = document.getElementById('oracle-download-bar');
-    const msgEl = document.getElementById('oracle-download-msg');
-    const restoreBtn = () => { btn.disabled = false; btn.style.opacity = '1'; btn.innerHTML = '⬇️ 一键下载并安装'; };
-
-    // 禁用按钮防止重复点击，并显示 loading 状态
-    btn.disabled = true;
-    btn.style.opacity = '0.6';
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span> 下载中...';
-    progressEl.style.display = 'block';
-    barEl.style.transition = 'none';
-    barEl.style.background = 'var(--primary)';
-    msgEl.textContent = '正在启动下载...';
-    msgEl.style.color = 'var(--text-muted)';
-
-    // 不确定进度动画（来回跑，纯 JS 驱动，不依赖 CSS）
-    let animPhase = 0;
-    let animTimer = null;
-    function startIndeterminateAnim() {
-      clearInterval(animTimer);
-      barEl.style.transition = 'width 0.3s linear';
-      animPhase = 0;
-      animTimer = setInterval(() => {
-        // 0-95 来回：0→30→60→95→60→30→0
-        const phases = [0, 30, 60, 95, 60, 30];
-        barEl.style.width = phases[animPhase % phases.length] + '%';
-        animPhase++;
-      }, 400);
-    }
-    startIndeterminateAnim();
-
-    // 清除之前的轮询
-    if (_oracleDownloadPollTimer) {
-      clearInterval(_oracleDownloadPollTimer);
-    }
-
-    try {
-      const res = await fetch('/api/oracle_client_download', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({})
-      });
-      const data = await res.json();
-
-      if (data.already_installed) {
-        barEl.style.width = '100%';
-        barEl.style.background = 'linear-gradient(90deg, #00C8A0, #00C8A0)';
-        msgEl.textContent = data.message;
-        msgEl.style.color = '#00C8A0';
-        restoreBtn();
-        checkOracleClientStatus();
-        return;
-      }
-
-      if (!data.ok) {
-        barEl.style.width = '0%';
-        barEl.style.background = 'linear-gradient(90deg, #EF4444, #EF4444)';
-        msgEl.textContent = '❌ ' + (data.message || '下载失败');
-        msgEl.style.color = '#EF4444';
-        restoreBtn();
-        return;
-      }
-
-      msgEl.textContent = '下载已在后台启动，正在等待完成...';
-      barEl.style.width = '5%';
-
-      // 轮询检查下载状态（每 800ms 一次）
-      let pollCount = 0;
-      let hasRealProgress = false; // 是否已经收到真实进度
-      const maxPolls = 600; // 最多轮询 10 分钟 (600 * 800ms)
-
-      _oracleDownloadPollTimer = setInterval(async () => {
-        pollCount++;
-        try {
-          const statusRes = await fetch('/api/oracle_client_download_status');
-          const statusData = await statusRes.json();
-
-          const dlStatus = statusData.download_status || '';
-          const dlMsg = statusData.download_message || '';
-          const dlError = statusData.download_error || null;
-          const dlProgress = statusData.download_progress || 0;
-
-          // 根据状态更新 UI
-          if (statusData.installed || dlStatus === 'done') {
-            clearInterval(_oracleDownloadPollTimer);
-            clearInterval(animTimer);
-            _oracleDownloadPollTimer = null;
-            barEl.classList.remove('progress-bar-animated');
-            barEl.style.width = '100%';
-            barEl.style.background = 'linear-gradient(90deg, #00C8A0, #00C8A0)';
-            msgEl.textContent = dlMsg || `✅ Oracle Instant Client ${statusData.version} 安装成功！`;
-            msgEl.style.color = '#00C8A0';
-            restoreBtn();
-            checkOracleClientStatus();
-            return;
-          }
-
-          if (dlError || dlStatus === 'error') {
-            clearInterval(_oracleDownloadPollTimer);
-            clearInterval(animTimer);
-            _oracleDownloadPollTimer = null;
-            barEl.classList.remove('progress-bar-animated');
-            barEl.style.width = '0%';
-            barEl.style.background = 'linear-gradient(90deg, #EF4444, #EF4444)';
-            msgEl.textContent = '❌ ' + (dlMsg || dlError || '下载失败');
-            msgEl.style.color = '#EF4444';
-            restoreBtn();
-            return;
-          }
-
-          // 下载中：如果有真实进度，显示真实进度条；否则保持动画
-          if (dlMsg) {
-            msgEl.textContent = dlMsg;
-          }
-
-          // 关键修复：如果后端返回了真实进度（>0），停止使用动画，显示真实进度
-          if (dlProgress > 0 && dlProgress < 100) {
-            if (!hasRealProgress) {
-              hasRealProgress = true;
-              clearInterval(animTimer); // 停止不确定动画
-              barEl.classList.remove('progress-bar-animated');
-            }
-            barEl.style.transition = 'width 0.3s ease';
-            barEl.style.width = dlProgress + '%';
-            barEl.style.background = 'var(--primary)';
-          }
-
-          if (pollCount >= maxPolls) {
-            clearInterval(_oracleDownloadPollTimer);
-            clearInterval(animTimer);
-            _oracleDownloadPollTimer = null;
-            barEl.classList.remove('progress-bar-animated');
-            barEl.style.background = 'linear-gradient(90deg, #ff9800, #ffa726)';
-            msgEl.textContent = '⏳ 下载时间较长，请等待完成后手动点击"检查安装状态"确认。';
-            restoreBtn();
-          }
-        } catch(e) {
-          // 忽略轮询中的网络错误
-        }
-      }, 800);
-
-    } catch(e) {
-      msgEl.textContent = '❌ 启动下载失败: ' + e.message;
-      msgEl.style.color = '#EF4444';
-      restoreBtn();
-      if (_oracleDownloadPollTimer) {
-        clearInterval(_oracleDownloadPollTimer);
-        _oracleDownloadPollTimer = null;
-      }
-    }
-  }
-
-  // 一键下载所有驱动（drivers.zip + Oracle Instant Client）
-  let _allDriversDownloadPollTimer = null;
-
-  async function downloadAllDrivers() {
-    const btn = document.getElementById('all-drivers-download-btn');
-    const progressEl = document.getElementById('all-drivers-download-progress');
-    const barEl = document.getElementById('all-drivers-download-bar');
-    const msgEl = document.getElementById('all-drivers-download-msg');
-    const restoreBtn = () => { btn.disabled = false; btn.style.opacity = '1'; btn.innerHTML = '📦 一键下载所有驱动'; };
-
-    // 禁用按钮防止重复点击，并显示 loading 状态
-    btn.disabled = true;
-    btn.style.opacity = '0.6';
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span> 下载中...';
-    progressEl.style.display = 'block';
-    barEl.style.transition = 'none';
-    barEl.style.background = 'var(--success)';
-    msgEl.textContent = '正在启动下载...';
-    msgEl.style.color = 'var(--text-muted)';
-
-    // 不确定进度动画
-    let animPhase = 0;
-    let animTimer = null;
-    function startIndeterminateAnim() {
-      clearInterval(animTimer);
-      barEl.style.transition = 'width 0.3s linear';
-      animPhase = 0;
-      animTimer = setInterval(() => {
-        const phases = [0, 30, 60, 95, 60, 30];
-        barEl.style.width = phases[animPhase % phases.length] + '%';
-        animPhase++;
-      }, 400);
-    }
-    startIndeterminateAnim();
-
-    // 清除之前的轮询
-    if (_allDriversDownloadPollTimer) {
-      clearInterval(_allDriversDownloadPollTimer);
-    }
-
-    try {
-      const res = await fetch('/api/download_all_drivers', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({})
-      });
-      const data = await res.json();
-
-      if (!data.ok) {
-        barEl.style.width = '0%';
-        barEl.style.background = 'linear-gradient(90deg, #EF4444, #EF4444)';
-        msgEl.textContent = '❌ ' + (data.message || '启动下载失败');
-        msgEl.style.color = '#EF4444';
-        restoreBtn();
-        return;
-      }
-
-      msgEl.textContent = '下载已在后台启动，正在等待完成...';
-      barEl.style.width = '5%';
-
-      // 轮询检查下载状态（每 800ms 一次）
-      let pollCount = 0;
-      let hasRealProgress = false;
-      const maxPolls = 600; // 最多轮询 10 分钟
-
-      _allDriversDownloadPollTimer = setInterval(async () => {
-        pollCount++;
-        try {
-          const statusRes = await fetch('/api/download_all_drivers_status');
-          const statusData = await statusRes.json();
-
-          const dlStatus = statusData.download_status || '';
-          const dlMsg = statusData.download_message || '';
-          const dlError = statusData.download_error || null;
-          const dlProgress = statusData.download_progress || 0;
-
-          // 根据状态更新 UI
-          if (dlStatus === 'done') {
-            clearInterval(_allDriversDownloadPollTimer);
-            clearInterval(animTimer);
-            _allDriversDownloadPollTimer = null;
-            barEl.classList.remove('progress-bar-animated');
-            barEl.style.width = '100%';
-            barEl.style.background = 'linear-gradient(90deg, #00C8A0, #00C8A0)';
-            msgEl.textContent = dlMsg || '✅ 所有驱动下载并安装成功！';
-            msgEl.style.color = '#00C8A0';
-            restoreBtn();
-            checkOracleClientStatus();
-            return;
-          }
-
-          if (dlError || dlStatus === 'error') {
-            clearInterval(_allDriversDownloadPollTimer);
-            clearInterval(animTimer);
-            _allDriversDownloadPollTimer = null;
-            barEl.classList.remove('progress-bar-animated');
-            barEl.style.width = '0%';
-            barEl.style.background = 'linear-gradient(90deg, #EF4444, #EF4444)';
-            msgEl.textContent = '❌ ' + (dlMsg || dlError || '下载失败');
-            msgEl.style.color = '#EF4444';
-            restoreBtn();
-            return;
-          }
-
-          // 下载中：如果有真实进度，显示真实进度条；否则保持动画
-          if (dlMsg) {
-            msgEl.textContent = dlMsg;
-          }
-
-          // 如果后端返回了真实进度（>0），停止使用动画，显示真实进度
-          if (dlProgress > 0 && dlProgress < 100) {
-            if (!hasRealProgress) {
-              hasRealProgress = true;
-              clearInterval(animTimer);
-              barEl.classList.remove('progress-bar-animated');
-            }
-            barEl.style.transition = 'width 0.3s ease';
-            barEl.style.width = dlProgress + '%';
-            barEl.style.background = 'var(--success)';
-          }
-
-          if (pollCount >= maxPolls) {
-            clearInterval(_allDriversDownloadPollTimer);
-            clearInterval(animTimer);
-            _allDriversDownloadPollTimer = null;
-            barEl.classList.remove('progress-bar-animated');
-            barEl.style.background = 'linear-gradient(90deg, #ff9800, #ffa726)';
-            msgEl.textContent = '⏳ 下载时间较长，请等待完成后手动点击"检查安装状态"确认。';
-            restoreBtn();
-          }
-        } catch(e) {
-          // 忽略轮询中的网络错误
-        }
-      }, 800);
-
-    } catch(e) {
-      msgEl.textContent = '❌ 启动下载失败: ' + e.message;
-      msgEl.style.color = '#EF4444';
-      restoreBtn();
-      if (_allDriversDownloadPollTimer) {
-        clearInterval(_allDriversDownloadPollTimer);
-        _allDriversDownloadPollTimer = null;
-      }
-    }
-  }
-
-  // ─── 合并驱动状态检测 ──────────────────────
-  async function checkAllDriverStatus() {
-    const el = document.getElementById('all-driver-status');
-    el.style.display = 'block';
-    el.innerHTML = '⏳ 正在检查所有驱动状态...';
-    el.style.background = 'var(--surface2)';
-    el.style.border = '1px solid var(--border)';
-    el.style.color = 'var(--text)';
-
-    try {
-      const res = await fetch('/api/driver_status');
-      const data = await res.json();
-      let html = '';
-      let allOk = true;
-
-      // Oracle Instant Client
-      const o = data.oracle || {};
-      if (o.installed) {
-        html += '<div style="margin-bottom:8px;">✅ <strong>Oracle Instant Client 已安装</strong><br/>' +
-          '版本: <code>' + (o.version || 'unknown') + '</code> · 平台: <code>' + (o.platform || '') + '</code><br/>' +
-          '路径: <code>' + (o.install_dir || '') + '</code></div>';
-      } else {
-        allOk = false;
-        html += '<div style="margin-bottom:8px;">❌ <strong>Oracle Instant Client 未安装</strong><br/>' +
-          '平台: <code>' + (o.platform || '') + '</code><br/>' +
-          '请点击上方"一键下载所有驱动"按钮自动安装。</div>';
-      }
-
-      // YashanDB Driver
-      const y = data.yashandb || {};
-      if (y.installed) {
-        html += '<div style="margin-bottom:8px;">✅ <strong>YashanDB Client 驱动已安装</strong><br/>' +
-          '平台: <code>' + (y.platform || '') + '</code><br/>' +
-          '路径: <code>' + (y.install_dir || '') + '</code></div>';
-      } else {
-        allOk = false;
-        html += '<div style="margin-bottom:8px;">❌ <strong>YashanDB Client 驱动未安装</strong><br/>' +
-          '请点击上方"一键下载所有驱动"按钮自动安装。</div>';
-      }
-
-      // SQL Server ODBC Driver
-      const d = data.odbc || {};
-      if (d.installed) {
-        const avail = (d.available || []).map(function(x) { return '<code>' + x + '</code>'; }).join(' / ');
-        html += '<div style="margin-bottom:8px;">✅ <strong>SQL Server ODBC 驱动已安装</strong><br/>' +
-          '已安装: ' + (avail || '无') + '<br/>' +
-          '将使用: <code>' + (d.using || '') + '</code></div>';
-      } else {
-        allOk = false;
-        const arch = d.system_arch || '未知';
-        let hint = '';
-        if (d.local_msi_available && d.local_msi_path) {
-          const msiFile = d.local_msi_path.split(/[\\\\/]/).pop();
-          hint = '❌ <strong>SQL Server ODBC 驱动未安装</strong><br/>' +
-            '系统架构: <code>' + arch + '</code><br/>' +
-            '可以使用内置安装包: <code>' + msiFile + '</code><br/>' +
-            '路径: <code>' + d.local_msi_path + '</code><br/>' +
-            '请手动运行该 MSI 文件完成安装，安装后重新检测。';
-        } else if (d.msi_name) {
-          hint = '❌ <strong>SQL Server ODBC 驱动未安装</strong><br/>' +
-            '系统架构: <code>' + arch + '</code><br/>' +
-            '请安装 <strong>' + d.msi_name.replace('.msi','') + '</strong> 后重试。<br/>' +
-            '<a href="' + d.download_url + '" target="_blank" style="color:var(--primary);font-weight:600;">🔗 官方下载页面 →</a>';
-        } else {
-          hint = '❌ <strong>SQL Server ODBC 驱动未安装</strong><br/>' +
-            '系统架构: <code>' + arch + '</code><br/>' +
-            '<a href="' + d.download_url + '" target="_blank" style="color:var(--primary);font-weight:600;">🔗 官方下载页面 →</a>';
-        }
-        html += '<div style="margin-bottom:8px;">' + hint + '</div>';
-      }
-
-      el.innerHTML = html;
-      if (allOk) {
-        el.style.background = 'rgba(76,175,80,0.08)';
-        el.style.border = '1px solid rgba(76,175,80,0.3)';
-        el.style.color = '#00C8A0';
-      } else {
-        el.style.background = 'rgba(255,152,0,0.08)';
-        el.style.border = '1px solid rgba(255,152,0,0.3)';
-        el.style.color = '#ff9800';
-      }
-    } catch(e) {
-      el.innerHTML = '❌ 检测失败: ' + e.message;
-      el.style.background = 'rgba(244,67,54,0.08)';
-      el.style.border = '1px solid rgba(244,67,54,0.3)';
-      el.style.color = '#EF4444';
-    }
-  }
-
-  </script>
-
-<!-- ─── About Modal ───────────────────────────────────── -->
-<style>
-  .about-modal-overlay {
-    display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:10000;
-    background:rgba(0,0,0,0.55);backdrop-filter:blur(6px);
-    overflow-y:auto;
-  }
-  .about-modal-box {
-    background:var(--surface);border:1px solid var(--border);border-radius:20px;
-    max-width:560px;width:92%;margin:80px auto;padding:0;
-    position:relative;box-shadow:0 24px 64px rgba(0,0,0,0.4);
-    overflow:hidden;
-  }
-  [data-theme="light"] .about-modal-box {
-    box-shadow:0 24px 64px rgba(0,0,0,0.12), 0 4px 16px rgba(0,0,0,0.06);
-  }
-  .about-hero {
-    background:linear-gradient(135deg, #0A2A6E 0%, #0D1426 50%, #00C8A0 100%);
-    padding:32px 32px 24px;position:relative;overflow:hidden;
-  }
-  .about-hero::before {
-    content:'';position:absolute;top:-50%;right:-30%;width:300px;height:300px;
-    background:radial-gradient(circle, rgba(255,255,255,0.08) 0%, transparent 70%);
-    border-radius:50%;
-  }
-  .about-hero::after {
-    content:'';position:absolute;bottom:-30%;left:-20%;width:200px;height:200px;
-    background:radial-gradient(circle, rgba(255,255,255,0.05) 0%, transparent 70%);
-    border-radius:50%;
-  }
-  .about-hero-inner {
-    display:flex;align-items:center;gap:16px;position:relative;z-index:1;
-  }
-  .about-logo {
-    width:56px;height:56px;border-radius:14px;
-    background:transparent;padding:0;
-    object-fit:contain;display:block;
-    box-shadow:0 4px 16px rgba(0,0,0,0.2);flex-shrink:0;
-  }
-  .about-hero-text h2 {
-    margin:0;font-size:24px;font-weight:800;color:#fff;letter-spacing:-0.5px;
-  }
-  .about-hero-text .about-sub {
-    font-size:12px;color:rgba(255,255,255,0.7);margin-top:2px;
-    font-weight:500;letter-spacing:0.3px;
-  }
-  .about-close-btn {
-    position:absolute;top:16px;right:16px;z-index:2;
-    background:rgba(255,255,255,0.15);border:none;
-    color:#fff;width:32px;height:32px;border-radius:10px;
-    cursor:pointer;font-size:14px;
-    display:flex;align-items:center;justify-content:center;
-    transition:background 0.2s;
-  }
-  .about-close-btn:hover { background:rgba(255,255,255,0.25); }
-  .about-body { padding:24px 32px 28px; }
-  .about-desc {
-    font-size:14px;line-height:1.8;color:var(--text);margin:0 0 8px;
-  }
-  .about-meta {
-    font-size:12.5px;color:var(--text-muted);margin:0 0 20px;
-    display:flex;flex-wrap:wrap;gap:6px 16px;
-  }
-  .about-meta-item { display:flex;align-items:center;gap:4px; }
-  .about-meta-item a { color:var(--accent2);text-decoration:none; }
-  .about-meta-item a:hover { text-decoration:underline; }
-  .about-dbs {
-    display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;
-  }
-  .about-db-chip {
-    display:inline-flex;align-items:center;gap:5px;
-    padding:5px 12px;
-    background:var(--surface2);border:1px solid var(--border);
-    border-radius:8px;font-size:12px;color:var(--text);font-weight:500;
-    transition:all 0.2s;
-  }
-  .about-db-chip:hover {
-    border-color:var(--primary);background:var(--primary-light);
-    color:var(--primary);transform:translateY(-1px);
-  }
-  .about-db-chip .db-emoji { font-size:14px; }
-  .about-agreement {
-    background:var(--surface2);border:1px solid var(--border);
-    border-radius:12px;padding:14px 16px;margin-bottom:0;
-  }
-  .about-agreement-title {
-    font-size:13px;font-weight:600;color:var(--warn);margin-bottom:8px;
-    display:flex;align-items:center;gap:6px;
-  }
-  .about-agreement-text {
-    margin:0;font-size:12.5px;line-height:1.8;color:var(--text-muted);
-  }
-  .about-grayscale-note {
-    background:rgba(120,120,120,0.08);border:1px solid var(--border);
-    border-left:3px solid #8a8a8a;border-radius:10px;
-    padding:10px 14px;margin-top:14px;font-size:12px;line-height:1.7;color:var(--text-muted);
-  }
-  .about-grayscale-note strong { color:var(--text); }
-  .about-footer {
-    text-align:center;padding:0 32px 20px;
-    font-size:11px;color:var(--text-muted);opacity:0.6;
-  }
-
-  /* ─── 实时监控页面样式 ─────────────────────────── */
-  .page-toolbar {
-    padding:10px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;
-  }
-  /* 监控状态指示器 */
-  .mon-status-running { background:#34a853 !important; box-shadow:0 0 6px rgba(52,168,83,0.5); }
-  .mon-status-stopped { background:#EF4444 !important; }
-  .mon-status-unknown { background:#999 !important; }
-
-  /* 严重度标签 */
-  .mon-severity {
-    display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;
-  }
-  .mon-severity-critical { background:rgba(255,103,101,0.15);color:#EF4444; }
-  .mon-severity-warning  { background:rgba(255,160,0,0.15);color:#ffa000; }
-  .mon-severity-normal   { background:rgba(52,168,83,0.15);color:#34a853; }
-
-  /* 连接柱状图 */
-  .mon-bar-row {
-    display:flex;align-items:center;gap:8px;font-size:12px;
-  }
-  .mon-bar-label {
-    width:200px;text-align:right;flex-shrink:0;color:var(--text);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-  }
-  .mon-bar-track {
-    flex:1;height:22px;background:var(--surface2);border-radius:4px;overflow:hidden;position:relative;
-  }
-  .mon-bar-fill {
-    height:100%;border-radius:4px;transition:width .4s ease;display:flex;align-items:center;justify-content:flex-end;padding-right:6px;
-    font-size:11px;color:#fff;font-weight:600;min-width:fit-content;
-  }
-  .mon-bar-fill-low    { background:linear-gradient(90deg,#34a853,#5ecf6e); }
-  .mon-bar-fill-medium { background:linear-gradient(90deg,#ffa000,#ffca28); }
-  .mon-bar-fill-high   { background:linear-gradient(90deg,#EF4444,#ff8a80); }
-
-  /* 热力图 */
-  .mon-heatmap-table {
-    border-collapse:collapse;font-size:11px;width:100%;
-  }
-  .mon-heatmap-table th {
-    background:var(--surface2);color:var(--text-muted);padding:4px 2px;text-align:center;position:sticky;top:0;font-weight:500;
-  }
-  .mon-heatmap-table td {
-    padding:3px 2px;text-align:center;border:1px solid var(--border-subtle);font-weight:500;
-  }
-  .mon-heat-0 { background:#1a2332;color:#8899aa; }
-  .mon-heat-1 { background:#1b3a4b;color:#4dd0e1; }
-  .mon-heat-2 { background:#1b5e20;color:#69f0ae; }
-  .mon-heat-3 { background:#f57f17;color:#fff176; }
-  .mon-heat-4 { background:#b71c1c;color:#ff8a80; }
-
-  /* SQL 文本截断 */
-  .mon-sql-text {
-    max-width:350px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:'Courier New',monospace;font-size:12px;
-  }
-  .mon-sql-text:hover {
-    white-space:normal;word-break:break-all;max-width:none;
-    position:absolute;z-index:10;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:4px 8px;
-    box-shadow:0 2px 8px rgba(0,0,0,0.3);
-  }
-
-  /* ═══ 实时监控 redesign 2026-06 ═══ */
-
-  /* 数据源类型彩色标签 */
-  .mon-tag {
-    display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;
-    white-space:nowrap;
-  }
-  .mon-tag-mysql     { background:rgba(59,130,246,0.12);color:#0A2A6E; }
-  .mon-tag-pg        { background:rgba(139,92,246,0.12);color:#0A2A6E; }
-  .mon-tag-ivory     { background:rgba(139,92,246,0.12);color:#0A2A6E; }
-  .mon-tag-tidb      { background:rgba(249,115,22,0.12);color:#fb923c; }
-  .mon-tag-oracle    { background:rgba(239,68,68,0.12);color:#EF4444; }
-  .mon-tag-dm8       { background:rgba(34,197,94,0.12);color:#00C8A0; }
-  .mon-tag-sqlserver { background:rgba(59,130,246,0.12);color:#0A2A6E; }
-  .mon-tag-default   { background:rgba(148,163,184,0.12);color:#94a3b8; }
-
-  /* 执行耗时颜色 */
-  .mon-time-high   { color:#EF4444;font-weight:600; }
-  .mon-time-med    { color:#fb923c;font-weight:600; }
-  .mon-time-low    { color:#00C8A0;font-weight:600; }
-
-  /* 严重度圆点 */
-  .mon-severity-dot {
-    display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:500;
-  }
-  .mon-severity-dot::before {
-    content:'';width:7px;height:7px;border-radius:50%;display:inline-block;
-  }
-  .mon-sev-high   { color:#EF4444; }
-  .mon-sev-high::before   { background:#EF4444; }
-  .mon-sev-medium { color:#fb923c; }
-  .mon-sev-medium::before { background:#fb923c; }
-  .mon-sev-low    { color:#00C8A0; }
-  .mon-sev-low::before    { background:#00C8A0; }
-
-  /* 监控筛选栏 */
-  .mon-filter-bar {
-    display:flex;gap:10px;align-items:center;flex-wrap:wrap;
-    margin-bottom:14px;padding:10px 14px;
-    background:var(--surface2);border:1px solid var(--border);border-radius:8px;
-  }
-  .mon-filter-bar select, .mon-filter-bar input {
-    background:var(--surface);border:1px solid var(--border);border-radius:6px;
-    color:var(--text);font-size:13px;padding:5px 10px;
-  }
-
-  /* 监控页 - 控制按钮组（标题右侧） */
-  .mon-page-header { margin-bottom:8px; }
-  .mon-page-title-row {
-    display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;
-  }
-  .mon-page-title-row h2 { margin:0; }
-  .mon-ctrl-group {
-    display:flex;align-items:center;gap:5px;flex-shrink:0;white-space:nowrap;
-  }
-  .mon-ctrl-btn {
-    display:inline-flex;align-items:center;gap:4px;
-    padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600;
-    border:1px solid var(--border);cursor:pointer;transition:all .2s;
-    background:var(--surface2);color:var(--text);
-  }
-  .mon-ctrl-btn:hover { transform:translateY(-1px);box-shadow:0 2px 8px rgba(0,0,0,.12); }
-  .mon-ctrl-start {
-    background:linear-gradient(135deg,#00C8A0,#00C8A0);color:#fff;border:none;
-  }
-  .mon-ctrl-start:hover { background:linear-gradient(135deg,#00C8A0,#15803d); }
-  .mon-ctrl-stop {
-    background:linear-gradient(135deg,#ef4444,#dc2626);color:#fff;border:none;
-  }
-  .mon-ctrl-stop:hover { background:linear-gradient(135deg,#dc2626,#b91c1c); }
-  .mon-interval-input {
-    width:40px;padding:3px 4px;border:1px solid var(--border);border-radius:6px;
-    background:var(--surface2);color:var(--text);font-size:12px;text-align:center;
-  }
-
-  .mon-filter-btn {
-    background:linear-gradient(135deg,#0A2A6E,#0A2A6E);color:#fff;border:none;
-    padding:6px 16px;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;
-    transition:all .2s;
-  }
-  .mon-filter-btn:hover { opacity:.9;transform:translateY(-1px); }
-  .mon-export-link {
-    font-size:12px;color:#0A2A6E;text-decoration:none;margin-left:auto;
-    cursor:pointer;
-  }
-  .mon-export-link:hover { text-decoration:underline; }
-
-  /* 自动刷新指示器 */
-  .mon-refresh-indicator {
-    display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-muted);
-    margin-left:auto;
-  }
-  .mon-refresh-dot {
-    width:7px;height:7px;border-radius:50%;
-  }
-  .mon-refresh-dot.running { background:#00C8A0;box-shadow:0 0 6px #00C8A0; }
-  .mon-refresh-dot.stopped { background:#9ca3af; }
-
-  /* 监控卡片数字颜色 */
-  .mon-count-blue  { color:#0A2A6E !important; }
-  .mon-count-red   { color:#EF4444 !important; }
-  .mon-count-green { color:#00C8A0 !important; }
-  .mon-count-orange{ color:#fb923c !important; }
-  .mon-count-sub {
-    font-size:11px;color:var(--text-muted);margin-top:4px;
-    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-  }
-  .mon-count-trend-up   { color:#EF4444; }
-  .mon-count-trend-down { color:#00C8A0; }
-
-  /* 连接页面两栏布局 */
-  .mon-conn-layout {
-    display:grid;grid-template-columns:2fr 1fr;gap:16px;
-  }
-  @media(max-width:1100px) {
-    .mon-conn-layout { grid-template-columns:1fr; }
-  }
-
-  /* 连接数柱状图 - 设计稿风格 */
-  .mon-conn-bar-row {
-    display:flex;align-items:center;gap:10px;font-size:12px;margin-bottom:6px;
-  }
-  .mon-conn-bar-label {
-    min-width:140px;max-width:240px;text-align:right;flex-shrink:0;color:var(--text);font-weight:500;
-    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;
-  }
-  .mon-conn-bar-track {
-    flex:1;height:18px;background:var(--surface2);border-radius:4px;overflow:hidden;position:relative;
-    border:1px solid var(--border);
-  }
-  .mon-conn-bar-fill {
-    height:100%;border-radius:3px;transition:width .4s ease;
-  }
-  .mon-conn-bar-fill.low    { background:#00C8A0; }
-  .mon-conn-bar-fill.medium { background:#fbbf24; }
-  .mon-conn-bar-fill.high   { background:#EF4444; }
-  .mon-conn-bar-num {
-    width:70px;text-align:left;flex-shrink:0;color:var(--text-muted);font-size:11px;font-weight:500;
-  }
-
-  /* 热力图 - 设计稿风格 */
-  .mon-heatmap-wrap {
-    background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;
-  }
-  .mon-heatmap-grid {
-    display:flex;flex-direction:column;gap:3px;
-  }
-  .mon-heatmap-row {
-    display:flex;align-items:center;gap:3px;
-  }
-  .mon-heatmap-label {
-    width:70px;font-size:10px;color:var(--text-muted);text-align:right;flex-shrink:0;
-    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-  }
-  .mon-heatmap-cell {
-    flex:1;height:22px;border-radius:3px;min-width:28px;
-    display:flex;align-items:center;justify-content:center;
-    font-size:10px;font-weight:500;color:var(--text);
-  }
-  .mon-heatmap-cell.h0 { background:rgba(74,222,128,0.12);color:#00C8A0; }
-  .mon-heatmap-cell.h1 { background:rgba(74,222,128,0.30);color:#00C8A0; }
-  .mon-heatmap-cell.h2 { background:rgba(251,191,36,0.30);color:#fbbf24; }
-  .mon-heatmap-cell.h3 { background:rgba(249,115,22,0.35);color:#fb923c; }
-  .mon-heatmap-cell.h4 { background:rgba(248,113,113,0.40);color:#EF4444; }
-  .mon-heatmap-legend {
-    display:flex;gap:12px;justify-content:center;margin-top:10px;font-size:11px;color:var(--text-muted);
-  }
-  .mon-heatmap-legend span { display:flex;align-items:center;gap:4px; }
-  .mon-heatmap-legend i { width:10px;height:10px;border-radius:2px;display:inline-block; }
-
-  /* 会话表格 - 紧凑风格 */
-  .mon-session-table th { font-size:11px;padding:6px 8px; }
-  .mon-session-table td { font-size:12px;padding:6px 8px; }
-  .mon-session-tag {
-    display:inline-block;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:500;
-    background:rgba(59,130,246,0.12);color:#0A2A6E;
-  }
-  .mon-state-executing { color:#00C8A0;font-weight:500; }
-  .mon-state-locked    { color:#EF4444;font-weight:500; }
-  .mon-state-sleep     { color:#94a3b8; }
-  .mon-state-idle      { color:#94a3b8; }
-</style>
-<div id="about-modal" class="about-modal-overlay" onclick="closeAboutModal(event)">
-  <div class="about-modal-box" onclick="event.stopPropagation()">
-    <!-- Hero -->
-    <div class="about-hero">
-      <button class="about-close-btn" onclick="closeAboutModal()">✕</button>
-      <div class="about-hero-inner">
-        <img class="about-logo" src="/dbcheck_logo_icon.png" alt="{{ product_name }}">
-        <div class="about-hero-text">
-          <h2>{{ product_name }}</h2>
-          <div class="about-sub">Database Intelligent Inspector <span id="about-version">{{ version }}{% if edition == 'professional' %} · <span data-i18n="webui.edition_badge">专业版</span>{% endif %}</span></div>
-        </div>
-      </div>
-    </div>
-    <!-- Body -->
-    <div class="about-body">
-      <p class="about-desc" data-i18n="webui.about_desc">
-        {{ product_name }} 专业版是一款商业数据库智能巡检工具，支持 MySQL、PostgreSQL、Oracle、SQL Server、达梦（DM）、TiDB、IvorySQL、YashanDB、GBase 等主流数据库的健康巡检与 AI 诊断。
-      </p>
-      <div class="about-meta">
-        <span class="about-meta-item">作者：fiyo (Jack Ge)</span>
-        <span class="about-meta-item">协议：{% if edition == 'professional' %}专有软件许可（Proprietary Software License）{% else %}Apache License 2.0（开源）{% endif %}</span>
-        <span class="about-meta-item">项目：<a href="https://github.com/fiyo/DBCheck" target="_blank">github.com/fiyo/DBCheck</a></span>
-        <span class="about-meta-item">邮箱：<a href="mailto:sdfiyon@gmail.com">sdfiyon@gmail.com</a></span>
-        <span class="about-meta-item">官网：<a href="https://dbcheck.top" target="_blank">dbcheck.top</a></span>
-      </div>
-
-      <!-- 支持的数据库 -->
-      <div class="about-dbs">
-        <span class="about-db-chip"><img src="/mysql.png" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='inline'" style="width:16px;height:16px;object-fit:contain"><span class="db-emoji" style="display:none;">🐬</span> MySQL</span>
-        <span class="about-db-chip"><img src="/postgresql.png" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='inline'" style="width:16px;height:16px;object-fit:contain"><span class="db-emoji" style="display:none;">🦴</span> PostgreSQL</span>
-        <span class="about-db-chip"><img src="/oracle.png" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='inline'" style="width:16px;height:16px;object-fit:contain"><span class="db-emoji" style="display:none;">🔶</span> Oracle</span>
-        <span class="about-db-chip"><img src="/sqlserver.png" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='inline'" style="width:16px;height:16px;object-fit:contain"><span class="db-emoji" style="display:none;">🗄️</span> SQL Server</span>
-        <span class="about-db-chip"><img src="/dm.png" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='inline'" style="width:16px;height:16px;object-fit:contain"><span class="db-emoji" style="display:none;">💎</span> DM 达梦</span>
-        <span class="about-db-chip"><img src="/tidb.png" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='inline'" style="width:16px;height:16px;object-fit:contain"><span class="db-emoji" style="display:none;">🌊</span> TiDB</span>
-        <span class="about-db-chip"><img src="/ivorysql.png" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='inline'" style="width:16px;height:16px;object-fit:contain"><span class="db-emoji" style="display:none;">🦣</span> IvorySQL</span>
-        <span class="about-db-chip"><img src="/yashandb.png" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='inline'" style="width:16px;height:16px;object-fit:contain"><span class="db-emoji" style="display:none;">🗻</span> YashanDB</span>
-        <span class="about-db-chip"><img src="/oceanbase.png" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='inline'" style="width:16px;height:16px;object-fit:contain"><span class="db-emoji" style="display:none;">🐋</span> OceanBase <span style="font-size:10px;background:#00C8A0;color:#fff;padding:1px 5px;border-radius:3px;font-weight:600">MySQL</span></span>
-      </div>
-
-      <!-- 赞助 / 捐赠 -->
-      <div style="display:none;margin-top:18px;padding:16px;border:1px dashed var(--border);border-radius:12px;background:var(--surface2);text-align:center">
-        <div style="font-size:14px;font-weight:600;margin-bottom:4px">💝 支持 RaccoonX 持续开发</div>
-        <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">如果这个项目对你有帮助，欢迎扫码赞助，你的支持是开源动力 ❤️</div>
-        <img src="/pay-about.png" alt="赞助二维码" style="width:200px;max-width:60%;border-radius:8px;background:#fff;padding:8px" onerror="this.style.display='none'">
-        <div style="font-size:11px;color:var(--text-muted);margin-top:8px">微信 / 支付宝扫码 · 赞助时请备注昵称 ❤️</div>
-      </div>
-
-      <!-- Apache License 2.0 开源协议（Base64 encoded to prevent static search） -->
-      <div class="about-agreement" id="agreement-container">
-        <div class="about-agreement-title" id="agreement-title"></div>
-        <div class="about-agreement-text" id="agreement-zh" lang="zh"></div>
-        <div class="about-agreement-text" id="agreement-en" lang="en" style="display:none;"></div>
-      </div>
-      <div class="about-grayscale-note" data-i18n-html="webui.about_grayscale_note"></div>
-    </div>
-    <!-- Footer -->
-    <div class="about-footer">
-      © 2026 {{ product_name }} · fiyo (Jack Ge) · <a href="https://github.com/fiyo/DBCheck" target="_blank">GitHub</a> · Apache License 2.0
-    </div>
-  </div>
-</div>
-
-<script>
-function showAboutModal() {
-  document.getElementById('about-modal').style.display = 'block';
-  document.body.style.overflow = 'hidden';
-  var isZh = (document.documentElement.lang === 'zh');
-  var notes = document.querySelectorAll('.about-agreement-text');
-  for (var i = 0; i < notes.length; i++) {
-    notes[i].style.display = (notes[i].getAttribute('lang') === (isZh ? 'zh' : 'en')) ? '' : 'none';
-  }
-}
-function closeAboutModal() {
-  document.getElementById('about-modal').style.display = 'none';
-  document.body.style.overflow = '';
-}
-// 点击 backdrop 关闭
-document.getElementById('about-modal').addEventListener('click', function(e) {
-  if (e.target === this) closeAboutModal();
-});
-// Esc 关闭
-document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') closeAboutModal();
-});
-
-// ─── Apache License 2.0 开源协议内容解密 ───
-(function(){
+  // ─────────────────────────────────────────────────────────────────────────────
+// 数据库驱动管理（替换原 Oracle Client 单库配置）
+// ─────────────────────────────────────────────────────────────────────────────
+let _driversCurrentType = null;
+let _driversAllTypes = [];
+let _driversShowHidden = false;
+
+async function loadDrivers() {
   try {
-    var _a=[
-      "5LiT5pyJ6L2v5Lu2IMK3IOWVhuS4muaOiOadg++8iFByb3ByaWV0YXJ5IFNvZnR3YXJlIMK3IENvbW1lcmNpYWwgTGljZW5zZe+8iQ==",
-      "5pys6L2v5Lu25Li6PHN0cm9uZz7kuJPmnInllYbkuJrova/ku7Y8L3N0cm9uZz7vvIzniYjmnYPlvZIgZml5b++8iEphY2sgR2XvvInmiYDmnInvvIzkv53nlZnkuIDliIfmnYPliKnjgII8YnIvPuacque7j+iRl+S9nOadg+S6uuS5pumdouaOiOadg++8jOS7u+S9leS6uuS4jeW+l+WkjeWItuOAgeS/ruaUueOAgeWPjee8luivkeOAgeWPjeaxh+e8luOAgeWIhuWPkeOAgeWHuuenn+OAgei9rOiuuOWPr+aIlueUqOS6juS7u+S9leWVhuS4muWGjeWIhuWPkeOAgjxici8+5q+P5bm0IDxzdHJvbmc+NeaciDE55pel6IezNeaciDIx5pelPC9zdHJvbmc+77yM55WM6Z2i5bCG5by65Yi25LulPHN0cm9uZz7ngbDluqbmqKHlvI88L3N0cm9uZz7mmL7npLrkuJTml6Dms5XliIfmjaLkuLvpopjvvIzor7flsIrph43ov5nkuIDorr7orqHjgII=",
-      "VGhpcyBzb2Z0d2FyZSBpcyBhIDxzdHJvbmc+cHJvcHJpZXRhcnkgY29tbWVyY2lhbCBwcm9kdWN0PC9zdHJvbmc+IG93bmVkIGJ5IGZpeW8gKEphY2sgR2UpLiBBbGwgcmlnaHRzIHJlc2VydmVkLjxici8+Tm8gY29weWluZywgbW9kaWZpY2F0aW9uLCBkZWNvbXBpbGluZywgZGlzYXNzZW1ibHksIGRpc3RyaWJ1dGlvbiwgc3VibGljZW5zaW5nLCBvciBjb21tZXJjaWFsIHJlZGlzdHJpYnV0aW9uIGlzIHBlcm1pdHRlZCB3aXRob3V0IHByaW9yIHdyaXR0ZW4gYXV0aG9yaXphdGlvbi48YnIvPkV2ZXJ5IHllYXIgZnJvbSA8c3Ryb25nPk1heSAxOSB0byBNYXkgMjE8L3N0cm9uZz4sIHRoZSBpbnRlcmZhY2UgaXMgZm9yY2VkIGludG8gPHN0cm9uZz5ncmF5c2NhbGUgbW9kZTwvc3Ryb25nPiBhbmQgdGhlbWUgc3dpdGNoaW5nIGlzIGRpc2FibGVkOyBwbGVhc2UgcmVzcGVjdCB0aGlzIGRlc2lnbi4="
-    ];
-    // Apache-2.0 / 社区版开源协议文案（professional 不展示，community 展示）
-    var _a_oss=[
-      "QXBhY2hlIExpY2Vuc2UgMi4w77yI5byA5rqQ5Y2P6K6u77yJ",
-      "5pys6L2v5Lu25LulIEFwYWNoZSBMaWNlbnNlIDIuMCDljY/orq7lvIDmupDlj5HluIPvvIzniYjmnYPlvZIgZml5b++8iEphY2sgR2XvvInmiYDmnInjgILkvaDlj6/ku6Xoh6rnlLHkvb/nlKjjgIHkv67mlLnjgIHliIblj5HmnKzova/ku7bvvIzljIXmi6zllYbkuJrnlKjpgJTvvIzkvYbpobvpgbXlroggQXBhY2hlLTIuMCDmnaHmrL7vvIjkv53nlZnniYjmnYPkuI7orrjlj6/lo7DmmI7jgIHms6jmmI7lj5jmm7TnrYnvvInjgILor6bnu4bmnaHmrL7op4Hku5PlupMgTElDRU5TRSDmlofku7bjgII8YnIvPjxici8+5q+P5bm0IDxzdHJvbmc+NeaciDE55pelPC9zdHJvbmc+IOiHsyA8c3Ryb25nPjXmnIgyMeaXpTwvc3Ryb25nPu+8jOeVjOmdouWwhuW8uuWItuS7pTxzdHJvbmc+54Gw5bqm5qih5byPPC9zdHJvbmc+5pi+56S65LiU5peg5rOV5YiH5o2i5Li76aKY77yM6K+35bCK6YeN6L+Z5LiA6K6+6K6h44CC",
-      "VGhpcyBzb2Z0d2FyZSBpcyBvcGVuLXNvdXJjZWQgdW5kZXIgdGhlIEFwYWNoZSBMaWNlbnNlIDIuMCwgQ29weXJpZ2h0IGZpeW8gKEphY2sgR2UpLiBZb3UgbWF5IHVzZSwgbW9kaWZ5LCBhbmQgZGlzdHJpYnV0ZSBpdCBmcmVlbHksIGluY2x1ZGluZyBmb3IgY29tbWVyY2lhbCBwdXJwb3NlcywgcHJvdmlkZWQgeW91IGNvbXBseSB3aXRoIHRoZSBBcGFjaGUtMi4wIHRlcm1zIChyZXRhaW4gY29weXJpZ2h0IGFuZCBsaWNlbnNlIG5vdGljZXMsIHN0YXRlIGNoYW5nZXMsIGV0Yy4pLiBTZWUgdGhlIExJQ0VOU0UgZmlsZSBmb3IgZGV0YWlscy48YnIvPjxici8+RXZlcnkgeWVhciBmcm9tIDxzdHJvbmc+TWF5IDE5PC9zdHJvbmc+IHRvIDxzdHJvbmc+TWF5IDIxPC9zdHJvbmc+LCB0aGUgaW50ZXJmYWNlIGlzIGZvcmNlZCBpbnRvIDxzdHJvbmc+Z3JheXNjYWxlIG1vZGU8L3N0cm9uZz4gYW5kIHRoZW1lIHN3aXRjaGluZyBpcyBkaXNhYmxlZDsgcGxlYXNlIHJlc3BlY3QgdGhpcyBkZXNpZ24u"
-    ];
-    var _d=function(s){var b=atob(s);var l=b.length;var a=new Uint8Array(l);for(var i=0;i<l;i++)a[i]=b.charCodeAt(i);return new TextDecoder('utf-8').decode(a);};
-    var t=document.getElementById('agreement-title');
-    var z=document.getElementById('agreement-zh');
-    var e=document.getElementById('agreement-en');
-    console.log('[DBCheck] agreement elements:', !!t, !!z, !!e);
-    if(t&&z&&e){
-      var _edition = "{{ edition }}";
-      var _src = (_edition === 'professional') ? _a : _a_oss;
-      var dt=_d(_src[0]); var dz=_d(_src[1]); var de=_d(_src[2]);
-      console.log('[DBCheck] decoded lengths:', dt.length, dz.length, de.length);
-      t.innerHTML=dt; z.innerHTML=dz; e.innerHTML=de;
-      console.log('[DBCheck] agreement content injected OK');
-    } else {
-      console.error('[DBCheck] agreement elements not found!');
-    }
-  } catch(err) {
-    console.error('[DBCheck] agreement decode error:', err);
-  }
-})();
-
-  // ─── Slogan 动画循环 ───
-  (function(){
-    const slogans = [
-      { text: '全库掌控，一检即安', sub: '{{ product_name }} · Database Inspector' },
-      { text: '数据库安全，尽在 {{ product_name }}', sub: 'Secure Your Data, Simplify Your Work' },
-      { text: '洞悉每一行，守护每一库', sub: 'Insight in Every Row, Guard for Every DB' },
-      { text: '一键巡检，万无一失', sub: 'One-Click Inspection, Zero Miss' }
-    ];
-    const elText = document.getElementById('slogan-text');
-    const elSub  = document.getElementById('slogan-sub');
-    if (!elText || !elSub) return; // 首页 Hero 化后 slogan 打字动画元素已移除，直接跳过
-    let idx = 0;
-    let typingTimer = null;
-
-    function typeWriter(text, cb) {
-      elText.textContent = '';
-      elText.classList.add('typing');
-      elText.classList.remove('typing-done');
-      let i = 0;
-      clearInterval(typingTimer);
-      typingTimer = setInterval(() => {
-        if (i < text.length) {
-          elText.textContent += text[i];
-          i++;
-        } else {
-          clearInterval(typingTimer);
-          elText.classList.remove('typing');
-          elText.classList.add('typing-done');
-          if (cb) cb();
-        }
-      }, 120);
-    }
-
-    function showSlogan() {
-      const s = slogans[idx];
-
-      // 彻底重置：移除所有状态类，强制 reflow 让 transition 重新生效
-      elText.className = 'slogan-text';
-      elText.textContent = '';
-      elText.classList.remove('typing', 'typing-done');
-      elSub.classList.remove('show');
-      elSub.textContent = s.sub;
-      void elText.offsetWidth;
-
-      // 触发进入过渡（opacity 0→1, transform 切入）
-      elText.classList.add('anim-enter');
-
-      // 测量完整文字宽度，固定容器宽度防止打字时跳动
-      const measureEl = document.createElement('span');
-      measureEl.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap;font-size:28px;font-weight:800;letter-spacing:4px;';
-      measureEl.textContent = s.text;
-      document.body.appendChild(measureEl);
-      const fullWidth = measureEl.offsetWidth;
-      document.body.removeChild(measureEl);
-      const container = elText.closest('.slogan-container');
-      if (container) {
-        container.style.width = fullWidth + 'px';
-        container.style.textAlign = 'center';
+    const url = '/api/drivers/types' + (_driversShowHidden ? '?hidden=1' : '');
+    const r = await fetch(url);
+    const d = await r.json();
+    if (!d.ok) { showToast && showToast('加载失败: ' + d.error, 'error'); return; }
+    _driversAllTypes = d.types || [];
+    renderDriversTypesList();
+    // 回收站模式不自动选中；普通模式下若当前类型已不在可见列表则重新选中第一项
+    if (!_driversShowHidden) {
+      const stillVisible = _driversAllTypes.some(t => t.key === _driversCurrentType);
+      if (_driversAllTypes.length > 0 && (!_driversCurrentType || !stillVisible)) {
+        const firstItem = document.querySelector('.drivers-type-item');
+        if (firstItem) selectDriverType(_driversAllTypes[0].key, firstItem);
       }
-
-      // 打字机效果
-      typeWriter(s.text, () => {
-        elSub.classList.add('show');
-        // 展示 2.5 秒后切换
-        setTimeout(() => {
-          // 触发离开过渡
-          elText.classList.remove('anim-enter');
-          elText.classList.add('anim-leave');
-          elSub.classList.remove('show');
-          setTimeout(() => {
-            idx = (idx + 1) % slogans.length;
-            showSlogan();
-          }, 500);
-        }, 2500);
-      });
     }
+  } catch (e) {
+    console.error('loadDrivers', e);
+    if (typeof showToast === 'function') showToast('加载失败: ' + e.message, 'error');
+  }
+}
 
-    // 页面加载后启动
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', showSlogan);
-    } else {
-      showSlogan();
-    }
-  })();
-
-</script>
-
-
-  <script src="/static/codemirror/lib/codemirror.js"></script>
-  <script src="/static/codemirror/mode/sql/sql.js"></script>
-  <script src="/static/codemirror/addon/edit/matchbrackets.js"></script>
-  <script src="/static/codemirror/addon/hint/show-hint.js"></script>
-  <script src="/static/codemirror/addon/hint/sql-hint.js"></script>
-  <script src="/static/codemirror/addon/display/placeholder.js"></script>
-  <script src="/static/js/inspection_config.js"></script>
-  <script src="/static/js/Sortable.min.js"></script>
-
-<script>
-// ─── SQL 编辑器功能 ─────────────────────────────────────
-var sqlEditor = null;
-
-function initSqlEditor(retry) {
-  retry = retry || 0;
-  var textarea = document.getElementById('sql-input-area');
-  if (!textarea) {
-    if (retry < 5) setTimeout(function() { initSqlEditor(retry + 1); }, 100);
+function renderDriversTypesList() {
+  const list = document.getElementById('drivers-types-list');
+  const toggleBtn = document.getElementById('drivers-toggle-hidden-btn');
+  if (toggleBtn) {
+    toggleBtn.innerHTML = _driversShowHidden ? '&#x2b05;' : '&#x1f5d1;';
+    toggleBtn.title = _driversShowHidden ? '返回类型列表' : '查看/恢复已删除类型';
+    toggleBtn.classList.toggle('active', _driversShowHidden);
+  }
+  if (!list) return;
+  if (_driversAllTypes.length === 0) {
+    list.innerHTML = '<div class="drivers-empty">' + (_driversShowHidden ? '没有已删除的类型' : '暂无类型') + '</div>';
     return;
   }
-  if (sqlEditor) return;
-  try {
-    sqlEditor = CodeMirror.fromTextArea(textarea, {
-      mode: 'text/x-sql',
-      theme: 'dracula',
-      lineNumbers: true,
-      matchBrackets: true,
-      indentUnit: 4,
-      tabSize: 4,
-      indentWithTabs: false,
-      lineWrapping: true,
-      extraKeys: {
-        "Ctrl-Enter": execSql,
-        "Ctrl-Shift-F": formatSql
-      },
-      hintOptions: { tables: {} }
+  list.innerHTML = _driversAllTypes.map(function(t) {
+    const badge = (!_driversShowHidden && t.driver_count > 0)
+      ? '<span class="badge">' + t.driver_count + '</span>'
+      : '';
+    const nativeTag = !t.is_jdbc ? '<span class="tag-native">native</span>' : '';
+    if (_driversShowHidden) {
+      return '<div class="drivers-type-item hidden-type" data-key="' + t.key + '">' +
+             '<span class="order">' + t.order + '</span>' +
+             '<span class="name">' + t.name_zh + '</span>' +
+             nativeTag +
+             '<span class="restore-type" data-key="' + t.key + '" data-name="' + t.name_zh + '">\u6062\u590d</span>' +
+             '</div>';
+    }
+    const isCustom = !!t.is_custom;
+    const customTag = isCustom ? '<span class="tag-custom">\u81ea\u5b9a\u4e49</span>' : '';
+    const title = isCustom ? '\u5220\u9664\u8be5\u81ea\u5b9a\u4e49\u7c7b\u578b\uff08\u4e0d\u53ef\u6062\u590d\uff09' : '\u5220\u9664\u8be5\u7c7b\u578b\u53ca\u5176\u6240\u6709\u9a71\u52a8';
+    // 仅管理员才渲染删除按钮（删除功能仅管理员有权限）
+    const canManage = window.__userRole === 'admin';
+    const delBtn = canManage
+      ? '<span class="del-type" data-key="' + t.key + '" data-name="' + t.name_zh + '" data-custom="' + (isCustom ? '1' : '0') + '" title="' + title + '">\u00d7</span>'
+      : '';
+    return '<div class="drivers-type-item" data-key="' + t.key + '">' +
+           '<span class="order">' + t.order + '</span>' +
+           '<span class="name">' + t.name_zh + '</span>' +
+           badge + nativeTag + customTag + delBtn +
+           '</div>';
+  }).join('');
+  list.querySelectorAll('.drivers-type-item').forEach(function(el) {
+    el.addEventListener('click', function(ev) {
+      const key = el.getAttribute('data-key');
+      const delEl = ev.target.closest('.del-type');
+      const resEl = ev.target.closest('.restore-type');
+      if (delEl) {
+        const name = delEl.getAttribute('data-name');
+        const isCustom = delEl.getAttribute('data-custom') === '1';
+        requestDeleteType(key, name, isCustom);
+      } else if (resEl) {
+        restoreDriverType(key, resEl.getAttribute('data-name'), ev);
+      } else {
+        selectDriverType(key, el);
+      }
     });
-    setTimeout(function() { sqlEditor.refresh(); }, 120);
-    console.log('[initSqlEditor] CodeMirror initialized');
-  } catch(e) {
-    console.error('[initSqlEditor] error:', e);
-    if (retry < 5) setTimeout(function() { initSqlEditor(retry + 1); }, 200);
+  });
+}
+
+function toggleDriversHiddenMode() {
+  _driversShowHidden = !_driversShowHidden;
+  _driversCurrentType = _driversShowHidden ? null : _driversCurrentType;
+  document.getElementById('drivers-current-type-name').textContent = _driversShowHidden ? '回收站：已删除类型' : '请选择左侧类型';
+  const btn = document.getElementById('drivers-new-btn');
+  if (btn) btn.disabled = true;
+  const addBtn = document.getElementById('drivers-add-type-btn');
+  if (addBtn) addBtn.style.display = _driversShowHidden ? 'none' : '';
+  const recBtn = document.getElementById('drivers-toggle-hidden-btn');
+  if (recBtn) {
+    recBtn.innerHTML = _driversShowHidden ? '&#x2b05;' : '&#x1f5d1;';
+    recBtn.title = _driversShowHidden ? '返回类型列表' : '查看/恢复已删除类型';
+    recBtn.classList.toggle('active', _driversShowHidden);
+  }
+  const tbody = document.getElementById('drivers-tbody');
+  if (tbody) tbody.innerHTML = '<tr><td colspan="4" class="drivers-empty">' + (_driversShowHidden ? '请在左侧选择要恢复的类型' : '请选择左侧类型查看驱动') + '</td></tr>';
+  loadDrivers();
+}
+
+// 删除类型：先校验管理员权限，再用 div 弹窗二次确认（替代原生 confirm）
+var _pendingDelete = null;
+function requestDeleteType(key, name, isCustom) {
+  if (window.__userRole !== 'admin') {
+    if (typeof showToast === 'function') showToast('只有管理员才能删除数据库类型', 'error');
+    return;
+  }
+  _pendingDelete = { key: key, name: name, isCustom: isCustom };
+  const m = document.getElementById('delete-type-modal');
+  if (!m) { doDeleteType(key, isCustom); return; } // 兜底：极端情况下直接删除
+  const msg = document.getElementById('delete-type-msg');
+  if (msg) {
+    msg.textContent = isCustom
+      ? ('确认删除自定义类型「' + name + '」？该类型及其下所有驱动 JAR 都会被一并删除，且不可恢复。')
+      : ('确认删除类型「' + name + '」？该类型下已上传的所有驱动 JAR 都会被一并删除。');
+  }
+  m.style.display = 'flex';
+}
+function closeDeleteTypeDialog() {
+  const m = document.getElementById('delete-type-modal');
+  if (m) m.style.display = 'none';
+  _pendingDelete = null;
+}
+async function confirmDeleteType() {
+  if (!_pendingDelete) return;
+  const item = _pendingDelete;
+  closeDeleteTypeDialog();
+  await doDeleteType(item.key, item.isCustom);
+}
+async function doDeleteType(key, isCustom) {
+  try {
+    const url = isCustom
+      ? ('/api/drivers/types/' + encodeURIComponent(key) + '/delete-custom')
+      : ('/api/drivers/types/' + encodeURIComponent(key) + '/delete');
+    const r = await fetch(url, { method: 'POST' });
+    const d = await r.json();
+    if (typeof showToast === 'function') showToast(d.msg || (d.ok ? '已删除' : '失败'), d.ok ? 'success' : 'error');
+    if (d.ok) {
+      if (_driversCurrentType === key) _driversCurrentType = null;
+      loadDrivers();
+    }
+  } catch (e) {
+    if (typeof showToast === 'function') showToast('删除类型失败: ' + e.message, 'error');
   }
 }
 
-function getSqlEditorText() {
-  return sqlEditor ? sqlEditor.getValue() : document.getElementById('sql-input-area').value;
+async function restoreDriverType(key, name, ev) {
+  if (ev) ev.stopPropagation();
+  try {
+    const r = await fetch('/api/drivers/types/' + encodeURIComponent(key) + '/restore', { method: 'POST' });
+    const d = await r.json();
+    if (typeof showToast === 'function') showToast(d.msg || (d.ok ? '已恢复' : '失败'), d.ok ? 'success' : 'error');
+    if (d.ok) loadDrivers();
+  } catch (e) {
+    if (typeof showToast === 'function') showToast('恢复类型失败: ' + e.message, 'error');
+  }
 }
 
-function setSqlEditorText(text) {
-  if (sqlEditor) sqlEditor.setValue(text);
-  else document.getElementById('sql-input-area').value = text;
+function openAddTypeDialog() {
+  const m = document.getElementById('add-type-modal');
+  if (!m) return;
+  document.getElementById('add-type-key').value = '';
+  document.getElementById('add-type-name-zh').value = '';
+  document.getElementById('add-type-name-en').value = '';
+  document.getElementById('add-type-driver-class').value = '';
+  document.getElementById('add-type-isjdbc').checked = true;
+  document.getElementById('add-type-err').textContent = '';
+  m.style.display = 'flex';
+  document.getElementById('add-type-key').focus();
 }
 
-// ─── SQL 树：全局状态 ───
-window._sqlCurrDs  = null;
-window._sqlCurrDb  = null;
-window._sqlCurrType = null;  // 'ds'|'db'|'table'|'view'
+function closeAddTypeDialog() {
+  const m = document.getElementById('add-type-modal');
+  if (m) m.style.display = 'none';
+}
 
-// ─── 事件委托：绑定树面板点击（只绑一次）───
-(function(){
-  var body = document.getElementById('sql-tree-body');
-  if (!body || body.dataset._delegated) return;
-  body.dataset._delegated = '1';
-  body.addEventListener('click', function(ev) {
-    // 点击了箭头 → 展开/折叠
-    var tog = ev.target.closest('.tree-toggle');
-    if (tog) {
-      ev.stopPropagation();
-      var node = tog.closest('.sql-tree-node');
-      if (!node) return;
-      var type = node.getAttribute('data-type');
-      var dsId = node.getAttribute('data-ds-id');
-      var dbName = node.getAttribute('data-db') || '';
-      if (type === 'ds') {
-        treeToggleDs(dsId, tog);
-      } else if (type === 'db') {
-        treeToggleDb(dsId, dbName, tog);
-      }
+async function submitAddType() {
+  const key = document.getElementById('add-type-key').value.trim();
+  const name_zh = document.getElementById('add-type-name-zh').value.trim();
+  const name_en = document.getElementById('add-type-name-en').value.trim();
+  const driver_class = document.getElementById('add-type-driver-class').value.trim();
+  const is_jdbc = document.getElementById('add-type-isjdbc').checked;
+  const errEl = document.getElementById('add-type-err');
+  if (!key) { errEl.textContent = '请填写类型标识'; return; }
+  if (!name_zh && !name_en) { errEl.textContent = '中文名/英文名至少填一个'; return; }
+  try {
+    const r = await fetch('/api/drivers/types', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key, name_zh, name_en, driver_class_hint: driver_class, is_jdbc })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      closeAddTypeDialog();
+      if (typeof showToast === 'function') showToast(d.msg || '已新增', 'success');
+      loadDrivers();
+    } else {
+      errEl.textContent = d.msg || d.error || '新增失败';
+    }
+  } catch (e) {
+    errEl.textContent = '新增失败: ' + e.message;
+  }
+}
+
+async function selectDriverType(key, el) {
+  _driversCurrentType = key;
+  document.querySelectorAll('.drivers-type-item').forEach(x => x.classList.remove('active'));
+  if (el) el.classList.add('active');
+  const meta = _driversAllTypes.find(x => x.key === key);
+  const nameEl = document.getElementById('drivers-current-type-name');
+  if (nameEl) nameEl.textContent = meta ? (meta.order + '. ' + meta.name_zh + '  (' + key + ')') : key;
+  const btn = document.getElementById('drivers-new-btn');
+  if (btn) btn.disabled = false;
+  await loadDriverList(key);
+}
+
+async function loadDriverList(key) {
+  try {
+    const r = await fetch('/api/drivers/list?db_type=' + encodeURIComponent(key));
+    const d = await r.json();
+    const tbody = document.getElementById('drivers-tbody');
+    if (!tbody) return;
+    if (!d.ok) {
+      tbody.innerHTML = '<tr><td colspan="4" class="drivers-empty">加载失败: ' + (d.error || '') + '</td></tr>';
       return;
     }
-    // 点击了节点文字/图标 → 选中
-    var sel = ev.target.closest('.sql-tree-node');
-    if (sel) {
-      treeSelect(sel);
+    if (!d.drivers || d.drivers.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" class="drivers-empty">该类型暂无已上传驱动，点击右上角「新增」上传</td></tr>';
+      return;
     }
-  });
-})();
+    tbody.innerHTML = d.drivers.map(x => {
+      const sizeKB = (x.file_size / 1024).toFixed(1);
+      const verCell = x.version + (x.is_active ? '<span class="active-tag">默认</span>' : '');
+      const cls = x.driver_class || '<span style="color:var(--text-muted)">未设置</span>';
+      const jarCell = '<span title="' + (x.jar_path || '').replace(/"/g, '&quot;') + '">' + x.jar_filename + '</span>' +
+                       '<br><small style="color:var(--text-muted)">' + sizeKB + ' KB</small>';
+      const actions = x.is_active
+        ? '<span class="muted">已激活</span>'
+        : '<button class="btn btn-xs btn-ghost" onclick="activateDriver(' + x.id + ')">激活</button>';
+      return '<tr' + (x.is_active ? ' class="is-active"' : '') + '>' +
+             '<td>' + verCell + '</td>' +
+             '<td><code>' + cls + '</code></td>' +
+             '<td>' + jarCell + '</td>' +
+             '<td class="drivers-actions">' + actions +
+             '<button class="btn btn-xs btn-danger" onclick="deleteDriver(' + x.id + ', \'' + (x.version || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')">删除</button>' +
+             '</td></tr>';
+    }).join('');
+  } catch (e) {
+    console.error('loadDriverList', e);
+  }
+}
 
-// ─── 加载树：数据源列表 ───
+async function activateDriver(id) {
+  try {
+    const r = await fetch('/api/drivers/' + id + '/activate', { method: 'POST' });
+    const d = await r.json();
+    if (typeof showToast === 'function') showToast(d.msg || (d.ok ? '已激活' : '失败'), d.ok ? 'success' : 'error');
+    if (d.ok) await loadDriverList(_driversCurrentType);
+  } catch (e) {
+    if (typeof showToast === 'function') showToast('激活失败: ' + e.message, 'error');
+  }
+}
+
+async function deleteDriver(id, ver) {
+  if (!confirm('确认删除版本「' + ver + '」？此操作会同时删除驱动 JAR 文件。')) return;
+  try {
+    const r = await fetch('/api/drivers/' + id + '/delete', { method: 'POST' });
+    const d = await r.json();
+    if (typeof showToast === 'function') showToast(d.msg || (d.ok ? '已删除' : '失败'), d.ok ? 'success' : 'error');
+    if (d.ok) {
+      await loadDriverList(_driversCurrentType);
+      loadDrivers();  // 刷新左侧 badge
+    }
+  } catch (e) {
+    if (typeof showToast === 'function') showToast('删除失败: ' + e.message, 'error');
+  }
+}
+
+function openDriverUploadDialog() {
+  if (!_driversCurrentType) {
+    if (typeof showToast === 'function') showToast('请先选择数据库类型', 'warn');
+    return;
+  }
+  document.getElementById('driver-upload-db-type').value = _driversCurrentType;
+  document.getElementById('driver-upload-version').value = '';
+  document.getElementById('driver-upload-class').value = '';
+  document.getElementById('driver-upload-file').value = '';
+  document.getElementById('driver-upload-note').value = '';
+  showUploadStatus('', 'hide');
+  document.getElementById('driver-upload-modal').style.display = 'flex';
+}
+
+function closeDriverUploadDialog() {
+  document.getElementById('driver-upload-modal').style.display = 'none';
+}
+
+async function submitDriverUpload() {
+  const f = document.getElementById('driver-upload-file').files[0];
+  const ver = document.getElementById('driver-upload-version').value.trim();
+  const cls = document.getElementById('driver-upload-class').value.trim();
+  const note = document.getElementById('driver-upload-note').value.trim();
+  if (!f) { showUploadStatus('请选择驱动文件', 'error'); return; }
+  if (!ver) { showUploadStatus('请填写版本号', 'error'); return; }
+  const fd = new FormData();
+  fd.append('file', f);
+  fd.append('db_type', _driversCurrentType);
+  fd.append('version', ver);
+  if (cls) fd.append('driver_class', cls);
+  if (note) fd.append('note', note);
+  showUploadStatus('⏳ 上传中...', 'info');
+  try {
+    const r = await fetch('/api/drivers/upload', { method: 'POST', body: fd });
+    const d = await r.json();
+    if (d.ok) {
+      showUploadStatus('✓ ' + d.msg, 'success');
+      setTimeout(() => {
+        closeDriverUploadDialog();
+        loadDriverList(_driversCurrentType);
+        loadDrivers();
+      }, 800);
+    } else {
+      showUploadStatus('✗ ' + d.error, 'error');
+    }
+  } catch (e) {
+    showUploadStatus('上传失败: ' + e.message, 'error');
+  }
+}
+
+function showUploadStatus(msg, kind) {
+  const status = document.getElementById('driver-upload-status');
+  if (!status) return;
+  if (kind === 'hide' || !msg) {
+    status.style.display = 'none';
+    status.textContent = '';
+    return;
+  }
+  status.style.display = 'block';
+  status.textContent = msg;
+  if (kind === 'success') {
+    status.style.background = 'rgba(16,185,129,0.1)';
+    status.style.color = '#10b981';
+  } else if (kind === 'error') {
+    status.style.background = 'rgba(239,68,68,0.1)';
+    status.style.color = '#ef4444';
+  } else {
+    status.style.background = 'rgba(59,130,246,0.1)';
+    status.style.color = '#3b82f6';
+  }
+}
+
 async function loadSqlTree() {
   var body = document.getElementById('sql-tree-body');
   if (!body) return;

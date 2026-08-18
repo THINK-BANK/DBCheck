@@ -79,6 +79,7 @@ from modules.inspection.engine import (
     RemoteSystemInfoCollector,
     get_host_disk_usage,
 )
+from modules.inspection.chapter_filter import build_chapter_filter_sql  # 章节可选：共享过滤 helper
 
 # 注册 java 模块导入钩子，使 `from java.x import` 可用（兼容 JPype 全版本）。
 # 仅注册钩子，不会启动 JVM；本插件须自包含，不依赖全局 import jpype.imports。
@@ -223,7 +224,7 @@ class ClickHouseJdbcInspector(BaseInspectionEngine):
 
     def __init__(self, host, port=8123, user='default', password='', database='',
                  ssh_info=None, template_id=None, jdbc_url=None, ssl=False,
-                 custom_http_headers=None):
+                 custom_http_headers=None, driver_version=''):
         super().__init__(host, int(port), user, password, database=database,
                          ssh_info=ssh_info, template_id=template_id)
         self.db_type = 'clickhouse'
@@ -236,6 +237,15 @@ class ClickHouseJdbcInspector(BaseInspectionEngine):
         self.conn_cfg = None
         self._ssh_tunnel = None
         self._db_version_str = 'unknown'
+        self.driver_version = driver_version or ''
+        self.jdbc_driver_path = None
+        try:
+            from modules import driver_registry as _dr
+            _jars = _dr.resolve_jdbc_driver_jars('clickhouse', self.driver_version)
+            if _jars:
+                self.jdbc_driver_path = _jars
+        except Exception:
+            self.jdbc_driver_path = None
 
     # ════════════════════════════════════════════════
     # 连接层
@@ -254,7 +264,7 @@ class ClickHouseJdbcInspector(BaseInspectionEngine):
             # 按绝对路径 + 唯一模块名加载本插件自有的 jdbc_jvm，避免被 db2 等同名
             # 模块抢注（同名兄弟模块冲突）
             _jvm = _load_own_jdbc_jvm()
-            _jvm.ensure_jvm()
+            _jvm.ensure_jvm(specific_jars=self.jdbc_driver_path)
             _jvm.register_clickhouse_driver()
 
             # 2. 构建连接配置（ClickHouseConnectionConfig 已在模块级按路径绑定，避免同名模块污染）
@@ -641,11 +651,12 @@ class ClickHouseJdbcInspector(BaseInspectionEngine):
         import sqlite3
         conn = sqlite3.connect(db_path)
         cur = conn.cursor()
+        _chap_frag, _chap_params = build_chapter_filter_sql(self.chapter_ids, alias='ch')
         cur.execute(
             "SELECT ch.id, ch.chapter_number, ch.chapter_title_zh, ch.chapter_title_en, ch.description "
             "FROM inspection_chapter ch JOIN inspection_template t ON ch.template_id=t.id "
-            "WHERE t.db_type=? ORDER BY ch.chapter_number",
-            (self.db_type,))
+            "WHERE t.db_type=?" + _chap_frag + " ORDER BY ch.chapter_number",
+            (self.db_type,) + tuple(_chap_params))
         chapters = []
         for tid, num, zh, en, desc in cur.fetchall():
             cur2 = conn.cursor()
@@ -822,7 +833,8 @@ def _java_properties(py_dict: Dict[str, str]):
 
 # ── 测试连接函数（供 web_ui / 自测调用）────────────────────────────
 def test_connection(host, port, user, password, database='', jdbc_url=None,
-                    ssl=False, custom_http_headers=None, **kwargs):
+                    ssl=False, custom_http_headers=None,
+                    driver_version='', **kwargs):
     """测试 ClickHouse JDBC 连接。
 
     Args:
@@ -841,7 +853,8 @@ def test_connection(host, port, user, password, database='', jdbc_url=None,
         inspector = ClickHouseJdbcInspector(
             host, int(port), user, password,
             database=database, jdbc_url=jdbc_url, ssl=ssl,
-            custom_http_headers=custom_http_headers)
+            custom_http_headers=custom_http_headers,
+            driver_version=driver_version)
         ok, msg = inspector.connect()
         inspector.disconnect()
         return ok, msg
@@ -851,7 +864,7 @@ def test_connection(host, port, user, password, database='', jdbc_url=None,
 
 # ── 实时监控连接工厂（供 pro/metrics_collector.py 使用）─────────────
 def get_connection(host, port, user, password, database='', jdbc_url=None,
-                  ssl=False, custom_http_headers=None):
+                  ssl=False, custom_http_headers=None, driver_version=''):
     """返回 DB-API 2.0 兼容的 JDBC 连接包装（JdbcConnectionWrapper）。
 
     Raises:
@@ -860,7 +873,8 @@ def get_connection(host, port, user, password, database='', jdbc_url=None,
     inspector = ClickHouseJdbcInspector(
         host, int(port), user, password,
         database=database, jdbc_url=jdbc_url, ssl=ssl,
-        custom_http_headers=custom_http_headers)
+        custom_http_headers=custom_http_headers,
+        driver_version=driver_version)
     ok, msg = inspector.connect()
     if not ok:
         raise RuntimeError('ClickHouse JDBC 连接失败: %s' % msg)
@@ -868,7 +882,8 @@ def get_connection(host, port, user, password, database='', jdbc_url=None,
 
 
 # ── 数据源获取函数（供 web_ui.py 使用）─────────────────────────────
-def getData(ip, port, user, password, ssh_info=None, template_id=None):
+def getData(ip, port, user, password, ssh_info=None, template_id=None,
+            driver_version=''):
     """获取 ClickHouse 数据源。
 
     返回 CompatWrapper 对象，web_ui 通过 wrapper.checkdb('builtin')
@@ -887,6 +902,7 @@ def getData(ip, port, user, password, ssh_info=None, template_id=None):
         ip, int(port), user, password,
         database=database, jdbc_url=jdbc_url, ssl=ssl,
         custom_http_headers=custom_http_headers,
+        driver_version=driver_version,
         ssh_info=ssh_info, template_id=template_id)
     ok, msg = inspector.connect()
     if not ok:
@@ -954,7 +970,8 @@ def get_task_config():
                  'jdbc_url': info.get('jdbc_url', ''),
                  'ssl': bool(info.get('ssl', False)),
                  'custom_http_headers': info.get('custom_http_headers', {}),
-             }, 'template_id': info.get('template_id')}
+             }, 'template_id': info.get('template_id'),
+             'driver_version': info.get('driver_version', '')}
         ),
         'conn_attr': '',  # getData 返回 CompatWrapper，跳过 conn_attr 检查
         'filename_key': 'webui.clickhouse_jdbc_report_filename',

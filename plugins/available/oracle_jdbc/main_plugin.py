@@ -127,7 +127,8 @@ class OracleJdbcInspector(BaseInspectionEngine):
     """Oracle JDBC 巡检器"""
 
     def __init__(self, host, port, user, password, service_name='ORCL',
-                 ssh_info=None, template_id=None, sysdba=False, jdbc_url=None):
+                 ssh_info=None, template_id=None, sysdba=False, jdbc_url=None,
+                 driver_version='', use_sid=False):
         """
         初始化 Oracle JDBC 巡检器
 
@@ -139,6 +140,7 @@ class OracleJdbcInspector(BaseInspectionEngine):
         :param ssh_info: SSH 连接信息（可选，用于远程执行命令）
         :param template_id: 巡检模板 ID（可选）
         :param sysdba: 是否以 SYSDBA 身份连接（默认 False）
+        :param driver_version: JDBC 驱动版本（驱动管理登记；空=用激活驱动）
         """
         # 调用父类初始化（不传递 db_type，它在父类中不存在）
         super().__init__(host, int(port), user, password, database=service_name, ssh_info=ssh_info, template_id=template_id)
@@ -147,23 +149,28 @@ class OracleJdbcInspector(BaseInspectionEngine):
         self.service_name = service_name
         self.sysdba = sysdba
         self.jdbc_url = jdbc_url
+        self.driver_version = driver_version or ''
+        self.use_sid = use_sid
         self.conn = None
         self.cursor = None
         self.checkdb_result = []
-        self.jdbc_driver_path = self._find_jdbc_driver()
+        self.jdbc_driver_path = self._find_jdbc_driver(self.driver_version)
 
-    def _find_jdbc_driver(self):
-        """查找 JDBC 驱动文件路径"""
-        # 优先使用 ojdbc8.jar（支持 Oracle 11g+）
-        drivers = [
-            os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', 'drivers', 'ojdbc8.jar'),
-            os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', 'drivers', 'ojdbc6.jar'),
-            os.path.join(os.path.dirname(os.path.abspath(__file__)), 'drivers', 'ojdbc8.jar'),
-            os.path.join(os.path.dirname(os.path.abspath(__file__)), 'drivers', 'ojdbc6.jar'),
-        ]
-        for driver in drivers:
-            if os.path.exists(driver):
-                return driver
+    def _find_jdbc_driver(self, driver_version=None):
+        """查找 JDBC 驱动文件路径。
+
+        统一从「数据库驱动管理」注册中心取指定版本（或激活版本）的 jar。
+        驱动目录已变更为 ``drivers/<db_type>/<version>/<jar>`` 结构化管理，
+        不再保留 ``drivers/ojdbc8.jar`` 等旧硬编码路径；注册中心无登记时
+        返回 None，由调用方提示用户到「数据库驱动管理」页面上传。
+        """
+        try:
+            from modules import driver_registry as _dr
+            _drv = _dr.resolve_jdbc_driver('oracle_jdbc', driver_version)
+            if _drv and _drv.get('jar_path') and os.path.isfile(_drv['jar_path']):
+                return _drv['jar_path']
+        except Exception:
+            pass
         return None
 
     def connect(self):
@@ -182,7 +189,7 @@ class OracleJdbcInspector(BaseInspectionEngine):
             # 1. 启动 JVM（如果尚未启动）
             if not jpype.isJVMStarted():
                 if not self.jdbc_driver_path or not os.path.exists(self.jdbc_driver_path):
-                    return False, "JDBC 驱动未找到，请下载 ojdbc8.jar 并放入 drivers/ 目录"
+                    return False, "Oracle JDBC 驱动未在「数据库驱动管理」中登记，请到驱动管理页面上传 Oracle 驱动 jar 后重试"
                 jpype.startJVM(classpath=[self.jdbc_driver_path])
 
             # 2. 注册 JDBC 驱动
@@ -196,7 +203,12 @@ class OracleJdbcInspector(BaseInspectionEngine):
                 # 用户直接提供了完整 JDBC URL（EZConnect / TNS / TCPS 等），原样使用
                 url = self.jdbc_url.strip()
             else:
-                url = f"jdbc:oracle:thin:@//{self.host}:{self.port}/{self.service_name}"
+                if self.use_sid:
+                    # SID 格式：jdbc:oracle:thin:@host:port:SID（冒号分隔，区别于服务名的斜杠分隔）
+                    url = f"jdbc:oracle:thin:@{self.host}:{self.port}:{self.service_name}"
+                else:
+                    # 服务名格式：jdbc:oracle:thin:@//host:port/service_name
+                    url = f"jdbc:oracle:thin:@//{self.host}:{self.port}/{self.service_name}"
 
             # 4. 建立连接（支持 SYSDBA 身份）
             if self.sysdba:
@@ -326,7 +338,7 @@ class OracleJdbcInspector(BaseInspectionEngine):
 
 
 # ── 测试连接函数（供 plugin_loader.py 使用）─────────────────────────────
-def test_connection(host, port, user, password, service_name='ORCL', sysdba=False, jdbc_url=None):
+def test_connection(host, port, user, password, service_name='ORCL', sysdba=False, jdbc_url=None, driver_version='', use_sid=False):
     """
     测试 Oracle JDBC 连接
 
@@ -334,13 +346,16 @@ def test_connection(host, port, user, password, service_name='ORCL', sysdba=Fals
     :param port: Oracle 服务端口
     :param user: Oracle 登录用户名
     :param password: Oracle 登录密码
-    :param service_name: 服务名（可选，默认 ORCL）
+    :param service_name: 服务名/SID（可选，默认 ORCL）
     :param sysdba: 是否使用 SYSDBA 模式（可选，默认 False）
+    :param driver_version: JDBC 驱动版本（驱动管理登记；空=用激活驱动）
+    :param use_sid: 连接串使用 SID 格式（jdbc:oracle:thin:@host:port:SID）而非服务名格式
     :return: (ok, msg) 元组
     """
     try:
         inspector = OracleJdbcInspector(host, int(port), user, password, service_name,
-                                         template_id=None, sysdba=sysdba, jdbc_url=jdbc_url)
+                                         template_id=None, sysdba=sysdba, jdbc_url=jdbc_url,
+                                         driver_version=driver_version, use_sid=use_sid)
         ok, msg = inspector.connect()
         inspector.disconnect()
         return ok, msg
@@ -349,7 +364,7 @@ def test_connection(host, port, user, password, service_name='ORCL', sysdba=Fals
 
 
 # ── 实时监控连接工厂（供 pro/metrics_collector.py 使用）─────────────
-def get_connection(host, port, user, password, service_name='ORCL', sysdba=False, jdbc_url=None):
+def get_connection(host, port, user, password, service_name='ORCL', sysdba=False, jdbc_url=None, driver_version='', use_sid=False):
     """
     返回 DB-API 2.0 兼容的 JDBC 连接包装（JdbcConnectionWrapper），
     供实时监控（metrics_collector）采集 Oracle 指标使用。
@@ -359,7 +374,8 @@ def get_connection(host, port, user, password, service_name='ORCL', sysdba=False
     :raises RuntimeError: 连接失败时抛出，含 JDBC 错误信息
     """
     inspector = OracleJdbcInspector(host, int(port), user, password, service_name,
-                                    sysdba=sysdba, jdbc_url=jdbc_url)
+                                    sysdba=sysdba, jdbc_url=jdbc_url, driver_version=driver_version,
+                                    use_sid=use_sid)
     ok, msg = inspector.connect()
     if not ok:
         raise RuntimeError('Oracle JDBC 连接失败: %s' % msg)
@@ -367,7 +383,7 @@ def get_connection(host, port, user, password, service_name='ORCL', sysdba=False
 
 
 # ── 数据源获取函数（供 web_ui.py 使用）─────────────────────────────
-def getData(ip, port, user, password, database='ORCL', ssh_info=None, template_id=None, service_name=None, sysdba=False):
+def getData(ip, port, user, password, database='ORCL', ssh_info=None, template_id=None, service_name=None, sysdba=False, driver_version='', use_sid=False):
     """
     获取 Oracle JDBC 数据源
 
@@ -378,12 +394,14 @@ def getData(ip, port, user, password, database='ORCL', ssh_info=None, template_i
     :param database: 数据库名（可选，默认值 ORCL）
     :param ssh_info: SSH 连接信息（可选）
     :param template_id: 巡检模板 ID（可选）
-    :param service_name: 服务名（可选，优先级高于 database）
+    :param service_name: 服务名/SID（可选，优先级高于 database）
     :param sysdba: 是否使用 SYSDBA 模式（可选，默认 False）
+    :param driver_version: JDBC 驱动版本（驱动管理登记；空=用激活驱动）
+    :param use_sid: 连接串使用 SID 格式（jdbc:oracle:thin:@host:port:SID）而非服务名格式
     :return: OracleJdbcInspector 对象，失败返回 None
     """
     db_name = service_name or database or 'ORCL'
-    inspector = OracleJdbcInspector(ip, int(port), user, password, db_name, ssh_info, template_id, sysdba=sysdba)
+    inspector = OracleJdbcInspector(ip, int(port), user, password, db_name, ssh_info, template_id, sysdba=sysdba, driver_version=driver_version, use_sid=use_sid)
     ok, msg = inspector.connect()
     if not ok:
         print(f"[Oracle JDBC] 连接失败: {msg}")
@@ -408,7 +426,9 @@ def get_task_config():
             [info['ip'], info['port'], info['user'], info['password']],
             {'ssh_info': {}, 'template_id': template_id,
              'service_name': info.get('service_name', 'ORCL'),
-             'sysdba': bool(info.get('sysdba', False))}
+             'sysdba': bool(info.get('sysdba', False)),
+             'driver_version': info.get('driver_version', ''),
+             'use_sid': bool(info.get('use_sid', False))}
         ),
         'conn_attr': 'conn_db2',
         'filename_key': 'webui.oracle_jdbc_report_filename',

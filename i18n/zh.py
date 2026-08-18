@@ -102,6 +102,7 @@ ZI = {
     "cli_ssh_key_path": "SSH 私钥文件路径: ",
     "cli_ssh_key_not_exist": "❌ SSH 私钥文件不存在: {path}",
     "cli_ssh_password": "SSH 密码: ",
+    "cli_driver_version": "JDBC 驱动版本（留空=用激活驱动）: ",
     "cli_ssh_config_title": "🔐 SSH 系统信息采集配置:",
     "cli_ssh_config_note": "如需获取系统信息（CPU、内存、磁盘等），请配置 SSH 连接",
     "cli_ssh_success": "✅ SSH 连接成功",

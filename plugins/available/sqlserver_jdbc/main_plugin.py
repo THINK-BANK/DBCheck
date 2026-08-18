@@ -307,7 +307,7 @@ class MssqlJdbcInspector(BaseInspectionEngine):
     def __init__(self, host, port, user, password, database=None,
                  ssh_info=None, template_id=None, jdbc_url=None,
                  instance_name="", encrypt=False, trust_server_certificate=True,
-                 chapter_ids=None):
+                 chapter_ids=None, driver_version=''):
         super().__init__(host, int(port), user, password, database=database,
                          ssh_info=ssh_info, template_id=template_id,
                          chapter_ids=chapter_ids)
@@ -322,6 +322,15 @@ class MssqlJdbcInspector(BaseInspectionEngine):
         self.conn_cfg = None
         self._mssql_version_str = 'unknown'
         self._used_encrypt_fallback = False
+        self.driver_version = driver_version or ''
+        self.jdbc_driver_path = None
+        try:
+            from modules import driver_registry as _dr
+            _jars = _dr.resolve_jdbc_driver_jars('sqlserver_jdbc', self.driver_version)
+            if _jars:
+                self.jdbc_driver_path = _jars
+        except Exception:
+            self.jdbc_driver_path = None
 
     # ════════════════════════════════════════════════
     # 连接层
@@ -339,7 +348,7 @@ class MssqlJdbcInspector(BaseInspectionEngine):
 
             # 1. 确保 JVM 启动且驱动 jar 在 classpath（共享单例）
             _jvm = _load_own_jdbc_jvm()
-            _jvm.ensure_jvm()
+            _jvm.ensure_jvm(specific_jars=self.jdbc_driver_path)
             _jvm.register_mssql_driver()
 
             # 2. 构建连接配置（MssqlJdbcConnectionConfig 已在模块级按路径绑定）
@@ -1027,7 +1036,8 @@ class MssqlJdbcInspector(BaseInspectionEngine):
 
 # ── 测试连接函数（供 web_ui / 自测调用）────────────────────────────
 def test_connection(host, port, user, password, database='', jdbc_url=None,
-                    instance_name=None, encrypt=False, trust_server_certificate=True, **kwargs):
+                    instance_name=None, encrypt=False, trust_server_certificate=True,
+                    driver_version='', **kwargs):
     """测试 SQL Server JDBC 连接。
 
     Args:
@@ -1051,6 +1061,7 @@ def test_connection(host, port, user, password, database='', jdbc_url=None,
             instance_name=instance_name or '',
             encrypt=encrypt,
             trust_server_certificate=trust_server_certificate,
+            driver_version=driver_version,
         )
         ok, msg = inspector.connect()
         inspector.disconnect()
@@ -1061,7 +1072,8 @@ def test_connection(host, port, user, password, database='', jdbc_url=None,
 
 # ── 实时监控连接工厂（供 pro/metrics_collector.py 使用）─────────────
 def get_connection(host, port, user, password, database='', jdbc_url=None,
-                   instance_name=None, encrypt=False, trust_server_certificate=True):
+                   instance_name=None, encrypt=False, trust_server_certificate=True,
+                   driver_version=''):
     """返回 DB-API 2.0 兼容的 JDBC 连接包装（JdbcConnectionWrapper）。
 
     Raises:
@@ -1074,6 +1086,7 @@ def get_connection(host, port, user, password, database='', jdbc_url=None,
         instance_name=instance_name or '',
         encrypt=encrypt,
         trust_server_certificate=trust_server_certificate,
+        driver_version=driver_version,
     )
     ok, msg = inspector.connect()
     if not ok:
@@ -1082,7 +1095,7 @@ def get_connection(host, port, user, password, database='', jdbc_url=None,
 
 
 # ── 数据源获取函数（供 web_ui.py 使用）─────────────────────────────
-def getData(ip, port, user, password, ssh_info=None, template_id=None):
+def getData(ip, port, user, password, ssh_info=None, template_id=None, driver_version=''):
     """获取 SQL Server JDBC 数据源。
 
     返回 CompatWrapper 对象，web_ui 通过 wrapper.checkdb('builtin')
@@ -1102,6 +1115,7 @@ def getData(ip, port, user, password, ssh_info=None, template_id=None):
         ip, int(port), user, password,
         database=database, jdbc_url=jdbc_url, instance_name=instance_name,
         encrypt=encrypt, trust_server_certificate=trust_server_certificate,
+        driver_version=driver_version,
         ssh_info=ssh_info, template_id=template_id)
     ok, msg = inspector.connect()
     if not ok:
@@ -1186,7 +1200,8 @@ def get_task_config():
                  'instance_name': info.get('instance_name', ''),
                  'encrypt': bool(info.get('encrypt', False)),
                  'trust_server_certificate': bool(info.get('trust_server_certificate', True)),
-             }, 'template_id': info.get('template_id')}
+             }, 'template_id': info.get('template_id'),
+             'driver_version': info.get('driver_version', '')}
         ),
         'conn_attr': '',  # getData 返回 CompatWrapper，跳过 conn_attr 检查
         'filename_key': 'webui.sqlserver_jdbc_report_filename',

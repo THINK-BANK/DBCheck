@@ -93,6 +93,7 @@ from modules.inspection.engine import (
     RemoteSystemInfoCollector,
     get_host_disk_usage,
 )
+from modules.inspection.chapter_filter import build_chapter_filter_sql  # 章节可选：共享过滤 helper
 
 # jpype.imports 必须在模块顶层导入（注册 java 钩子），否则 from java.sql import DriverManager
 # / from java.util import Properties 等语句无法解析。不会启动 JVM，仅注册 import 钩子。
@@ -266,7 +267,8 @@ class HgdbJdbcInspector(BaseInspectionEngine):
     ]
 
     def __init__(self, host, port, user, password, database=None,
-                 ssh_info=None, template_id=None, jdbc_url=None):
+                 ssh_info=None, template_id=None, jdbc_url=None,
+                 driver_version=''):
         super().__init__(host, int(port), user, password, database=database,
                          ssh_info=ssh_info, template_id=template_id)
         self.db_type = 'hgdb'
@@ -276,6 +278,15 @@ class HgdbJdbcInspector(BaseInspectionEngine):
         self.raw_jdbc_conn = None
         self.conn_cfg = None
         self._hgdb_version_str = 'unknown'
+        self.driver_version = driver_version or ''
+        self.jdbc_driver_path = None
+        try:
+            from modules import driver_registry as _dr
+            _jars = _dr.resolve_jdbc_driver_jars('hgdb', self.driver_version)
+            if _jars:
+                self.jdbc_driver_path = _jars
+        except Exception:
+            self.jdbc_driver_path = None
 
     # ════════════════════════════════════════════════
     # 连接层
@@ -295,7 +306,7 @@ class HgdbJdbcInspector(BaseInspectionEngine):
             # 按绝对路径 + 唯一模块名加载本插件自有的 jdbc_jvm，避免被 db2_jdbc
             # 等同名模块抢注（同名兄弟模块冲突）。
             _jvm = _load_own_jdbc_jvm()
-            _jvm.ensure_jvm()
+            _jvm.ensure_jvm(specific_jars=self.jdbc_driver_path)
             _jvm.register_hgdb_driver()
 
             # 2. 构建连接配置（HgdbConnectionConfig 已在模块级按路径绑定，避免同名模块污染）
@@ -393,11 +404,12 @@ class HgdbJdbcInspector(BaseInspectionEngine):
         import sqlite3
         conn = sqlite3.connect(db_path)
         cur = conn.cursor()
+        _chap_frag, _chap_params = build_chapter_filter_sql(self.chapter_ids, alias='ch')
         cur.execute(
             "SELECT ch.id, ch.chapter_number, ch.chapter_title_zh, ch.chapter_title_en, ch.description "
             "FROM inspection_chapter ch JOIN inspection_template t ON ch.template_id=t.id "
-            "WHERE t.db_type=? ORDER BY ch.chapter_number",
-            (self.db_type,))
+            "WHERE t.db_type=?" + _chap_frag + " ORDER BY ch.chapter_number",
+            (self.db_type,) + tuple(_chap_params))
         chapters = []
         for tid, num, zh, en, desc in cur.fetchall():
             cur2 = conn.cursor()
@@ -554,7 +566,8 @@ class HgdbJdbcInspector(BaseInspectionEngine):
 
 
 # ── 测试连接函数（供 web_ui / 自测调用）────────────────────────────
-def test_connection(host, port, user, password, database='', jdbc_url=None, **kwargs):
+def test_connection(host, port, user, password, database='', jdbc_url=None,
+                    driver_version='', **kwargs):
     """测试 HGDB JDBC 连接。
 
     Args:
@@ -571,7 +584,8 @@ def test_connection(host, port, user, password, database='', jdbc_url=None, **kw
     try:
         inspector = HgdbJdbcInspector(
             host, int(port), user, password,
-            database=database, jdbc_url=jdbc_url)
+            database=database, jdbc_url=jdbc_url,
+            driver_version=driver_version)
         ok, msg = inspector.connect()
         inspector.disconnect()
         return ok, msg
@@ -580,7 +594,8 @@ def test_connection(host, port, user, password, database='', jdbc_url=None, **kw
 
 
 # ── 实时监控连接工厂（供 pro/metrics_collector.py 使用）─────────────
-def get_connection(host, port, user, password, database='', jdbc_url=None):
+def get_connection(host, port, user, password, database='', jdbc_url=None,
+                   driver_version=''):
     """返回 DB-API 2.0 兼容的 JDBC 连接包装（JdbcConnectionWrapper）。
 
     Raises:
@@ -589,7 +604,8 @@ def get_connection(host, port, user, password, database='', jdbc_url=None):
     database = _normalize_hgdb_database(database)
     inspector = HgdbJdbcInspector(
         host, int(port), user, password,
-        database=database, jdbc_url=jdbc_url)
+        database=database, jdbc_url=jdbc_url,
+        driver_version=driver_version)
     ok, msg = inspector.connect()
     if not ok:
         raise RuntimeError('HGDB JDBC 连接失败: %s' % msg)
@@ -597,7 +613,8 @@ def get_connection(host, port, user, password, database='', jdbc_url=None):
 
 
 # ── 数据源获取函数（供 web_ui.py 使用）─────────────────────────────
-def getData(ip, port, user, password, ssh_info=None, template_id=None):
+def getData(ip, port, user, password, ssh_info=None, template_id=None,
+            driver_version=''):
     """获取 HGDB 数据源。
 
     返回 CompatWrapper 对象，web_ui 通过 wrapper.checkdb('builtin')
@@ -613,6 +630,7 @@ def getData(ip, port, user, password, ssh_info=None, template_id=None):
     inspector = HgdbJdbcInspector(
         ip, int(port), user, password,
         database=database, jdbc_url=jdbc_url,
+        driver_version=driver_version,
         ssh_info=ssh_info, template_id=template_id)
     ok, msg = inspector.connect()
     if not ok:
@@ -681,7 +699,8 @@ def get_task_config():
                  'database': info.get('database', ''),
                  'jdbc_url': info.get('jdbc_url', ''),
                  'ssl': bool(info.get('ssl', False)),
-             }, 'template_id': info.get('template_id')}
+             }, 'template_id': info.get('template_id'),
+             'driver_version': info.get('driver_version', '')}
         ),
         'conn_attr': '',  # getData 返回 CompatWrapper，跳过 conn_attr 检查
         'filename_key': 'webui.hgdb_report_filename',

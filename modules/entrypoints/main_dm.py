@@ -9,6 +9,7 @@ from i18n import get_lang, t as _t
 from modules.inspection.engine import BaseInspectionEngine
 from modules.core import entry
 from modules.core.paths import PROJECT_ROOT
+from modules.driver_registry import resolve_jdbc_driver_jars
 import os
 import glob as _glob
 
@@ -29,14 +30,14 @@ import getpass
 # 兼容函数 — 供 web_ui.py 旧代码调用
 # (DmInspector 在下方定义，兼容函数仅在调用时才引用，不会提前报错)
 
-def getData(ip, port, user, password, ssh_info=None, db_name=None, template_id=None):
+def getData(ip, port, user, password, ssh_info=None, db_name=None, template_id=None, driver_version=''):
     """
     原有 API - 创建 DmInspector 实例
 
     注意：这个函数在重构过程中保留，用于兼容 web_ui.py 中的旧代码。
     新代码应该直接使用 DmInspector 类。
     """
-    inspector = DmInspector(ip, port, user, password, db_name, ssh_info, template_id)
+    inspector = DmInspector(ip, port, user, password, db_name, ssh_info, template_id, driver_version=driver_version)
     ok, ver = inspector.connect()
     if not ok:
         return None
@@ -171,9 +172,11 @@ class DmInspector(BaseInspectionEngine):
     继承 BaseInspectionEngine，只需实现 connect() 和 get_template_id()
     """
     
-    def __init__(self, host, port, user, password, database=None, ssh_info=None, template_id=None):
+    def __init__(self, host, port, user, password, database=None, ssh_info=None, template_id=None,
+                 driver_version=''):
         super().__init__(host, port, user, password, database, ssh_info, template_id)
         self.db_type = 'dm8'  # 设置数据库类型
+        self.driver_version = driver_version   # 来自数据源/手动表单；空串=用激活驱动
         self._lang = get_lang()
         
     def connect(self):
@@ -186,10 +189,19 @@ class DmInspector(BaseInspectionEngine):
         从根本上规避 -70089 Encryption module failed to load。
         """
         # ── 优先 JDBC ──────────────────────────────────────────────
+        # 1) 优先驱动管理（用户上传/激活的指定版本 jar）；2) 回退项目根 drivers/dm8/ 自动发现。
+        _jar = None
         try:
-            _jar = _find_dm_jdbc_jar()
+            _resolved = resolve_jdbc_driver_jars('dm', self.driver_version)
+            if _resolved:
+                _jar = _resolved[0]
         except Exception:
             _jar = None
+        if not _jar:
+            try:
+                _jar = _find_dm_jdbc_jar()
+            except Exception:
+                _jar = None
 
         if _jar:
             try:
@@ -267,7 +279,8 @@ def main_cli():
     parser.add_argument('--ssh-host', help=_t("cli_ssh_host"))
     parser.add_argument('--ssh-port', type=int, default=22, help=_t("cli_ssh_port"))
     parser.add_argument('--ssh-user', default='root', help=_t("cli_ssh_user"))
-    parser.add_argument('--ssh-password', help=_t("cli_ssh_password"))
+    parser.add_argument('--ssh-key', help=_t("cli_ssh_key_file"))
+    parser.add_argument('--driver-version', default='', help=_t("cli_driver_version"))
     args = parser.parse_args()
 
     password = args.password
@@ -289,7 +302,8 @@ def main_cli():
         user=args.user,
         password=password,
         database=args.database,
-        ssh_info=ssh_info
+        ssh_info=ssh_info,
+        driver_version=args.driver_version
     )
 
     ok, version = inspector.connect()
