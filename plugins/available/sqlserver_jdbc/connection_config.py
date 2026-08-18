@@ -73,32 +73,26 @@ class MssqlJdbcConnectionConfig:
         Returns:
             可用的 JDBC 连接 URL 字符串
         """
+        # 统一连接层：基础连接串（透传/实例名/encrypt/trust 逻辑）由
+        # modules.jdbc_connector.build_jdbc_url 生成；本插件只追加专属扩展参数。
+        from modules.jdbc_connector import build_jdbc_url as _build_jdbc_url
+        _base = _build_jdbc_url(
+            'sqlserver_jdbc', self.host, self.port,
+            database=self.database,
+            encrypt=bool(self.encrypt),
+            trust_server_certificate=bool(self.trust_server_certificate),
+            jdbc_url=self.jdbc_url,
+            instance_name=self.instance_name,
+        )
         if self.jdbc_url and str(self.jdbc_url).strip().lower().startswith("jdbc:sqlserver"):
             return self.jdbc_url.strip()
-
-        params: list = [f"databaseName={self.database or 'master'}"]
-
-        if self.encrypt:
-            params.append("encrypt=true")
-            params.append(f"trustServerCertificate={'true' if self.trust_server_certificate else 'false'}")
-            params.append("sslProtocol=TLSv1.2")
-        else:
-            # encrypt=false 时 trustServerCertificate 无意义；保留 false 也会触发
-            # 某些驱动版本/服务器配置的异常 SSL 路径，因此直接省略该参数。
-            params.append("encrypt=false")
-
-        params.append(
-            f"loginTimeout={int(self.login_timeout_s) if self.login_timeout_s and self.login_timeout_s > 0 else 10}"
+        # 专属扩展参数段（loginTimeout/applicationName/认证方式，SQL Server 特有）
+        _extras = (
+            f";loginTimeout={int(self.login_timeout_s) if self.login_timeout_s and self.login_timeout_s > 0 else 10}"
+            f";applicationName={self.application_name or 'DBCheck'}"
+            ";authentication=NotSpecified"
         )
-        params.append(f"applicationName={self.application_name or 'DBCheck'}")
-        params.append("authentication=NotSpecified")
-
-        common_params = ";".join(params)
-
-        if self.instance_name:
-            # 命名实例：不带端口；MS JDBC 通过 SQL Browser 解析
-            return f"jdbc:sqlserver://{self.host};instanceName={self.instance_name};{common_params}"
-        return f"jdbc:sqlserver://{self.host}:{int(self.port) if self.port else 1433};{common_params}"
+        return _base + _extras
 
     def build_properties(self) -> Dict[str, str]:
         """构建 JDBC 连接属性字典。

@@ -198,17 +198,14 @@ class OracleJdbcInspector(BaseInspectionEngine):
             from java.util import Properties
             jpype.JClass('oracle.jdbc.driver.OracleDriver')()
 
-            # 3. 构建连接 URL
-            if self.jdbc_url and self.jdbc_url.strip().lower().startswith('jdbc:oracle'):
-                # 用户直接提供了完整 JDBC URL（EZConnect / TNS / TCPS 等），原样使用
-                url = self.jdbc_url.strip()
-            else:
-                if self.use_sid:
-                    # SID 格式：jdbc:oracle:thin:@host:port:SID（冒号分隔，区别于服务名的斜杠分隔）
-                    url = f"jdbc:oracle:thin:@{self.host}:{self.port}:{self.service_name}"
-                else:
-                    # 服务名格式：jdbc:oracle:thin:@//host:port/service_name
-                    url = f"jdbc:oracle:thin:@//{self.host}:{self.port}/{self.service_name}"
+            # 3. 构建连接 URL（统一连接层：use_sid/服务名/EZConnect 透传逻辑集中一处）
+            from modules.jdbc_connector import build_jdbc_url as _build_jdbc_url
+            url = _build_jdbc_url(
+                'oracle_jdbc', self.host, self.port,
+                service_name=self.service_name,
+                use_sid=bool(self.use_sid),
+                jdbc_url=self.jdbc_url,
+            )
 
             # 4. 建立连接（支持 SYSDBA 身份）
             if self.sysdba:

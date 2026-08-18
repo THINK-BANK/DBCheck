@@ -189,43 +189,39 @@ class DmInspector(BaseInspectionEngine):
         从根本上规避 -70089 Encryption module failed to load。
         """
         # ── 优先 JDBC ──────────────────────────────────────────────
-        # 1) 优先驱动管理（用户上传/激活的指定版本 jar）；2) 回退项目根 drivers/dm8/ 自动发现。
-        _jar = None
+        # 统一连接层（modules/jdbc_connector）：驱动管理优先（driver_version），
+        # 回退项目根 drivers/dm8/ 自动发现；连接失败走 dmPython 回退。
+        _conn = None
+        _meta = {}
         try:
-            _resolved = resolve_jdbc_driver_jars('dm', self.driver_version)
-            if _resolved:
-                _jar = _resolved[0]
-        except Exception:
-            _jar = None
-        if not _jar:
-            try:
-                _jar = _find_dm_jdbc_jar()
-            except Exception:
-                _jar = None
+            from modules.jdbc_connector import open_jdbc_connection
+            _conn, _meta = open_jdbc_connection(
+                'dm', self.host, self.port, self.user, self.password,
+                driver_version=self.driver_version,
+                fallback_dirs=[os.path.join(str(PROJECT_ROOT), 'drivers', 'dm8'),
+                               os.path.join(str(PROJECT_ROOT), 'drivers', 'dm')],
+                recursive=True,
+            )
+        except Exception as e:  # noqa: BLE001
+            print("DM8 统一连接层调用失败，回退 dmPython:", e)
 
-        if _jar:
+        if _conn is not None:
+            self.conn = _conn
+            self.cursor = self.conn.cursor()
             try:
-                import jaydebeapi
-                _setup_jvm_for_dm(_jar)
-                _url = 'jdbc:dm://%s:%d' % (self.host, int(self.port))
-                self.conn = jaydebeapi.connect(
-                    'dm.jdbc.driver.DmDriver', _url,
-                    [self.user, self.password], [_jar])
-                self.cursor = self.conn.cursor()
+                self.cursor.execute("SELECT VERSION$ FROM V$VERSION")
+                version = self.cursor.fetchone()[0]
+            except Exception:
                 try:
-                    self.cursor.execute("SELECT VERSION$ FROM V$VERSION")
+                    self.cursor.execute("SELECT BANNER FROM V$VERSION WHERE ROWNUM=1")
                     version = self.cursor.fetchone()[0]
                 except Exception:
-                    try:
-                        self.cursor.execute("SELECT BANNER FROM V$VERSION WHERE ROWNUM=1")
-                        version = self.cursor.fetchone()[0]
-                    except Exception:
-                        version = 'Unknown'
-                self.context['version'] = [{'VERSION': version}]
-                print(_t("dm8_connect_success").format(host=self.host, port=self.port))
-                return True, version
-            except Exception as e:  # noqa: BLE001 - JDBC 失败回退 dmPython
-                print("DM8 JDBC 连接失败，回退 dmPython:", e)
+                    version = 'Unknown'
+            self.context['version'] = [{'VERSION': version}]
+            print(_t("dm8_connect_success").format(host=self.host, port=self.port))
+            return True, version
+        else:
+            print("DM8 JDBC 连接失败，回退 dmPython:", (_meta or {}).get('error', ''))
 
         # ── 回退 dmPython ──────────────────────────────────────────
         try:

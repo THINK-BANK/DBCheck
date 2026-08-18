@@ -2263,6 +2263,7 @@ def test_plugin_connection(db_type, host, port, user, password, **kwargs):
 #  "注册表 + 插件 connect_test 字段" 查表。新增复用已有协议的插件只需在
 #  plugin.json 写 connect_test: "mysql"/"pg"/...，无需在此改 elif。
 # ═══════════════════════════════════════════════════════════════════════════
+from modules.driver_registry import JDBC_PLUGIN_TO_CATALOG
 from modules.db_types.dbtype_registry import (
     CONNECTION_TESTERS,
     get_db_meta,
@@ -2727,8 +2728,10 @@ def _ct_mongodb(data, flavor):
 JDBC_SUBPROCESS_DB_TYPES = ('hgdb', 'db2', 'sqlserver_jdbc', 'oracle_jdbc', 'oracle')
 JDBC_TEST_TIMEOUT = 30  # 秒；需覆盖 JVM 冷启动(3~10s) + JDBC 登录超时(10~15s)
 
-# 需要整条巡检任务隔离到子进程的数据库类型（均依赖进程内 JVM/JPype）
-JVM_INSPECTION_DB_TYPES = ('hgdb', 'db2', 'sqlserver_jdbc', 'oracle_jdbc', 'dm')
+# 需要整条巡检任务隔离到子进程的数据库类型（均依赖进程内 JVM/JPype）。
+# 与 driver_registry.JDBC_PLUGIN_TO_CATALOG 对齐：6 个 JDBC 插件 + 核心内置 dm/gbase，
+# 任何新增 JDBC 类型必须同步加入，否则主进程内启 JVM 会钉死 gevent hub。
+JVM_INSPECTION_DB_TYPES = ('hgdb', 'db2', 'sqlserver_jdbc', 'oracle_jdbc', 'dm', 'gbase', 'clickhouse', 'uxdb')
 JDBC_INSPECTION_TIMEOUT = 3600  # 巡检任务整体硬超时（秒）
 
 
@@ -4357,7 +4360,8 @@ def api_start_inspection():
                 if db_info.get('connection_mode') is None:
                     db_info['connection_mode'] = 'jdbc'
             # JDBC 驱动管理：从数据源实例透传 驱动版本(driver_version) 与 Oracle SID 模式(use_sid)
-            if db_type in ('oracle_jdbc', 'sqlserver_jdbc', 'db2_jdbc', 'hgdb_jdbc', 'clickhouse_jdbc', 'uxdb_jdbc'):
+            # （判定用单一注册源 JDBC_PLUGIN_TO_CATALOG，覆盖 6 插件 + 核心内置 dm/gbase）
+            if db_type in JDBC_PLUGIN_TO_CATALOG:
                 if instance.get('driver_version') is not None:
                     db_info['driver_version'] = instance.get('driver_version')
                 if db_type == 'oracle_jdbc':
@@ -4408,7 +4412,8 @@ def api_start_inspection():
                 if db_info.get('connection_mode') is None:
                     db_info['connection_mode'] = 'jdbc'
             # JDBC 驱动管理：手动输入的 驱动版本(driver_version) 与 Oracle SID 模式(use_sid)
-            if db_type in ('oracle_jdbc', 'sqlserver_jdbc', 'db2_jdbc', 'hgdb_jdbc', 'clickhouse_jdbc', 'uxdb_jdbc'):
+            # （判定用单一注册源 JDBC_PLUGIN_TO_CATALOG，覆盖 6 插件 + 核心内置 dm/gbase）
+            if db_type in JDBC_PLUGIN_TO_CATALOG:
                 if data.get('driver_version') is not None:
                     db_info['driver_version'] = data.get('driver_version')
                 if db_type == 'oracle_jdbc':
@@ -5392,6 +5397,9 @@ def api_scheduler_add():
                     'ssh_user': data.get('ssh_user', None),
                     'ssh_password': data.get('ssh_password', ''),
                     'ssh_key_file': data.get('ssh_key_file', ''),
+                    # JDBC 驱动管理：驱动版本与 Oracle SID 模式（前端 saveJob 已透传，此前被丢弃）
+                    'driver_version': data.get('driver_version') or None,
+                    'use_sid': bool(data.get('use_sid', False)),
                 }
             }
 

@@ -4951,14 +4951,16 @@ function formatBytes(bytes) {
       }
 
       // 插件 db_type → 驱动管理 catalog key 映射（与 driver_registry.JDBC_PLUGIN_TO_CATALOG 一致）
-      // ★ 单一注册源：新增 JDBC 类型只改这里。oracle_jdbc 等是 JDBC，oracle（原生）不是。
+      // ★ 单一注册源：新增 JDBC 类型只改这里。key 必须是「分派令牌」：
+      //   oracle_jdbc / sqlserver_jdbc 令牌即带 _jdbc；db2/hgdb/clickhouse/uxdb
+      //   插件的注册 id 是 db2_jdbc 等，但下拉/巡检令牌是原生名（与 plugin.json db_type 一致）。
       var _JDBC_CATALOG = {
         'oracle_jdbc':     'oracle',
         'sqlserver_jdbc':  'sqlserver',
-        'db2_jdbc':        'db2',
-        'hgdb_jdbc':       'highgo',
-        'clickhouse_jdbc': 'clickhouse',
-        'uxdb_jdbc':       'uxdb',
+        'db2':             'db2',
+        'hgdb':            'highgo',
+        'clickhouse':      'clickhouse',
+        'uxdb':            'uxdb',
         'dm':              'dm',         // 核心内置 JDBC（达梦）
         'gbase':           'gbase8s'     // 核心内置 JDBC（GBase 8s/8t 驱动类）
       };
@@ -4966,7 +4968,7 @@ function formatBytes(bytes) {
       function isJdbcType(dbType) {                     // 统一判定入口（取代 4 处硬编码 indexOf/||）
         return _JDBC_TYPES.indexOf(dbType) >= 0;
       }
-      function jdbcCatalogOf(dbType) {                  // plugin-id → 驱动管理 catalog key
+      function jdbcCatalogOf(dbType) {                  // 分派令牌 → 驱动管理 catalog key
         return _JDBC_CATALOG[dbType] || null;
       }
       async function _loadDriverVersions(dbType, selectedVersion, selectId) {
@@ -5100,8 +5102,9 @@ function formatBytes(bytes) {
           payload.encrypt = document.getElementById('ds-encrypt')?.checked ? 1 : 0;
           payload.trust_server_certificate = document.getElementById('ds-trust-server-cert')?.checked ? 1 : 0;
         }
-        // JDBC 驱动版本（驱动管理登记；空=用激活版本）
-        if (['oracle_jdbc','sqlserver_jdbc','db2_jdbc','hgdb_jdbc','clickhouse_jdbc','uxdb_jdbc'].indexOf(payload.db_type) >= 0) {
+        // JDBC 驱动版本（驱动管理登记；空=用激活版本）。isJdbcType() 含
+        // 6 个 JDBC 插件 + 核心内置 dm/gbase，避免硬编码 chain 漏类型
+        if (isJdbcType(payload.db_type)) {
           const dv = document.getElementById('ds-driver-version')?.value || '';
           if (dv) payload.driver_version = dv;
         }
@@ -5254,7 +5257,7 @@ function formatBytes(bytes) {
               // 端口放在 onDsDbTypeChange 之后，避免被默认值覆盖
               document.getElementById('ds-port').value = ds.port ?? 3306;
               // 回填 JDBC 驱动版本（延迟到类型切换拉取列表之后，确保选中项生效）
-              if (['oracle_jdbc','sqlserver_jdbc','db2_jdbc','hgdb_jdbc','clickhouse_jdbc','uxdb_jdbc'].indexOf(ds.db_type) >= 0) {
+              if (isJdbcType(ds.db_type)) {
                 setTimeout(function(){ _loadDriverVersions(ds.db_type, ds.driver_version || ''); }, 250);
               }
               // 添加隐藏字段存储ID

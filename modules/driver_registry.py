@@ -464,13 +464,16 @@ def get_active_driver(db_type: str) -> Optional[Dict]:
 # 插件标识常带 _jdbc 后缀（oracle_jdbc/sqlserver_jdbc），而驱动注册表用 catalog
 # key（oracle/sqlserver）。本映射让插件无需关心 catalog key，统一经 resolve_jdbc_driver
 # 取驱动；未列出的类型按自身名直查（如 dm 即 catalog key 'dm'）。
+# ⚠️ key 必须是「巡检/数据源分派令牌」：oracle_jdbc / sqlserver_jdbc 是令牌本身，
+#    而 db2/hgdb/clickhouse/uxdb 插件的注册 id 是 db2_jdbc 等，但分派令牌是原生名
+#    （db2/hgdb/clickhouse/uxdb），与前端 db_type 下拉、plugin.json db_type 一致。
 JDBC_PLUGIN_TO_CATALOG = {
     'oracle_jdbc': 'oracle',
     'sqlserver_jdbc': 'sqlserver',
-    'db2_jdbc': 'db2',
-    'hgdb_jdbc': 'highgo',
-    'clickhouse_jdbc': 'clickhouse',
-    'uxdb_jdbc': 'uxdb',
+    'db2': 'db2',
+    'hgdb': 'highgo',
+    'clickhouse': 'clickhouse',
+    'uxdb': 'uxdb',
     'dm': 'dm',
     'gbase': 'gbase8s',   # 核心内置 GBase 走 JDBC（com.gbasedbt.jdbc.Driver；同源也覆盖 gbase8a）
 }

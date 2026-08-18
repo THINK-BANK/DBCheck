@@ -245,18 +245,25 @@ def _gbase_jdbc_url(host, port, database, gbase_server_name='gbase01'):
 def connect_gbase_jdbc(host, port, user, password, database='', gbase_server_name='gbase01', driver_version=''):
     """GBase 8s JDBC 连接统一入口（供 web_ui 的「列数据库」「列表/视图」端点复用）。
 
+    内部走 modules.jdbc_connector 统一连接层（url 模板 + 驱动解析 + JVM + 建连），
+    与 DM / 6 个 JDBC 插件共用同一套连接方法，GBase 只贡献自己的连接串模板。
+
     Returns:
         (conn, jar_basename_or_None)  连接成功时返回 (jaydebeapi.Connection, basename)；
         失败时抛 RuntimeError，包含可读原因。
     """
-    jdbc_url, url_err = _gbase_jdbc_url(host, port, database, gbase_server_name)
-    if not jdbc_url:
-        raise RuntimeError(url_err or 'JDBC URL 构造失败')
-    conn, jar, err = _open_gbase_jdbc(host, port, user, password, database, gbase_server_name,
-                                       jdbc_url, driver_version)
-    if err:
-        raise RuntimeError(err)
-    return conn, os.path.basename(jar) if jar else None
+    from modules.jdbc_connector import open_jdbc_connection
+
+    conn, meta = open_jdbc_connection(
+        'gbase', host, port, user, password,
+        driver_version=driver_version,
+        database=database or None,
+        gbase_server_name=gbase_server_name,
+        fallback_dirs=[os.path.join(str(PROJECT_ROOT), 'drivers', 'gbase')],
+    )
+    if conn is None:
+        raise RuntimeError((meta or {}).get('error') or 'GBase 8s JDBC 连接失败')
+    return conn, (meta or {}).get('driver')
 
 
 def _open_gbase_jdbc(host, port, user, password, database, gbase_server_name, jdbc_url, driver_version=''):

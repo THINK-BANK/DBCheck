@@ -63,7 +63,9 @@ class Db2ConnectionConfig:
         """
         if self.jdbc_url and str(self.jdbc_url).strip().lower().startswith("jdbc:db2"):
             return self.jdbc_url.strip()
-        return f"jdbc:db2://{self.host}:{self.port}/{self.database}"
+        # 统一连接层：基础连接串由 modules.jdbc_connector 生成（每种库只差模板）
+        from modules.jdbc_connector import build_jdbc_url as _build_jdbc_url
+        return _build_jdbc_url('db2', self.host, self.port, database=self.database)
 
     def build_properties(self) -> Dict[str, str]:
         """构建 JDBC 连接属性字典。

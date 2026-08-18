@@ -264,20 +264,8 @@ def _test_dm_jdbc(payload):
     ``-70089 Encryption module failed to load``。不另做插件，直接复用本隔离
     子进程（JVM 在 monkey-patch 之外执行，避免钉死 gevent hub）。
     """
-    # 优先驱动管理：用户上传的指定版本 jar
-    _jar = None
-    try:
-        _resolved = resolve_jdbc_driver_jars('dm', (payload.get('kwargs') or {}).get('driver_version') or '')
-        if _resolved:
-            _jar = _resolved[0]
-    except Exception:
-        _jar = None
-    if _jar is None:
-        _jar = _find_dm_jdbc_jar()
-    if _jar is None:
-        return False, ('drivers/dm8/ 下未找到 DmJdbcDriver*.jar。请从达梦官网下载 '
-                       'DM8 JDBC 驱动（推荐 DmJdbcDriver18.jar）并放入该目录。')
-
+    # 统一连接层（modules/jdbc_connector）：驱动管理优先（driver_version），
+    # 回退 <项目根>/drivers/dm8/ 自动发现；连接测试与巡检引擎同一套连接方法。
     _host = payload.get('host')
     try:
         _port = int(payload.get('port') or 5236)
@@ -285,6 +273,7 @@ def _test_dm_jdbc(payload):
         _port = 5236
     _user = payload.get('user') or ''
     _pw = payload.get('password') or ''
+    _dv = (payload.get('kwargs') or {}).get('driver_version') or ''
 
     # TCP 预检：主机不可达时几秒内给出准确原因，不必启 JVM
     _err = _tcp_preflight(_host, _port)
@@ -292,17 +281,23 @@ def _test_dm_jdbc(payload):
         return False, _err
 
     try:
-        import jaydebeapi
-    except Exception as e:  # noqa: BLE001
-        # JDBC 后端（jaydebeapi）缺失 → 回退 dmPython（需本机达梦客户端原生库）。
-        # 本子进程未被 gevent monkey-patch，dmPython 在此执行安全。
-        return _test_dm_dmpython(payload, jdbc_reason=e)
-
-    # DM8 JDBC：驱动类 dm.jdbc.driver.DmDriver，URL jdbc:dm://host:port
-    _url = f'jdbc:dm://{_host}:{_port}'
-    try:
-        _conn = jaydebeapi.connect('dm.jdbc.driver.DmDriver', _url,
-                                   [_user, _pw], _jar)
+        from modules.jdbc_connector import open_jdbc_connection
+        _conn, _meta = open_jdbc_connection(
+            'dm', _host, _port, _user, _pw,
+            driver_version=_dv,
+            fallback_dirs=[os.path.join(str(PROJECT_ROOT), 'drivers', 'dm8'),
+                           os.path.join(str(PROJECT_ROOT), 'drivers', 'dm')],
+            recursive=True,
+        )
+        if _conn is None:
+            _jdbc_err = (_meta or {}).get('error') or ''
+            # -70089：旧版驱动加密模块缺失（dmpython 同样需要达梦客户端 libdmcrypt，
+            # 回退无意义）→ 直接透出带修复指引的错误；其它失败才回退 dmPython。
+            if '-70089' in _jdbc_err or 'Encryption module' in _jdbc_err:
+                return False, _jdbc_err
+            # 驱动缺失 → 回退 dmPython（需本机达梦客户端原生库）。
+            # 本子进程未被 gevent monkey-patch，dmPython 在此执行安全。
+            return _test_dm_dmpython(payload, jdbc_reason=_jdbc_err)
         _cur = _conn.cursor()
         try:
             _cur.execute('SELECT 1')
@@ -310,7 +305,7 @@ def _test_dm_jdbc(payload):
         finally:
             _cur.close()
             _conn.close()
-        return True, f'DM8 连接成功（JDBC 驱动：{os.path.basename(_jar)}）'
+        return True, f'DM8 连接成功（JDBC 驱动：{(_meta or {}).get("driver")}）'
     except Exception as e:  # noqa: BLE001
         return False, f'DM8 JDBC 连接失败：{e}'
 

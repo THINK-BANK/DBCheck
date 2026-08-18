@@ -65,8 +65,10 @@ class ClickHouseConnectionConfig:
         """
         if self.jdbc_url and str(self.jdbc_url).strip().lower().startswith("jdbc:clickhouse"):
             return self.jdbc_url.strip()
-        db_part = "/%s" % self.database.strip() if self.database and self.database.strip() else ""
-        return f"jdbc:clickhouse://{self.host}:{self.port}{db_part}"
+        # 统一连接层：基础连接串由 modules.jdbc_connector 生成（每种库只差模板；
+        # 空库名不产生尾部斜杠，与统一层行为一致）
+        from modules.jdbc_connector import build_jdbc_url as _build_jdbc_url
+        return _build_jdbc_url('clickhouse', self.host, self.port, database=self.database)
 
     @staticmethod
     def _sanitize_header(key: str, value: str) -> bool:
