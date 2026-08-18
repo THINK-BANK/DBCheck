@@ -46,7 +46,7 @@ from modules.core import paths
 from modules.core.paths import INSPECTION_DB
 paths.ensure_migrated()
 
-from flask import Flask, request, jsonify, render_template, Response, send_file, make_response
+from flask import Flask, request, jsonify, render_template, Response, send_file, make_response, session
 from modules.config.version import __version__, EDITION
 from modules.core.brand import PRODUCT_NAME_EN, PRODUCT_NAME_ZH, PRODUCT_FULL_NAME, PRODUCT_TAGLINE_EN
 from flask_socketio import SocketIO, emit, join_room, leave_room
@@ -635,13 +635,17 @@ def _verify_agreement_integrity():
     try:
         _blk = str(PROJECT_ROOT)
         _tpl = os.path.join(_blk, 'web_templates', 'index.html')
+        _self = open(__file__, 'r', encoding='utf-8', errors='ignore').read()
         _ok = True
+
+        # 1) 授权数组校验：优先匹配社区版 var _a_oss，其次专业版 var _a
+        _arr_found = False
         if os.path.exists(_tpl):
             _src = open(_tpl, 'r', encoding='utf-8', errors='ignore').read()
-            _m = re.search(r'var\s+_a\s*=\s*\[(.*?)\];', _src, re.S)
-            if not _m:
-                _ok = False
-            else:
+            _m = re.search(r'var\s+_a_oss\s*=\s*\[(.*?)\];', _src, re.S) \
+              or re.search(r'var\s+_a\s*=\s*\[(.*?)\];', _src, re.S)
+            if _m:
+                _arr_found = True
                 _got = set()
                 for _s in re.findall(r'"([A-Za-z0-9+/=]+)"', _m.group(1)):
                     try:
@@ -650,9 +654,17 @@ def _verify_agreement_integrity():
                         pass
                 if not (_H_C.issubset(_got) or _H_P.issubset(_got)):
                     _ok = False
-        else:
-            _ok = False
-        _self = open(__file__, 'r', encoding='utf-8', errors='ignore').read()
+
+        # 2) 开源社区版未内置专有协议 blob（index.html 无 var _a / var _a_oss）。
+        #    此时改为校验「纪念日强制灰度」设计是否保留——这才是真正要守护的红线。
+        #    若灰度强制逻辑被移除，才判定为条款被破坏。
+        if not _arr_found:
+            if not ('def _enforce_grayscale' in _self
+                    and 'def _inject_grayscale' in _self
+                    and '19 <= now.day <= 21' in _self):
+                _ok = False
+
+        # 3) 自身守卫标记必须存在
         if _d(_M1) not in _self or _d(_M2) not in _self:
             _ok = False
         if not _ok:
@@ -2582,7 +2594,8 @@ def _ct_sqlserver_jdbc(data, flavor):
                    jdbc_url=data.get('jdbc_url') or None,
                    instance_name=data.get('instance_name') or '',
                    encrypt=bool(data.get('encrypt', False)),
-                   trust_server_certificate=bool(data.get('trust_server_certificate', True)))
+                   trust_server_certificate=bool(data.get('trust_server_certificate', True)),
+                   driver_version=data.get('driver_version') or None)
     ok, msg = run_jdbc_test_subprocess('sqlserver_jdbc', data, _kwargs)
     if not ok and _mode == 'auto':
         ok2, msg2 = _odbc()
@@ -3047,7 +3060,8 @@ def _ct_hgdb(data, flavor):
     是「点测试连接界面卡死」的直接来源之一。
     """
     _kwargs = dict(database=data.get('database', '') or '',
-                   jdbc_url=data.get('jdbc_url') or None)
+                   jdbc_url=data.get('jdbc_url') or None,
+                   driver_version=data.get('driver_version') or None)
     ok, msg = run_jdbc_test_subprocess('hgdb', data, _kwargs)
     return _jdbc_conn_result(ok, msg, flavor, 'hgdb')
 
@@ -3065,6 +3079,7 @@ def _ct_oracle_jdbc(data, flavor):
         service_name=data.get('service_name', '') or 'ORCL',
         sysdba=bool(data.get('sysdba', False)),
         jdbc_url=data.get('jdbc_url') or None,
+        driver_version=data.get('driver_version') or None,
     )
     ok, msg = run_jdbc_test_subprocess('oracle_jdbc', data, _kwargs)
     return _jdbc_conn_result(ok, msg, flavor, 'Oracle (JDBC)')
@@ -3073,7 +3088,8 @@ def _ct_oracle_jdbc(data, flavor):
 def _ct_db2(data, flavor):
     _kwargs = dict(database=data.get('database', ''),
                    jdbc_url=data.get('jdbc_url') or None,
-                   ssl=bool(data.get('ssl', False)))
+                   ssl=bool(data.get('ssl', False)),
+                   driver_version=data.get('driver_version') or None)
     ok, msg = run_jdbc_test_subprocess('db2', data, _kwargs)
     return _jdbc_conn_result(ok, msg, flavor, 'db2')
 
@@ -3083,7 +3099,8 @@ def _plugin_conn_fallback(data, flavor):
     db_type = data.get('db_type')
     _kwargs = dict(service_name=data.get('service_name', ''),
                    sysdba=bool(data.get('sysdba', False)),
-                   jdbc_url=data.get('jdbc_url') or None)
+                   jdbc_url=data.get('jdbc_url') or None,
+                   driver_version=data.get('driver_version') or None)
     # 防御性守卫：任何 *_jdbc 类型若未注册到 CONNECTION_TESTERS，绝不在主进程
     # 调插件的 test_connection——那会在 gevent 进程内 startJVM，原生线程钉死 hub
     # 导致整个 Web 界面卡死。一律降级到子进程隔离测试：jdbc_test_cli 按 db_type
@@ -6522,6 +6539,7 @@ def api_pro_datasource_add():
             connection_mode=data.get('connection_mode') or ('jdbc' if _db_type == 'sqlserver_jdbc' else 'odbc'),
             encrypt=bool(data.get('encrypt', False)) if _db_type == 'sqlserver_jdbc' else False,
             trust_server_certificate=bool(data.get('trust_server_certificate', True)) if _db_type == 'sqlserver_jdbc' else True,
+            driver_version=data.get('driver_version', '') or '',
             tags=data.get('tags', []),
             group=data.get('group', 'default'),
             description=data.get('description', ''),
@@ -10609,6 +10627,192 @@ def api_dm8_offline_report(task_id):
         )
     except Exception as e:
         return jsonify({'ok': False, 'msg': f'生成报告失败: {e}'})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JDBC 驱动管理 API（Stage A：仅注册表 + 上传/删除/激活，不改插件）
+# ─────────────────────────────────────────────────────────────────────────────
+# 单文件上传硬上限 200MB（多数 JDBC 驱动 jar ≤ 100MB）
+MAX_DRIVER_UPLOAD_BYTES = 200 * 1024 * 1024
+
+@app.route('/api/drivers/types', methods=['GET'])
+def api_drivers_types():
+    """返回 db_type 清单；?hidden=1 返回已隐藏类型（回收站）"""
+    try:
+        from modules import driver_registry as dr
+        if request.args.get('hidden', '0') in ('1', 'true', 'yes'):
+            types = dr.list_hidden_db_types()
+        else:
+            types = dr.list_db_types()
+        # 统计每个类型的已上传驱动数
+        result = []
+        for t in types:
+            drivers = dr.list_drivers(t['key'])
+            t2 = dict(t)
+            t2['driver_count'] = len(drivers)
+            t2['active_version'] = next((d['version'] for d in drivers if d['is_active']), '')
+            result.append(t2)
+        return jsonify({'ok': True, 'types': result})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)[:200]})
+
+
+@app.route('/api/drivers/types/<db_type>/delete', methods=['POST'])
+def api_drivers_types_delete(db_type):
+    """隐藏（删除）某个数据库类型，同时清理该类型下所有驱动"""
+    try:
+        # 仅管理员可删除数据库/产品类型
+        if not session.get('is_admin', False):
+            return jsonify({'ok': False, 'msg': '只有管理员才能删除数据库类型', 'error': 'permission_denied'}), 403
+        from modules import driver_registry as dr
+        ok, msg = dr.hide_db_type(db_type)
+        return jsonify({'ok': ok, 'msg': msg})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)[:200]})
+
+
+@app.route('/api/drivers/types/<db_type>/restore', methods=['POST'])
+def api_drivers_types_restore(db_type):
+    """恢复之前隐藏的数据库类型"""
+    try:
+        from modules import driver_registry as dr
+        ok, msg = dr.unhide_db_type(db_type)
+        return jsonify({'ok': ok, 'msg': msg})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)[:200]})
+
+
+@app.route('/api/drivers/types', methods=['POST'])
+def api_drivers_types_create():
+    """新增一个用户自定义数据库类型"""
+    try:
+        from modules import driver_registry as dr
+        data = request.get_json(force=True, silent=True) or {}
+        key = (data.get('key') or '').strip()
+        name_zh = (data.get('name_zh') or '').strip()
+        name_en = (data.get('name_en') or '').strip()
+        driver_class_hint = (data.get('driver_class_hint') or '').strip()
+        is_jdbc = bool(data.get('is_jdbc', True))
+        ok, msg = dr.add_custom_db_type(key, name_zh, name_en, driver_class_hint, is_jdbc)
+        return jsonify({'ok': ok, 'msg': msg})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)[:200]})
+
+
+@app.route('/api/drivers/types/<db_type>/delete-custom', methods=['POST'])
+def api_drivers_types_delete_custom(db_type):
+    """真删用户自定义数据库类型（同时清理其下所有驱动）"""
+    try:
+        # 仅管理员可删除数据库/产品类型
+        if not session.get('is_admin', False):
+            return jsonify({'ok': False, 'msg': '只有管理员才能删除数据库类型', 'error': 'permission_denied'}), 403
+        from modules import driver_registry as dr
+        ok, msg = dr.delete_custom_db_type(db_type)
+        return jsonify({'ok': ok, 'msg': msg})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)[:200]})
+
+
+@app.route('/api/drivers/list', methods=['GET'])
+def api_drivers_list():
+    """列出某 db_type 的所有已登记驱动"""
+    try:
+        from modules import driver_registry as dr
+        db_type = request.args.get('db_type', '').strip()
+        if not db_type:
+            return jsonify({'ok': False, 'error': 'db_type 不能为空'})
+        drivers = dr.list_drivers(db_type)
+        return jsonify({'ok': True, 'drivers': drivers, 'db_type': db_type})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)[:200]})
+
+
+@app.route('/api/drivers/upload', methods=['POST'])
+def api_drivers_upload():
+    """
+    上传新的 JDBC 驱动 jar
+    表单字段: file (jar), db_type, version, driver_class (可选，自动用 hint 兜底), note (可选)
+    """
+    try:
+        from modules import driver_registry as dr
+        if 'file' not in request.files:
+            return jsonify({'ok': False, 'error': '未收到文件'})
+        f = request.files['file']
+        # Flask 的 f.filename 是 Content-Disposition 里的原始文件名；curl 没传时
+        # 会给临时名（如 tmp.XXXX.jar）。若文件名不像 jar，回退到占位名。
+        orig_name = (f.filename or '').strip()
+        if not orig_name or not orig_name.lower().endswith('.jar'):
+            # 用 db_type + version 推断默认名
+            from modules import driver_registry as dr
+            hint = next((t['driver_class_hint'] for t in dr.list_db_types() if t['key'] == db_type), db_type or 'driver')
+            # 从 hint 推导：com.mysql.cj.jdbc.Driver → mysql
+            vendor = db_type or 'driver'
+            version_safe = re.sub(r'[^A-Za-z0-9._\-+]', '_', version) if version else '1.0'
+            orig_name = f'{vendor}-{version_safe}.jar'
+            print(f'[driver_upload] 使用兜底文件名: {orig_name}')
+        if not orig_name:
+            return jsonify({'ok': False, 'error': '文件名为空'})
+
+        # 立即校验 Content-Length，防超大上传
+        cl = request.content_length or 0
+        if cl > MAX_DRIVER_UPLOAD_BYTES:
+            return jsonify({'ok': False, 'error': f'文件过大（>{MAX_DRIVER_UPLOAD_BYTES // 1024 // 1024}MB）'})
+
+        db_type = (request.form.get('db_type') or '').strip()
+        version = (request.form.get('version') or '').strip()
+        driver_class = (request.form.get('driver_class') or '').strip()
+        note = (request.form.get('note') or '').strip()
+
+        # driver_class 为空时用 catalog 提示兜底
+        if not driver_class:
+            hint = next((t['driver_class_hint'] for t in dr.list_db_types() if t['key'] == db_type), '')
+            driver_class = hint
+
+        # 保存到临时文件后传给 driver_registry.add_driver
+        import tempfile, os
+        suffix = os.path.splitext(orig_name)[1] or '.jar'
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+        f.save(tmp.name)
+        tmp.close()
+
+        ok, msg, new_id = dr.add_driver(
+            db_type=db_type, version=version, driver_class=driver_class,
+            src_path=tmp.name, original_filename=orig_name, note=note
+        )
+        # 清理临时文件（add_driver 成功后已移走）
+        try:
+            if os.path.exists(tmp.name):
+                os.remove(tmp.name)
+        except Exception:
+            pass
+
+        if not ok:
+            return jsonify({'ok': False, 'error': msg})
+        return jsonify({'ok': True, 'msg': msg, 'id': new_id})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)[:200]})
+
+
+@app.route('/api/drivers/<int:driver_id>/delete', methods=['POST'])
+def api_drivers_delete(driver_id):
+    """删除驱动（同时移走 jar 文件）"""
+    try:
+        from modules import driver_registry as dr
+        ok, msg = dr.delete_driver(driver_id)
+        return jsonify({'ok': ok, 'msg': msg})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)[:200]})
+
+
+@app.route('/api/drivers/<int:driver_id>/activate', methods=['POST'])
+def api_drivers_activate(driver_id):
+    """设为该 db_type 的默认驱动"""
+    try:
+        from modules import driver_registry as dr
+        ok, msg = dr.activate_driver(driver_id)
+        return jsonify({'ok': ok, 'msg': msg})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)[:200]})
 
 
 def main():

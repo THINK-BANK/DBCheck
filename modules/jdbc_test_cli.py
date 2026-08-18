@@ -98,6 +98,18 @@ def _find_plugin_dir(db_type):
             if path and os.path.isdir(path):
                 return path, None
             return None, f'插件目录不存在: {path}'
+    # 二次归一：前端常发带 _jdbc 后缀的 db_type（clickhouse_jdbc/uxdb_jdbc），
+    # 而插件 plugin.json 声明为 clickhouse/uxdb。去掉后缀再匹配一次。
+    norm = db_type[:-5] if isinstance(db_type, str) and db_type.endswith('_jdbc') else None
+    if norm:
+        for p in plugins:
+            if not p.get('enabled'):
+                continue
+            if p.get('db_type') == norm or norm in (p.get('db_types') or []):
+                path = p.get('path')
+                if path and os.path.isdir(path):
+                    return path, None
+                return None, f'插件目录不存在: {path}'
     return None, f'插件 {db_type} 未启用或不存在'
 
 
