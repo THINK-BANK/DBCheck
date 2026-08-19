@@ -336,22 +336,15 @@ class MssqlJdbcInspector(BaseInspectionEngine):
     # 连接层
     # ════════════════════════════════════════════════
     def connect(self) -> Tuple[bool, str]:
-        """连接 SQL Server 数据库（JPype + JDBC）。
+        """连接 SQL Server 数据库（统一连接层 JPype 模式）。
 
         Returns:
             (ok, msg)：ok 为 True 时 msg 是版本可读串；
                           ok 为 False 时 msg 是错误信息。
         """
         try:
-            import jpype
-            import jpype.imports
-
-            # 1. 确保 JVM 启动且驱动 jar 在 classpath（共享单例）
-            _jvm = _load_own_jdbc_jvm()
-            _jvm.ensure_jvm(specific_jars=self.jdbc_driver_path)
-            _jvm.register_mssql_driver()
-
-            # 2. 构建连接配置（MssqlJdbcConnectionConfig 已在模块级按路径绑定）
+            # 1. 构建连接配置（MssqlJdbcConnectionConfig 已在模块级按路径绑定；
+            #    build_jdbc_url/build_properties 均委托统一层）
             cfg = MssqlJdbcConnectionConfig(
                 host=self.host,
                 port=int(self.port),
@@ -365,46 +358,46 @@ class MssqlJdbcInspector(BaseInspectionEngine):
             )
             self.conn_cfg = cfg
 
-            from java.sql import DriverManager
-            from java.util import Properties
-
-            url = cfg.build_jdbc_url()
-            props = Properties()
-            for k, v in cfg.build_properties().items():
-                props.setProperty(str(k), str(v))
-
-            print(f"[MSSQL-JDBC] JDBC URL: {url}")
-
-            try:
-                jdbc_conn = DriverManager.getConnection(url, props)
-                self._used_encrypt_fallback = False
-            except Exception as first_e:
-                err = str(first_e)
-                # encrypt=false 时若错误与 SSL/TLS/encrypt 相关，自动回退到
-                # encrypt=true;trustServerCertificate=true 再试一次，兼容服务
-                # 器强制加密的场景（常见旧版/内网 SQL Server 配置）。
+            # SSL 回退钩子：encrypt=false 时若错误与 TLS/encrypt 相关，自动
+            # 启用 encrypt=true;trustServerCertificate=true 再试一次（兼容
+            # 服务器强制加密场景）。经统一层 on_error 回调注入。
+            def _ssl_retry(e, ctx):
+                err = str(e).lower()
                 _ssl_keywords = (
                     'encrypt', 'ssl', 'tls', 'secure',
                     'trustservercertificate', 'certificate', 'handshake',
                     'unexpected_message', 'did not return a response',
                 )
-                if (not cfg.encrypt) and any(k in err.lower() for k in _ssl_keywords):
+                if (not cfg.encrypt) and any(k in err for k in _ssl_keywords):
                     cfg.encrypt = True
                     cfg.trust_server_certificate = True
-                    url2 = cfg.build_jdbc_url()
-                    print(f"[MSSQL-JDBC] 首次连接因 TLS/encrypt 失败，尝试启用 TLS 回退: {url2}")
-                    try:
-                        jdbc_conn = DriverManager.getConnection(url2, props)
-                        self._used_encrypt_fallback = True
-                    except Exception as second_e:
-                        raise RuntimeError(
-                            f"{err}（已尝试自动启用 TLS 加密回退，但仍失败: {second_e}）"
-                        ) from second_e
-                else:
-                    raise
+                    self._used_encrypt_fallback = True
+                    print(f"[MSSQL-JDBC] 首次连接因 TLS/encrypt 失败，尝试启用 TLS 回退")
+                    return cfg.build_jdbc_url(), cfg.build_properties()
+                return None
 
-            self.raw_jdbc_conn = jdbc_conn
-            self.conn = JdbcConnectionWrapper(jdbc_conn)
+            # 2. 统一连接层：驱动解析 / JVM 启动 / URL 构造 / props 装配 / 建连
+            from modules.jdbc_connector import open_jdbc_connection
+            conn, meta = open_jdbc_connection(
+                'sqlserver_jdbc', self.host, self.port,
+                user=self.user, password=self.password,
+                driver_version=self.driver_version,
+                database=self.database or 'master',
+                jdbc_url=self.jdbc_url or '',
+                encrypt=self.encrypt,
+                trust_server_certificate=self.trust_server_certificate,
+                mode='jpype',
+                properties=cfg.build_properties(),
+                on_error=_ssl_retry,
+                instance_name=self.instance_name or '',
+                login_timeout_s=cfg.login_timeout_s,
+                application_name=cfg.application_name,
+            )
+            if conn is None:
+                return False, meta['error']
+
+            self.raw_jdbc_conn = conn
+            self.conn = JdbcConnectionWrapper(conn)
             self.cursor = self.conn.cursor()
 
             # 3. 读取版本

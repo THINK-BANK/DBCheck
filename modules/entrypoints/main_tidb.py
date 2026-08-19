@@ -31,7 +31,7 @@ class TiDBInspector(BaseInspectionEngine):
     只需实现 connect() 方法，其他逻辑全部在基类中！
     """
 
-    def __init__(self, host, port, user, password, database=None, ssh_info=None, template_id=None):
+    def __init__(self, host, port, user, password, database=None, ssh_info=None, template_id=None, driver_version=''):
         """
         初始化 TiDB 巡检器
 
@@ -42,20 +42,47 @@ class TiDBInspector(BaseInspectionEngine):
         :param database: 要连接的数据库名（可选）
         :param ssh_info: SSH 连接信息字典（可选）
         :param template_id: 巡检模板 ID（可选，指定后使用对应模板的 SQL）
+        :param driver_version: JDBC 驱动版本（可选，驱动管理登记；空=激活版本）
         """
         super().__init__(host, port, user, password, database, ssh_info, template_id)
         self.db_type = 'tidb'
+        self.driver_version = driver_version
 
     def connect(self):
         """
-        连接 TiDB 数据库
-        使用 pymysql 驱动（TiDB 兼容 MySQL 协议）
+        连接 TiDB 数据库（统一 JDBC 优先，回退 pymysql；TiDB 兼容 MySQL 协议）。
 
         返回:
             (ok, version) - ok 为 True 时 version 是版本号，否则是错误信息
         """
-        import pymysql
         try:
+            import os as _os
+            from modules.jdbc_connector import open_jdbc_connection
+            from modules.core.paths import PROJECT_ROOT
+            _conn, _meta = open_jdbc_connection(
+                'tidb', self.host, int(self.port),
+                user=self.user, password=self.password,
+                database=self.database or 'mysql',
+                driver_version=self.driver_version,
+                fallback_dirs=[_os.path.join(str(PROJECT_ROOT), 'drivers', 'mysql')],
+            )
+            if _conn is None:
+                return self._connect_native((_meta or {}).get('error') or 'JDBC 连接失败')
+            self.conn = _conn
+            self.cursor = self.conn.cursor()
+            self.cursor.execute("SELECT VERSION()")
+            ver = self.cursor.fetchone()[0]
+            return True, ver
+        except Exception as e:
+            return self._connect_native(str(e))
+
+    def _connect_native(self, reason=''):
+        """回退：pymysql 原生连接（JDBC 驱动缺失/JVM 异常时）。
+
+        巡检子进程未 gevent monkey-patch，pymysql 原生调用安全。
+        """
+        try:
+            import pymysql
             self.conn = pymysql.connect(
                 host=self.host,
                 port=self.port,
@@ -70,9 +97,10 @@ class TiDBInspector(BaseInspectionEngine):
             self.cursor = self.conn.cursor()
             self.cursor.execute("SELECT VERSION()")
             ver = self.cursor.fetchone()[0]
+            print(f"[TiDB] pymysql 回退连接成功（JDBC: {reason[:80]}...）" if reason else "[TiDB] pymysql 连接成功")
             return True, ver
-        except Exception as e:
-            return False, str(e)
+        except Exception as e2:
+            return False, (f'{reason}；pymysql 回退也失败: {e2}' if reason else str(e2))
 
     def _customize_queries(self, sql_dict):
         """覆盖 MySQL 不兼容的 SQL 查询（TiDB 专用）"""
@@ -156,14 +184,14 @@ class TiDBInspector(BaseInspectionEngine):
 
 
 # ── 保留原有 API 兼容性（供 web_ui.py 旧代码调用）────────────────────
-def getData(ip, port, user, password, ssh_info=None, template_id=None, database=None):
+def getData(ip, port, user, password, ssh_info=None, template_id=None, database=None, driver_version=''):
     """
     原有 API - 创建 TiDBInspector 实例
 
     注意：这个函数在重构过程中保留，用于兼容 web_ui.py 中的旧代码。
     新代码应该直接使用 TiDBInspector 类。
     """
-    inspector = TiDBInspector(ip, port, user, password, database, ssh_info, template_id)
+    inspector = TiDBInspector(ip, port, user, password, database, ssh_info, template_id, driver_version)
     ok, ver = inspector.connect()
     if not ok:
         # 不再吞掉真实错误：直接抛出，由上层（web_ui.run_inspection_task / run_inspection.py）捕获并展示真实原因

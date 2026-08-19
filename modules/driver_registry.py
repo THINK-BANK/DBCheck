@@ -48,7 +48,7 @@ DB_TYPE_CATALOG: List[Dict] = [
     {'key': 'postgresql',    'name_zh': 'PostgreSQL',    'name_en': 'PostgreSQL',    'driver_class_hint': 'org.postgresql.Driver',              'is_jdbc': True,  'order': 5},
     {'key': 'db2',           'name_zh': 'DB2',           'name_en': 'IBM Db2',       'driver_class_hint': 'com.ibm.db2.jcc.DB2Driver',          'is_jdbc': True,  'order': 6},
     {'key': 'dm',            'name_zh': 'DM',            'name_en': 'DM (达梦)',     'driver_class_hint': 'dm.jdbc.driver.DmDriver',            'is_jdbc': True,  'order': 7},
-    {'key': 'kingbase',      'name_zh': 'KingBase',      'name_en': 'KingbaseES',    'driver_class_hint': 'com.kingbase8.jdbc.Driver',          'is_jdbc': True,  'order': 8},
+    {'key': 'kingbase',      'name_zh': 'KingBase',      'name_en': 'KingbaseES',    'driver_class_hint': 'com.kingbase8.Driver',               'is_jdbc': True,  'order': 8},
     {'key': 'oscar',         'name_zh': 'Oscar',         'name_en': 'Oscar (神州通用)', 'driver_class_hint': 'com.oscar.Driver',                 'is_jdbc': True,  'order': 9},
     {'key': 'gbase8a',       'name_zh': 'GBase8A',       'name_en': 'GBase 8a',      'driver_class_hint': 'com.gbase.jdbc.Driver',              'is_jdbc': True,  'order': 10},
     {'key': 'gbase8s',       'name_zh': 'GBase8S',       'name_en': 'GBase 8s',      'driver_class_hint': 'com.gbasedbt.jdbc.Driver',            'is_jdbc': True,  'order': 11},
@@ -65,7 +65,10 @@ DB_TYPE_CATALOG: List[Dict] = [
     {'key': 'doris',         'name_zh': 'Doris',         'name_en': 'Apache Doris',  'driver_class_hint': 'com.mysql.cj.jdbc.Driver',            'is_jdbc': True,  'order': 22},
     {'key': 'oceanbase',     'name_zh': 'OceanBase',     'name_en': 'OceanBase',     'driver_class_hint': 'com.oceanbase.jdbc.Driver',          'is_jdbc': True,  'order': 23},
     {'key': 'tdengine',      'name_zh': 'TDengine',      'name_en': 'TDengine',      'driver_class_hint': 'com.taosdata.jdbc.rsdriver',         'is_jdbc': True,  'order': 24},
-    {'key': 'uxdb',          'name_zh': 'UXDB',          'name_en': 'UXDB (优炫)',   'driver_class_hint': 'uxdb.Driver',                        'is_jdbc': True,  'order': 25},
+    {'key': 'uxdb',          'name_zh': 'UXDB',          'name_en': 'UXDB (优炫)',   'driver_class_hint': 'com.uxsino.uxdb.Driver',          'is_jdbc': True,  'order': 25},
+    {'key': 'ivorysql',      'name_zh': 'IvorySQL',      'name_en': 'IvorySQL',      'driver_class_hint': 'org.postgresql.Driver',            'is_jdbc': True,  'order': 26},
+    {'key': 'yashandb',      'name_zh': 'YashanDB',      'name_en': 'YashanDB (崖山)', 'driver_class_hint': 'com.yashandb.jdbc.Driver',        'is_jdbc': True,  'order': 27},
+    {'key': 'tidb',          'name_zh': 'TiDB',          'name_en': 'TiDB',           'driver_class_hint': 'com.mysql.cj.jdbc.Driver',          'is_jdbc': True,  'order': 28},
 ]
 DB_TYPE_KEYS = frozenset(d['key'] for d in DB_TYPE_CATALOG)
 
@@ -476,7 +479,39 @@ JDBC_PLUGIN_TO_CATALOG = {
     'uxdb': 'uxdb',
     'dm': 'dm',
     'gbase': 'gbase8s',   # 核心内置 GBase 走 JDBC（com.gbasedbt.jdbc.Driver；同源也覆盖 gbase8a）
+    'ivorysql': 'postgresql',  # IvorySQL 兼容 PG 协议，复用 PostgreSQL JDBC 驱动
+    'pg': 'postgresql',        # PostgreSQL 标准 JDBC 驱动
+    'kingbase': 'kingbase',    # KingbaseES 官方驱动（com.kingbase8.Driver，jar 内实测）
+    'yashandb': 'yashandb',    # YashanDB 官方驱动（com.yashandb.jdbc.Driver）
+    'mysql': 'mysql',          # MySQL Connector/J（com.mysql.cj.jdbc.Driver）
+    'mariadb': 'mariadb',      # MariaDB Connector/J（org.mariadb.jdbc.Driver）
+    'tidb': 'mysql',           # TiDB 兼容 MySQL 协议，复用 MySQL Connector/J
+    'oceanbase': 'oceanbase',  # OceanBase 官方驱动（com.oceanbase.jdbc.Driver）
 }
+
+
+def _relocate_jar_path(db_type: str, version: Optional[str], jar_filename: str) -> Optional[str]:
+    """jar_path 失效时按文件名在 drivers/ 下重建绝对路径。
+
+    场景：打包（frozen）环境下 jar_path 存的是开发机绝对路径（如
+    D:\\DBCheck\\drivers\\oracle\\8\\ojdbc8.jar），打包后必然失效；
+    但 drivers/ 目录本身随包（spec data_dirs 含 'drivers'）。这里按
+    catalog/version/jar_filename 三层顺序扫描定位，命中即返回新路径。
+    """
+    if not jar_filename:
+        return None
+    candidates = []
+    # 1) drivers/<catalog>/<version>/<jar_filename>
+    if version:
+        candidates.append(Path(DRIVERS_DIR) / db_type / str(version) / jar_filename)
+    # 2) drivers/<catalog>/<jar_filename>
+    candidates.append(Path(DRIVERS_DIR) / db_type / jar_filename)
+    # 3) drivers/<jar_filename>（散落根目录的 jar，如 jedis-8.0.0.jar）
+    candidates.append(Path(DRIVERS_DIR) / jar_filename)
+    for cand in candidates:
+        if cand.is_file():
+            return str(cand.resolve())
+    return None
 
 
 def get_driver(db_type: str, version: Optional[str] = None) -> Optional[Dict]:
@@ -493,8 +528,11 @@ def get_driver(db_type: str, version: Optional[str] = None) -> Optional[Dict]:
         return None
     c = _conn()
     if version:
+        # 同版本可能登记多条（如 HighGo 专用 jar 与 PG 通用 jar 版本号相同）：
+        # 必须激活优先，否则 LIMIT 1 可能取到非激活驱动导致连接用错 jar。
         row = c.execute(
-            'SELECT * FROM jdbc_driver_registry WHERE db_type=? AND version=? LIMIT 1',
+            'SELECT * FROM jdbc_driver_registry WHERE db_type=? AND version=? '
+            'ORDER BY is_active DESC, uploaded_at DESC LIMIT 1',
             (db_type, version)
         ).fetchone()
     else:
@@ -502,7 +540,15 @@ def get_driver(db_type: str, version: Optional[str] = None) -> Optional[Dict]:
             'SELECT * FROM jdbc_driver_registry WHERE db_type=? AND is_active=1 LIMIT 1',
             (db_type,)
         ).fetchone()
-    return dict(row) if row else None
+    d = dict(row) if row else None
+    if d:
+        # jar_path 失效（打包后绝对路径错位）时按文件名重定位，保证登记数据
+        # 在 exe 分发后依然可用；找不到则保留原值（调用方会走 fallback 兜底）。
+        if not (d.get('jar_path') and os.path.isfile(d['jar_path'])):
+            _new = _relocate_jar_path(d.get('db_type'), d.get('version'), d.get('jar_filename') or '')
+            if _new:
+                d['jar_path'] = _new
+    return d
 
 
 def resolve_jdbc_driver(plugin_db_type: str, version: Optional[str] = None) -> Optional[Dict]:
@@ -537,6 +583,102 @@ def resolve_jdbc_driver_jars(plugin_db_type: str, version: Optional[str] = None)
     if jar and os.path.isfile(jar):
         return [os.path.abspath(jar)]
     return None
+
+
+def seed_driver_registry(seed_path: Optional[str] = None) -> int:
+    """从随包种子 JSON 导入驱动登记（打包分发后首次启动自动补齐）。
+
+    场景：打包（frozen）环境不带 data/（运行时目录），用户拿到 exe 后
+    drivers.db 是空库——但 drivers/ 目录（jar 文件）与 modules/config/
+    （种子 JSON）都已随包。本函数在启动时调用，表为空时从种子导入登记，
+    让「驱动设置」页开箱即用；已登记过的环境（表非空）自动跳过，幂等。
+
+    种子文件默认 ``modules/config/drivers_seed.json``（本地打包前用
+    export_drivers_seed() 生成；勿提交 git——含用户驱动配置）。
+
+    Returns:
+        本次导入的登记条数（0 表示跳过/无种子）。
+    """
+    try:
+        if seed_path is None:
+            seed_path = str(Path(__file__).resolve().parent / 'config' / 'drivers_seed.json')
+        if not os.path.isfile(seed_path):
+            return 0
+        with open(seed_path, encoding='utf-8') as f:
+            seed = json.load(f)
+        rows = seed.get('drivers') or seed if isinstance(seed, list) else (seed.get('drivers') or [])
+        if not isinstance(rows, list) or not rows:
+            return 0
+
+        c = _conn()
+        # 表已有任何登记（哪怕 1 条）→ 视为用户已配置过，跳过整体导入
+        existing = c.execute('SELECT COUNT(*) FROM jdbc_driver_registry').fetchone()[0]
+        if existing:
+            return 0
+
+        _inserted = 0
+        for r in rows:
+            db_type = str(r.get('db_type') or '').strip()
+            jar_filename = str(r.get('jar_filename') or '').strip()
+            version = str(r.get('version') or '').strip()
+            if not db_type or not jar_filename:
+                continue
+            # jar_path 按当前环境重定位（打包后 PROJECT_ROOT 指向 exe 同级/_internal）
+            jar_path = _relocate_jar_path(db_type, version or None, jar_filename)
+            try:
+                c.execute(
+                    'INSERT INTO jdbc_driver_registry'
+                    ' (db_type, version, driver_class, jar_filename, jar_path,'
+                    '  file_size, is_active, uploaded_at, note)'
+                    ' VALUES (?,?,?,?,?,?,?,?,?)',
+                    (
+                        db_type,
+                        version,
+                        str(r.get('driver_class') or ''),
+                        jar_filename,
+                        jar_path,
+                        int(r.get('file_size') or 0),
+                        1 if r.get('is_active') else 0,
+                        str(r.get('uploaded_at') or ''),
+                        str(r.get('note') or ''),
+                    ),
+                )
+                _inserted += 1
+            except sqlite3.IntegrityError:
+                continue
+        c.commit()
+        return _inserted
+    except Exception:  # noqa: BLE001 — 种子导入失败绝不影响启动
+        return 0
+
+
+def export_drivers_seed(seed_path: Optional[str] = None) -> int:
+    """把当前 data/drivers.db 的登记导出为随包种子 JSON（本地打包前执行）。
+
+    只导出元数据（db_type/version/driver_class/jar_filename/is_active/note），
+    不导出 jar_path 绝对路径（打包后无意义，导入时按文件名重定位）。
+
+    Returns:
+        导出的条数。
+    """
+    if seed_path is None:
+        seed_path = str(Path(__file__).resolve().parent / 'config' / 'drivers_seed.json')
+    c = _conn()
+    rows = c.execute(
+        'SELECT db_type, version, driver_class, jar_filename, file_size,'
+        '       is_active, uploaded_at, note FROM jdbc_driver_registry'
+        ' ORDER BY db_type, is_active DESC'
+    ).fetchall()
+    out = {
+        '_comment': '随包种子：驱动登记元数据（不含 jar_path，导入时按文件名重定位）。'
+                    '由 export_drivers_seed() 生成，勿手工编辑；勿提交 git。',
+        'exported_at': __import__('datetime').datetime.now().isoformat(timespec='seconds'),
+        'drivers': [dict(r) for r in rows],
+    }
+    os.makedirs(os.path.dirname(seed_path), exist_ok=True)
+    with open(seed_path, 'w', encoding='utf-8') as f:
+        json.dump(out, f, ensure_ascii=False, indent=2)
+    return len(rows)
 
 
 # ── 入口：模块导入即建表（幂等） ───────────────────────────

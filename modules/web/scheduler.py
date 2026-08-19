@@ -419,17 +419,21 @@ def _run_inspection_core(job_id, db_info, inspector_name, notify_on_done):
             'kingbase': run_kingbase,
         }
 
-        if db_type in runner_map:
+        # 分派优先级：JVM/JDBC 类型一律子进程隔离（最高优先级）。
+        # 背景：内置类型引擎 connect() 已统一走 JDBC（jaydebeapi/JVM），若在主进程
+        # （调度器线程，与 gevent hub 同进程）内启动 JVM，会与 hub 死锁 → 定时巡检
+        # 触发即整个界面卡死/HTTP 无响应（2026-08-20 实测：23:45 定时 ivorysql 巡检
+        # 触发后服务僵死）。与插件类型（hgdb/db2）同根因，统一走
+        # jdbc_inspection_cli 干净子进程，主进程只 spawn + 读 report_path。
+        from modules.jdbc_inspection_cli import JVM_INSPECTION_DB_TYPES
+        if db_type in JVM_INSPECTION_DB_TYPES:
+            report_file = _run_plugin_inspection_subprocess(db_info, inspector_name)
+        elif db_type in runner_map:
+            # 非 JVM 内置类型（oracle=oracledb / sqlserver=pyodbc 原生驱动）主进程安全
             report_file, *_ = runner_map[db_type](db_info, inspector_name, ssh_info)
         else:
-            # 插件类型：JVM 依赖型（hgdb / db2 / sqlserver_jdbc / oracle_jdbc）必须在
-            # 干净子进程中执行，否则进程内 JVM 与 gevent hub 死锁 -> 整个界面卡死
-            # （与 Web「开始巡检」同根因，修复方案亦一致：子进程隔离）。
-            from modules.jdbc_inspection_cli import JVM_INSPECTION_DB_TYPES
-            if db_type in JVM_INSPECTION_DB_TYPES:
-                report_file = _run_plugin_inspection_subprocess(db_info, inspector_name)
-            else:
-                report_file = _run_plugin_inspection(db_info, inspector_name, ssh_info)
+            # 其余插件类型：JVM 依赖型已在上面拦截，此处仅原生驱动插件
+            report_file = _run_plugin_inspection(db_info, inspector_name, ssh_info)
 
         if not report_file:
             raise RuntimeError('Word 报告渲染失败')

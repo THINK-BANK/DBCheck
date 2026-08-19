@@ -4962,7 +4962,15 @@ function formatBytes(bytes) {
         'clickhouse':      'clickhouse',
         'uxdb':            'uxdb',
         'dm':              'dm',         // 核心内置 JDBC（达梦）
-        'gbase':           'gbase8s'     // 核心内置 JDBC（GBase 8s/8t 驱动类）
+        'gbase':           'gbase8s',    // 核心内置 JDBC（GBase 8s/8t 驱动类）
+        'ivorysql':        'postgresql',  // 核心内置 JDBC（IvorySQL 兼容 PG 协议）
+        'pg':              'postgresql',  // PostgreSQL 标准 JDBC
+        'kingbase':        'kingbase',    // KingbaseES 官方 JDBC
+        'yashandb':        'yashandb',    // YashanDB 官方 JDBC
+        'mysql':           'mysql',       // MySQL Connector/J
+        'mariadb':         'mariadb',     // MariaDB Connector/J
+        'tidb':            'mysql',       // TiDB 兼容 MySQL 协议，复用 MySQL 驱动
+        'oceanbase':       'oceanbase'    // OceanBase 官方 JDBC
       };
       var _JDBC_TYPES = Object.keys(_JDBC_CATALOG);     // 所有走 JDBC 的 plugin/核心 db_type
       function isJdbcType(dbType) {                     // 统一判定入口（取代 4 处硬编码 indexOf/||）
@@ -4977,12 +4985,23 @@ function formatBytes(bytes) {
         // 保留当前选择（编辑回填时由 selectedVersion 覆盖）
         var _cur = selectedVersion !== undefined ? selectedVersion : sel.value;
         sel.innerHTML = '<option value="">默认（激活版本）</option>';
+        // 请求序号：新建巡检「切换类型」与「选择数据源」会并发触发两次加载，
+        // 若不做竞态防护，先发的响应晚到会把选项追加到后清空的下拉框 → 重复项。
+        var _reqId = (sel._reqSeq = (sel._reqSeq || 0) + 1);
         var catalogKey = _JDBC_CATALOG[dbType] || dbType;
         try {
           const r = await fetch('/api/drivers/list?db_type=' + encodeURIComponent(catalogKey));
           const d = await r.json();
+          if (sel._reqSeq !== _reqId) return;  // 已有更新的请求，丢弃过期响应
           if (d.ok && d.drivers) {
+            // 同版本可能登记多条（如 HighGo 专用 jar 与 PG 通用 jar 版本号相同），
+            // 下拉框语义是「选版本」→ 按 version 去重；list 已按 is_active 排序，
+            // 先到先得即保留激活版本。
+            var _seenVersions = {};
             d.drivers.forEach(function(drv) {
+              var _v = drv.version || '';
+              if (!_v || _seenVersions[_v]) return;
+              _seenVersions[_v] = true;
               var opt = document.createElement('option');
               opt.value = drv.version;
               var _mark = drv.is_active ? ' ✓激活' : '';
@@ -4991,7 +5010,7 @@ function formatBytes(bytes) {
             });
           }
         } catch (e) { /* 忽略：驱动管理无数据时不阻塞表单 */ }
-        if (_cur) sel.value = _cur;
+        if (_cur && sel._reqSeq === _reqId) sel.value = _cur;
       }
 
       function toggleDsSsh() {
@@ -5576,7 +5595,7 @@ function formatBytes(bytes) {
               <button class="hero-btn hero-btn--ghost" onclick="showPage('intelligence')" data-i18n="webui.home_quick_diagnose">智能诊断</button>
             </div>
           </div>
-          <img class="hero-mascot" src="/mascot.png" alt="{{ product_name }} Mascot">
+          <img class="hero-mascot" id="hero-mascot-img" src="/mascot.png" alt="{{ product_name }} Mascot">
         </section>
 
         <!-- ══ 首屏 6 统计 ══ -->
@@ -7018,7 +7037,7 @@ curl -H "X-API-Key: YOUR_API_KEY" http://localhost:5003/api/v1/inspect/{task_id}
       <!-- ══ Page: Oracle Client Settings ══ -->
       <!-- ══ Page: Database Drivers Management ══ -->
       <div class="page" id="page-oracle-client">
-        <div class="card">
+        <div class="card" style="display:flex;flex-direction:column;flex:1;min-height:0">
           <div class="card-title">
             <span>📦</span>
             <span>数据库驱动管理</span>
@@ -7029,14 +7048,14 @@ curl -H "X-API-Key: YOUR_API_KEY" http://localhost:5003/api/v1/inspect/{task_id}
           <style>
             .drivers-types-pane,.drivers-list-pane{
               background:var(--surface2);border:1px solid var(--border);
-              border-radius:10px;display:flex;flex-direction:column;overflow:hidden
+              border-radius:10px;display:flex;flex-direction:column;overflow:hidden;min-height:0
             }
             .drivers-pane-header{
               padding:10px 14px;border-bottom:1px solid var(--border);
               display:flex;align-items:center;justify-content:space-between;
               font-weight:600;font-size:13px;background:var(--surface)
             }
-            .drivers-types-list{flex:1;overflow-y:auto;max-height:560px}
+            .drivers-types-list{flex:1;overflow-y:auto;min-height:0}
             .drivers-type-item{
               padding:10px 14px;cursor:pointer;display:flex;align-items:center;gap:10px;
               border-bottom:1px solid var(--border);transition:background .15s
@@ -7054,7 +7073,7 @@ curl -H "X-API-Key: YOUR_API_KEY" http://localhost:5003/api/v1/inspect/{task_id}
               background:rgba(156,163,175,0.18);color:var(--text-muted);
               font-size:9.5px;padding:1px 6px;border-radius:4px;font-weight:500
             }
-            .drivers-table-wrap{flex:1;overflow:auto;max-height:560px}
+            .drivers-table-wrap{flex:1;overflow:auto;min-height:0}
             .drivers-table{width:100%;border-collapse:collapse;font-size:12.5px}
             .drivers-table thead th{
               padding:10px 14px;text-align:left;background:var(--surface);
@@ -7102,7 +7121,7 @@ curl -H "X-API-Key: YOUR_API_KEY" http://localhost:5003/api/v1/inspect/{task_id}
               display:flex;align-items:center;justify-content:center;z-index:9999;backdrop-filter:blur(2px)}
           </style>
 
-          <div style="display:grid;grid-template-columns:280px 1fr;gap:16px">
+          <div style="display:grid;grid-template-columns:280px 1fr;gap:16px;flex:1;min-height:0">
             <!-- 左：db_type 类型列表 -->
             <div class="drivers-types-pane">
               <div class="drivers-pane-header">
@@ -8093,8 +8112,10 @@ curl -H "X-API-Key: YOUR_API_KEY" http://localhost:5003/api/v1/inspect/{task_id}
           <!-- 模板列表页面 -->
           <div id="inspection-template-list-page">
             <div class="page-toolbar">
+              {% if user_role == 'admin' %}
               <button class="btn btn-primary btn-sm" onclick="editInspectionTemplate(null)" data-i18n="webui.inspection_create_template">创建模板</button>
               <button class="btn btn-sm" onclick="importInspectionTemplate()" data-i18n="webui.inspection_import">导入</button>
+              {% endif %}
             </div>
             <div id="inspection-template-list" class="inspection-template-list">
               <!-- 动态加载模板列表 -->
@@ -8105,8 +8126,10 @@ curl -H "X-API-Key: YOUR_API_KEY" http://localhost:5003/api/v1/inspect/{task_id}
           <div id="inspection-template-edit-page" style="display:none;">
             <div class="page-toolbar">
               <button class="btn btn-ghost btn-sm" onclick="showInspectionTemplateList()" data-i18n="webui.inspection_back_to_list">返回列表</button>
+              {% if user_role == 'admin' %}
               <button class="btn btn-primary btn-sm" id="inspection-save-template-btn" onclick="saveInspectionTemplate()" data-i18n="webui.inspection_save_template">保存模板</button>
               <button class="btn btn-sm btn-primary" id="inspection-add-chapter-btn" onclick="addInspectionChapter()" data-i18n="webui.inspection_add_chapter">添加章节</button>
+              {% endif %}
               <button class="btn btn-sm" onclick="exportInspectionTemplate()" data-i18n="webui.inspection_export" style="display:none;">导出</button>
             </div>
             <!-- 模板信息编辑区 -->
@@ -15171,6 +15194,384 @@ async function executeFixSql(taskId, sql) {
   font-size: 11px;
 }
 </style>
+<!-- ─── About Modal 样式（恢复自 a609e39）─── -->
+<style>
+  .about-modal-overlay {
+    display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:10000;
+    background:rgba(0,0,0,0.55);backdrop-filter:blur(6px);
+    overflow-y:auto;
+  }
+  .about-modal-box {
+    background:var(--surface);border:1px solid var(--border);border-radius:20px;
+    max-width:560px;width:92%;margin:80px auto;padding:0;
+    position:relative;box-shadow:0 24px 64px rgba(0,0,0,0.4);
+    overflow:hidden;
+  }
+  [data-theme="light"] .about-modal-box {
+    box-shadow:0 24px 64px rgba(0,0,0,0.12), 0 4px 16px rgba(0,0,0,0.06);
+  }
+  .about-hero {
+    background:linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #a855f7 100%);
+    padding:32px 32px 24px;position:relative;overflow:hidden;
+  }
+  .about-hero::before {
+    content:'';position:absolute;top:-50%;right:-30%;width:300px;height:300px;
+    background:radial-gradient(circle, rgba(255,255,255,0.08) 0%, transparent 70%);
+    border-radius:50%;
+  }
+  .about-hero::after {
+    content:'';position:absolute;bottom:-30%;left:-20%;width:200px;height:200px;
+    background:radial-gradient(circle, rgba(255,255,255,0.05) 0%, transparent 70%);
+    border-radius:50%;
+  }
+  .about-hero-inner {
+    display:flex;align-items:center;gap:16px;position:relative;z-index:1;
+  }
+  .about-logo {
+    width:56px;height:56px;border-radius:14px;
+    box-shadow:0 4px 16px rgba(0,0,0,0.2);flex-shrink:0;
+  }
+  .about-hero-text h2 {
+    margin:0;font-size:24px;font-weight:800;color:#fff;letter-spacing:-0.5px;
+  }
+  .about-hero-text .about-sub {
+    font-size:12px;color:rgba(255,255,255,0.7);margin-top:2px;
+    font-weight:500;letter-spacing:0.3px;
+  }
+  .about-close-btn {
+    position:absolute;top:16px;right:16px;z-index:2;
+    background:rgba(255,255,255,0.15);border:none;
+    color:#fff;width:32px;height:32px;border-radius:10px;
+    cursor:pointer;font-size:14px;
+    display:flex;align-items:center;justify-content:center;
+    transition:background 0.2s;
+  }
+  .about-close-btn:hover { background:rgba(255,255,255,0.25); }
+  .about-body { padding:24px 32px 28px; }
+  .about-desc {
+    font-size:14px;line-height:1.8;color:var(--text);margin:0 0 8px;
+  }
+  .about-meta {
+    font-size:12.5px;color:var(--text-muted);margin:0 0 20px;
+    display:flex;flex-wrap:wrap;gap:6px 16px;
+  }
+  .about-meta-item { display:flex;align-items:center;gap:4px; }
+  .about-meta-item a { color:var(--accent2);text-decoration:none; }
+  .about-meta-item a:hover { text-decoration:underline; }
+  .about-dbs {
+    display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;
+  }
+  .about-db-chip {
+    display:inline-flex;align-items:center;gap:5px;
+    padding:5px 12px;
+    background:var(--surface2);border:1px solid var(--border);
+    border-radius:8px;font-size:12px;color:var(--text);font-weight:500;
+    transition:all 0.2s;
+  }
+  .about-db-chip:hover {
+    border-color:var(--primary);background:var(--primary-light);
+    color:var(--primary);transform:translateY(-1px);
+  }
+  .about-db-chip .db-emoji { font-size:14px; }
+  .about-agreement {
+    background:var(--surface2);border:1px solid var(--border);
+    border-radius:12px;padding:14px 16px;margin-bottom:0;
+  }
+  .about-agreement-title {
+    font-size:13px;font-weight:600;color:var(--warn);margin-bottom:8px;
+    display:flex;align-items:center;gap:6px;
+  }
+  .about-agreement-text {
+    margin:0;font-size:12.5px;line-height:1.8;color:var(--text-muted);
+  }
+  .about-footer {
+    text-align:center;padding:0 32px 20px;
+    font-size:11px;color:var(--text-muted);opacity:0.6;
+  }
+
+  /* ─── 实时监控页面样式 ─────────────────────────── */
+  .page-toolbar {
+    padding:10px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;
+  }
+  /* 监控状态指示器 */
+  .mon-status-running { background:#34a853 !important; box-shadow:0 0 6px rgba(52,168,83,0.5); }
+  .mon-status-stopped { background:#ff6765 !important; }
+  .mon-status-unknown { background:#999 !important; }
+
+  /* 严重度标签 */
+  .mon-severity {
+    display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;
+  }
+  .mon-severity-critical { background:rgba(255,103,101,0.15);color:#ff6765; }
+  .mon-severity-warning  { background:rgba(255,160,0,0.15);color:#ffa000; }
+  .mon-severity-normal   { background:rgba(52,168,83,0.15);color:#34a853; }
+
+  /* 连接柱状图 */
+  .mon-bar-row {
+    display:flex;align-items:center;gap:8px;font-size:12px;
+  }
+  .mon-bar-label {
+    width:200px;text-align:right;flex-shrink:0;color:var(--text);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  .mon-bar-track {
+    flex:1;height:22px;background:var(--surface2);border-radius:4px;overflow:hidden;position:relative;
+  }
+  .mon-bar-fill {
+    height:100%;border-radius:4px;transition:width .4s ease;display:flex;align-items:center;justify-content:flex-end;padding-right:6px;
+    font-size:11px;color:#fff;font-weight:600;min-width:fit-content;
+  }
+  .mon-bar-fill-low    { background:linear-gradient(90deg,#34a853,#5ecf6e); }
+  .mon-bar-fill-medium { background:linear-gradient(90deg,#ffa000,#ffca28); }
+  .mon-bar-fill-high   { background:linear-gradient(90deg,#ff6765,#ff8a80); }
+
+  /* 热力图 */
+  .mon-heatmap-table {
+    border-collapse:collapse;font-size:11px;width:100%;
+  }
+  .mon-heatmap-table th {
+    background:var(--surface2);color:var(--text-muted);padding:4px 2px;text-align:center;position:sticky;top:0;font-weight:500;
+  }
+  .mon-heatmap-table td {
+    padding:3px 2px;text-align:center;border:1px solid var(--border-subtle);font-weight:500;
+  }
+  .mon-heat-0 { background:#1a2332;color:#8899aa; }
+  .mon-heat-1 { background:#1b3a4b;color:#4dd0e1; }
+  .mon-heat-2 { background:#1b5e20;color:#69f0ae; }
+  .mon-heat-3 { background:#f57f17;color:#fff176; }
+  .mon-heat-4 { background:#b71c1c;color:#ff8a80; }
+
+  /* SQL 文本截断 */
+  .mon-sql-text {
+    max-width:350px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:'Courier New',monospace;font-size:12px;
+  }
+  .mon-sql-text:hover {
+    white-space:normal;word-break:break-all;max-width:none;
+    position:absolute;z-index:10;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:4px 8px;
+    box-shadow:0 2px 8px rgba(0,0,0,0.3);
+  }
+
+  /* ═══ 实时监控 redesign 2026-06 ═══ */
+
+  /* 数据源类型彩色标签 */
+  .mon-tag {
+    display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;
+    white-space:nowrap;
+  }
+  .mon-tag-mysql     { background:rgba(59,130,246,0.12);color:#60a5fa; }
+  .mon-tag-pg        { background:rgba(139,92,246,0.12);color:#a78bfa; }
+  .mon-tag-ivory     { background:rgba(139,92,246,0.12);color:#a78bfa; }
+  .mon-tag-tidb      { background:rgba(249,115,22,0.12);color:#fb923c; }
+  .mon-tag-oracle    { background:rgba(239,68,68,0.12);color:#f87171; }
+  .mon-tag-dm8       { background:rgba(34,197,94,0.12);color:#4ade80; }
+  .mon-tag-sqlserver { background:rgba(59,130,246,0.12);color:#60a5fa; }
+  .mon-tag-default   { background:rgba(148,163,184,0.12);color:#94a3b8; }
+
+  /* 执行耗时颜色 */
+  .mon-time-high   { color:#f87171;font-weight:600; }
+  .mon-time-med    { color:#fb923c;font-weight:600; }
+  .mon-time-low    { color:#4ade80;font-weight:600; }
+
+  /* 严重度圆点 */
+  .mon-severity-dot {
+    display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:500;
+  }
+  .mon-severity-dot::before {
+    content:'';width:7px;height:7px;border-radius:50%;display:inline-block;
+  }
+  .mon-sev-high   { color:#f87171; }
+  .mon-sev-high::before   { background:#f87171; }
+  .mon-sev-medium { color:#fb923c; }
+  .mon-sev-medium::before { background:#fb923c; }
+  .mon-sev-low    { color:#4ade80; }
+  .mon-sev-low::before    { background:#4ade80; }
+
+  /* 监控筛选栏 */
+  .mon-filter-bar {
+    display:flex;gap:10px;align-items:center;flex-wrap:wrap;
+    margin-bottom:14px;padding:10px 14px;
+    background:var(--surface2);border:1px solid var(--border);border-radius:8px;
+  }
+  .mon-filter-bar select, .mon-filter-bar input {
+    background:var(--surface);border:1px solid var(--border);border-radius:6px;
+    color:var(--text);font-size:13px;padding:5px 10px;
+  }
+
+  /* 监控页 - 控制按钮组（标题右侧） */
+  .mon-page-header { margin-bottom:8px; }
+  .mon-page-title-row {
+    display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;
+  }
+  .mon-page-title-row h2 { margin:0; }
+  .mon-ctrl-group {
+    display:flex;align-items:center;gap:5px;flex-shrink:0;white-space:nowrap;
+  }
+  .mon-ctrl-btn {
+    display:inline-flex;align-items:center;gap:4px;
+    padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600;
+    border:1px solid var(--border);cursor:pointer;transition:all .2s;
+    background:var(--surface2);color:var(--text);
+  }
+  .mon-ctrl-btn:hover { transform:translateY(-1px);box-shadow:0 2px 8px rgba(0,0,0,.12); }
+  .mon-ctrl-start {
+    background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;border:none;
+  }
+  .mon-ctrl-start:hover { background:linear-gradient(135deg,#16a34a,#15803d); }
+  .mon-ctrl-stop {
+    background:linear-gradient(135deg,#ef4444,#dc2626);color:#fff;border:none;
+  }
+  .mon-ctrl-stop:hover { background:linear-gradient(135deg,#dc2626,#b91c1c); }
+  .mon-interval-input {
+    width:40px;padding:3px 4px;border:1px solid var(--border);border-radius:6px;
+    background:var(--surface2);color:var(--text);font-size:12px;text-align:center;
+  }
+
+  .mon-filter-btn {
+    background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;border:none;
+    padding:6px 16px;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;
+    transition:all .2s;
+  }
+  .mon-filter-btn:hover { opacity:.9;transform:translateY(-1px); }
+  .mon-export-link {
+    font-size:12px;color:#60a5fa;text-decoration:none;margin-left:auto;
+    cursor:pointer;
+  }
+  .mon-export-link:hover { text-decoration:underline; }
+
+  /* 自动刷新指示器 */
+  .mon-refresh-indicator {
+    display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-muted);
+    margin-left:auto;
+  }
+  .mon-refresh-dot {
+    width:7px;height:7px;border-radius:50%;
+  }
+  .mon-refresh-dot.running { background:#4ade80;box-shadow:0 0 6px #4ade80; }
+  .mon-refresh-dot.stopped { background:#9ca3af; }
+
+  /* 监控卡片数字颜色 */
+  .mon-count-blue  { color:#60a5fa !important; }
+  .mon-count-red   { color:#f87171 !important; }
+  .mon-count-green { color:#4ade80 !important; }
+  .mon-count-orange{ color:#fb923c !important; }
+  .mon-count-sub {
+    font-size:11px;color:var(--text-muted);margin-top:4px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  .mon-count-trend-up   { color:#f87171; }
+  .mon-count-trend-down { color:#4ade80; }
+
+  /* 连接页面两栏布局 */
+  .mon-conn-layout {
+    display:grid;grid-template-columns:2fr 1fr;gap:16px;
+  }
+  @media(max-width:1100px) {
+    .mon-conn-layout { grid-template-columns:1fr; }
+  }
+
+  /* 连接数柱状图 - 设计稿风格 */
+  .mon-conn-bar-row {
+    display:flex;align-items:center;gap:10px;font-size:12px;margin-bottom:6px;
+  }
+  .mon-conn-bar-label {
+    min-width:140px;max-width:240px;text-align:right;flex-shrink:0;color:var(--text);font-weight:500;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;
+  }
+  .mon-conn-bar-track {
+    flex:1;height:18px;background:var(--surface2);border-radius:4px;overflow:hidden;position:relative;
+    border:1px solid var(--border);
+  }
+  .mon-conn-bar-fill {
+    height:100%;border-radius:3px;transition:width .4s ease;
+  }
+  .mon-conn-bar-fill.low    { background:#4ade80; }
+  .mon-conn-bar-fill.medium { background:#fbbf24; }
+  .mon-conn-bar-fill.high   { background:#f87171; }
+  .mon-conn-bar-num {
+    width:70px;text-align:left;flex-shrink:0;color:var(--text-muted);font-size:11px;font-weight:500;
+  }
+
+  /* 热力图 - 设计稿风格 */
+  .mon-heatmap-wrap {
+    background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;
+  }
+  .mon-heatmap-grid {
+    display:flex;flex-direction:column;gap:3px;
+  }
+  .mon-heatmap-row {
+    display:flex;align-items:center;gap:3px;
+  }
+  .mon-heatmap-label {
+    width:70px;font-size:10px;color:var(--text-muted);text-align:right;flex-shrink:0;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  .mon-heatmap-cell {
+    flex:1;height:22px;border-radius:3px;min-width:28px;
+    display:flex;align-items:center;justify-content:center;
+    font-size:10px;font-weight:500;color:var(--text);
+  }
+  .mon-heatmap-cell.h0 { background:rgba(74,222,128,0.12);color:#4ade80; }
+  .mon-heatmap-cell.h1 { background:rgba(74,222,128,0.30);color:#4ade80; }
+  .mon-heatmap-cell.h2 { background:rgba(251,191,36,0.30);color:#fbbf24; }
+  .mon-heatmap-cell.h3 { background:rgba(249,115,22,0.35);color:#fb923c; }
+  .mon-heatmap-cell.h4 { background:rgba(248,113,113,0.40);color:#f87171; }
+  .mon-heatmap-legend {
+    display:flex;gap:12px;justify-content:center;margin-top:10px;font-size:11px;color:var(--text-muted);
+  }
+  .mon-heatmap-legend span { display:flex;align-items:center;gap:4px; }
+  .mon-heatmap-legend i { width:10px;height:10px;border-radius:2px;display:inline-block; }
+
+  /* 会话表格 - 紧凑风格 */
+  .mon-session-table th { font-size:11px;padding:6px 8px; }
+  .mon-session-table td { font-size:12px;padding:6px 8px; }
+  .mon-session-tag {
+    display:inline-block;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:500;
+    background:rgba(59,130,246,0.12);color:#60a5fa;
+  }
+  .mon-state-executing { color:#4ade80;font-weight:500; }
+  .mon-state-locked    { color:#f87171;font-weight:500; }
+  .mon-state-sleep     { color:#94a3b8; }
+  .mon-state-idle      { color:#94a3b8; }
+</style>
+<!-- ─── UI 美化增强：全局按钮 / 驱动管理（2026-08-19）─── -->
+<style>
+  /* ── 全局按钮细节增强（不破坏现有 class 语义）── */
+  .btn { box-shadow: 0 1px 2px rgba(0,0,0,.18); }
+  .btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,.25); }
+  .btn:active { transform: translateY(0); box-shadow: none; }
+  .btn:focus-visible { outline: 2px solid var(--accent, #00C8A0); outline-offset: 2px; }
+  .btn-primary:hover { background: #123a8f; }
+  .btn-ghost:hover { background: rgba(148,163,184,.08); }
+  .btn-danger:hover { background: rgba(248,81,73,.28); }
+  .btn:disabled { opacity: .55; cursor: not-allowed; transform: none; box-shadow: none; }
+
+  /* ── 裸按钮（无 class）统一基础样式，避免浏览器默认丑陋外观 ── */
+  button:not([class]) {
+    padding: 7px 16px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--surface2, #1A2338); color: var(--text, #F8F9FA);
+    font-size: 13px; cursor: pointer; transition: all .15s ease;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  button:not([class]):hover { border-color: var(--accent, #00C8A0); color: var(--accent, #00C8A0); }
+  button:not([class]):active { transform: scale(.97); }
+
+  /* ── 驱动管理页增强 ── */
+  .drivers-icon-btn { border-radius: 8px; transition: all .18s ease; }
+  .drivers-icon-btn:hover { background: rgba(0,200,160,.12); border-color: var(--accent, #00C8A0); color: var(--accent, #00C8A0); transform: translateY(-1px); }
+  .drivers-icon-btn:active { transform: scale(.92); }
+  .drivers-icon-btn:focus-visible { outline: 2px solid var(--accent, #00C8A0); outline-offset: 2px; }
+  .drivers-type-item { border-radius: 8px; margin-bottom: 2px; }
+  .drivers-type-item.active { border-left: 3px solid var(--accent, #00C8A0); background: rgba(0,200,160,.08); }
+  .drivers-pane-header { font-weight: 600; letter-spacing: .2px; }
+  .drivers-table thead th {
+    position: sticky; top: 0; z-index: 1;
+    background: var(--surface2, #1A2338); font-weight: 600;
+  }
+  .drivers-table tbody tr { transition: background .15s ease; }
+  .drivers-table tbody tr.is-active { border-left: 3px solid var(--success, #10b981); }
+  .drivers-table code { transition: all .15s ease; }
+  .drivers-table code:hover { color: var(--text); border: 1px solid var(--border); }
+</style>
+
 
 <script>
 /* ── Toast 通知系统 ─────────────────────────── */
@@ -15837,6 +16238,13 @@ async function loadMonitorSummary() {
   try {
     const data = await _fetchMonitorInstances();
     monitorSummary = data.instances || [];
+    // 吉祥物健康态：任一实例不可用或报错（非冷却期）→ 告警
+    try {
+      var _anyBad = monitorSummary.some(function(i) {
+        return i.available === false || (i.error && i.status !== 'cooldown');
+      });
+      mascotSetHealth(!_anyBad);
+    } catch(e) {}
     const pill = document.getElementById('monitor-running-pill');
     if (pill && data.running !== undefined) {
       pill.textContent = i18n('webui.home_monitor_running_prefix') + (data.running ? i18n('webui.home_monitor_running_on') : i18n('webui.home_monitor_running_off'));
@@ -17977,10 +18385,44 @@ if (typeof socket !== 'undefined') {
       currentChatTaskId = null;
     }
   });
+
+  // ═══ 首页吉祥物三态切换（正常 / 任务中 / 健康告警）═══
+  // mascot.png=默认 · mascot_02.png=巡检任务进行中 · mascot_01.png=数据源健康告警
+  // 映射可随时调整：改 _setMascotImg 的 src 即可。
+  var _mascotTaskCount = 0;
+  var _mascotAlert = false;
+  function _mascotImg(src) {
+    var el = document.getElementById('hero-mascot-img');
+    if (el) el.src = src;
+  }
+  function updateMascot() {
+    if (_mascotTaskCount > 0) { _mascotImg('/mascot_02.png'); return; }  // 任务优先
+    if (_mascotAlert)         { _mascotImg('/mascot_01.png'); return; }  // 健康告警
+    _mascotImg('/mascot.png');
+  }
+  function mascotTaskStart() { _mascotTaskCount++; updateMascot(); }
+  function mascotTaskEnd()   { if (_mascotTaskCount > 0) _mascotTaskCount--; updateMascot(); }
+  function mascotSetHealth(ok) { _mascotAlert = !ok; updateMascot(); }
+
   // 实时日志（后端 emit('log', ...) 的实时消息）
   socket.on('log', function(data) {
     if (data && data.msg && data.msg.trim()) {
       addChatMessage(data.msg, 'system', false);
+      if (data.msg.indexOf('开始巡检') > -1) mascotTaskStart();
+    }
+  });
+  // 巡检失败/错误（❌ 高亮；此前前端未监听 error 事件，巡检失败时错误信息被丢弃）
+  socket.on('error', function(data) {
+    if (data && data.msg && data.msg.trim()) {
+      addChatMessage('❌ ' + data.msg, 'system', false);
+      mascotTaskEnd();
+    }
+  });
+  // 巡检结束消息（成功完成或失败原因）
+  socket.on('done', function(data) {
+    if (data && data.msg && data.msg.trim()) {
+      addChatMessage(data.msg, 'system', false);
+      mascotTaskEnd();
     }
   });
   // 巡检进度步骤
@@ -21114,6 +21556,9 @@ function mkdirRemote() {
     </div>
 <script src="/static/js/baseline_config.js"></script>
   <script src="/static/js/server_thresholds.js"></script>
+  <!-- 巡检配置管理：写操作（保存/删除/创建）仅管理员可见可用 -->
+  <script>window._IS_ADMIN = ({{ 'true' if user_role == 'admin' else 'false' }});</script>
+  <script src="/static/js/inspection_config.js"></script>
 <!-- 底部状态栏 -->
 <div class="status-bar" id="status-bar">
   <div class="sb-item sb-brand">
@@ -21788,7 +22233,7 @@ const STATIC_DB_PH_MAP = {'pg':'postgres','ivorysql':'ivorysql','kingbase':'king
         // selectDbType 由 loadDbTypes() 动态调用
       }
     } catch (e) {
-      console.error('[DBCheck] 加载数据库类型失败:', e);
+      console.error('[RaccoonX] 加载数据库类型失败:', e);
     }
   }
 
@@ -22028,6 +22473,85 @@ const STATIC_DB_PH_MAP = {'pg':'postgres','ivorysql':'ivorysql','kingbase':'king
     initChartResizeObserver();
   });
   </script>
+
+<!-- ─── About Modal（恢复自 a609e39）─── -->
+<div id="about-modal" class="about-modal-overlay" onclick="closeAboutModal(event)">
+  <div class="about-modal-box" onclick="event.stopPropagation()">
+    <!-- Hero -->
+    <div class="about-hero">
+      <button class="about-close-btn" onclick="closeAboutModal()">✕</button>
+      <div class="about-hero-inner">
+        <img class="about-logo" src="/dbcheck_logo.png" alt="RaccoonX">
+        <div class="about-hero-text">
+          <h2>RaccoonX</h2>
+          <div class="about-sub">数据库智能巡检平台 <span id="about-version">{{ version }}</span></div>
+        </div>
+      </div>
+    </div>
+    <!-- Body -->
+    <div class="about-body">
+      <p class="about-desc" data-i18n="webui.about_desc">
+        浣巡（RaccoonX）是一款数据库智能巡检平台，支持 MySQL、PostgreSQL、Oracle、SQL Server、达梦（DM）、TiDB、IvorySQL、YashanDB 等主流数据库的健康巡检与 AI 诊断。
+      </p>
+      <div class="about-meta">
+        <span class="about-meta-item">作者：Jack Ge (fiyo)</span>
+        <span class="about-meta-item">协议：MIT License</span>
+        <span class="about-meta-item">官网：<a href="https://dbcheck.top" target="_blank">dbcheck.top</a></span>
+      </div>
+
+      <!-- 支持的数据库 -->
+      <div class="about-dbs">
+        <span class="about-db-chip"><img src="/mysql.png" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='inline'" style="width:16px;height:16px;object-fit:contain"><span class="db-emoji" style="display:none;">🐬</span> MySQL</span>
+        <span class="about-db-chip"><img src="/postgresql.png" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='inline'" style="width:16px;height:16px;object-fit:contain"><span class="db-emoji" style="display:none;">🦴</span> PostgreSQL</span>
+        <span class="about-db-chip"><img src="/oracle.png" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='inline'" style="width:16px;height:16px;object-fit:contain"><span class="db-emoji" style="display:none;">🔶</span> Oracle</span>
+        <span class="about-db-chip"><img src="/sqlserver.png" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='inline'" style="width:16px;height:16px;object-fit:contain"><span class="db-emoji" style="display:none;">🗄️</span> SQL Server</span>
+        <span class="about-db-chip"><img src="/dm.png" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='inline'" style="width:16px;height:16px;object-fit:contain"><span class="db-emoji" style="display:none;">💎</span> DM 达梦</span>
+        <span class="about-db-chip"><img src="/tidb.png" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='inline'" style="width:16px;height:16px;object-fit:contain"><span class="db-emoji" style="display:none;">🌊</span> TiDB</span>
+        <span class="about-db-chip"><img src="/ivorysql.png" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='inline'" style="width:16px;height:16px;object-fit:contain"><span class="db-emoji" style="display:none;">🦣</span> IvorySQL</span>
+        <span class="about-db-chip"><img src="/yashandb.png" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='inline'" style="width:16px;height:16px;object-fit:contain"><span class="db-emoji" style="display:none;">🗻</span> YashanDB</span>
+      </div>
+
+      <!-- 君子协定（Base64 encoded to prevent static search） -->
+      <div class="about-agreement" id="agreement-container">
+        <div class="about-agreement-title" id="agreement-title">⚠️ 君子协定（Gentleman's Agreement）</div>
+        <div class="about-agreement-text" id="agreement-zh" lang="zh">每年 <strong>5月19日至5月25日</strong>，本软件界面将强制以<strong>灰度模式</strong>显示，且用户无法切换主题。请尊重原作者的设计保留，勿尝试修改或绕过该灰度模式。</div>
+        <div class="about-agreement-text" id="agreement-en" lang="en" style="display:none;">Every year from <strong>May 19 to May 25</strong>, the interface will be forced to <strong>grayscale mode</strong> and users cannot switch themes. Please respect the original design and do not attempt to modify or bypass this grayscale mode.</div>
+      </div>
+    </div>
+    <!-- Footer -->
+    <div class="about-footer">
+      © 2026 RaccoonX · 浣巡智能巡检平台
+    </div>
+  </div>
+</div>
+
+<script>
+function showAboutModal() {
+  document.getElementById('about-modal').style.display = 'block';
+  document.body.style.overflow = 'hidden';
+  var isZh = (document.documentElement.lang === 'zh');
+  var notes = document.querySelectorAll('.about-agreement-text');
+  for (var i = 0; i < notes.length; i++) {
+    notes[i].style.display = (notes[i].getAttribute('lang') === (isZh ? 'zh' : 'en')) ? '' : 'none';
+  }
+}
+function closeAboutModal() {
+  document.getElementById('about-modal').style.display = 'none';
+  document.body.style.overflow = '';
+}
+// 点击 backdrop 关闭
+document.getElementById('about-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeAboutModal();
+});
+// Esc 关闭
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeAboutModal();
+});
+
+
+
+</script>
+
 </body>
 </html>
 

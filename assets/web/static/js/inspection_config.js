@@ -9,6 +9,9 @@ let currentInspectionChapterId = null;
 let inspectionQueryUnsaved = false;  // 查询内联编辑是否有未保存内容
 let currentInspectionIsPreset = false;  // 当前编辑的模板是否为预置模板
 
+// 写操作（保存/删除/创建）仅管理员可用：index.html 通过 Jinja 注入 window._IS_ADMIN
+const IS_ADMIN = window._IS_ADMIN === true;
+
 
 // ==================== 页面初始化 ====================
 
@@ -107,7 +110,7 @@ function renderInspectionTemplateList(templates) {
             </div>
             <div class="card-actions">
                 <button class="card-action-btn card-action-btn--export" onclick="event.stopPropagation(); exportInspectionTemplate(${t.id})">导出</button>
-                ${!isPreset ? `<button class="card-action-btn card-action-btn--delete" onclick="event.stopPropagation(); deleteInspectionTemplate(${t.id}, '${escapeHtml(t.template_name)}')">删除</button>` : ''}
+                ${!isPreset && IS_ADMIN ? `<button class="card-action-btn card-action-btn--delete" onclick="event.stopPropagation(); deleteInspectionTemplate(${t.id}, '${escapeHtml(t.template_name)}')">删除</button>` : ''}
             </div>
         </div>`;
     });
@@ -201,6 +204,7 @@ function clearInspectionTemplateEditForm() {
 }
 
 async function saveInspectionTemplate() {
+    if (!IS_ADMIN) { toast('只有管理员才能执行此操作', 'error'); return; }
     if (currentInspectionIsPreset) {
         toast('预置模板不可修改', 'error');
         return;
@@ -248,6 +252,7 @@ async function saveInspectionTemplate() {
 }
 
 async function deleteInspectionTemplate(templateId, templateName) {
+    if (!IS_ADMIN) { toast('只有管理员才能执行此操作', 'error'); return; }
     const confirmed = await showConfirmDialog('确认删除', `确定要删除模板"${templateName}"吗？此操作不可撤销。`);
     if (!confirmed) return;
     try {
@@ -307,7 +312,7 @@ function renderInspectionChapters(chapters) {
         const clickAction = isPreset
             ? `onclick="viewInspectionChapterReadOnly(${ch.id})"`
             : `onclick="editInspectionChapter(${ch.id})"`;
-        const deleteBtn = isPreset ? '' : `
+        const deleteBtn = (isPreset || !IS_ADMIN) ? '' : `
             <div class="chapter-item-actions">
                 <button class="btn-delete-x" title="删除" onclick="event.stopPropagation(); deleteInspectionChapter(${ch.id}, '${escapeHtml(ch.chapter_title_zh)}')">✕</button>
             </div>`;
@@ -336,6 +341,7 @@ function renderInspectionChapters(chapters) {
                         animation: 150,
                         ghostClass: 'chapter-sortable-ghost',
                         onEnd: function() {
+                            if (!IS_ADMIN) return;  // 拖拽排序属写操作，仅管理员
                             const items = listEl.querySelectorAll('[data-chapter-id]');
                             const ids = Array.from(items).map(el => parseInt(el.getAttribute('data-chapter-id')));
                             fetch('/api/inspection/chapters/reorder', {
@@ -354,6 +360,7 @@ function renderInspectionChapters(chapters) {
 }
 
 function addInspectionChapter() {
+    if (!IS_ADMIN) { toast('只有管理员才能执行此操作', 'error'); return; }
     if (!currentInspectionTemplateId) {
         toast('请先保存模板', 'error');
         return;
@@ -426,7 +433,7 @@ function showInspectionChapterEditForm(chapter) {
                 <div class="form-group"><label>章节标题（英文）</label><input type="text" id="inspection-chapter-title-en" class="form-input" value="${escapeHtml(chapter.chapter_title_en || '')}" /></div>
                 <div class="form-group"><label>章节描述</label><textarea id="inspection-chapter-desc" class="form-textarea">${escapeHtml(chapter.description || '')}</textarea></div>
                 <div class="form-group"><label><input type="checkbox" id="inspection-chapter-enabled" ${chapter.enabled != 0 ? 'checked' : ''} /> 启用</label></div>
-                <div class="form-actions"><button class="btn btn-primary btn-sm" onclick="saveInspectionChapter()">保存章节</button></div>
+                ${IS_ADMIN ? '<div class="form-actions"><button class="btn btn-primary btn-sm" onclick="saveInspectionChapter()">保存章节</button></div>' : ''}
             </div>
             <div id="inspection-query-list"></div>`;
         loadInspectionQueries(chapter.id);
@@ -439,13 +446,14 @@ function showInspectionChapterEditForm(chapter) {
                 <div class="form-group"><label>章节标题（英文）</label><input type="text" id="inspection-chapter-title-en" class="form-input" value="" /></div>
                 <div class="form-group"><label>章节描述</label><textarea id="inspection-chapter-desc" class="form-textarea"></textarea></div>
                 <div class="form-group"><label><input type="checkbox" id="inspection-chapter-enabled" checked /> 启用</label></div>
-                <div class="form-actions"><button class="btn btn-primary btn-sm" onclick="saveInspectionChapter()">保存章节</button></div>
+                ${IS_ADMIN ? '<div class="form-actions"><button class="btn btn-primary btn-sm" onclick="saveInspectionChapter()">保存章节</button></div>' : ''}
             </div>
             <div id="inspection-query-list"></div>`;
     }
 }
 
 async function saveInspectionChapter() {
+    if (!IS_ADMIN) { toast('只有管理员才能执行此操作', 'error'); return; }
     if (currentInspectionIsPreset) {
         toast('预置模板不可修改', 'error');
         return;
@@ -498,6 +506,7 @@ async function saveInspectionChapter() {
 }
 
 async function deleteInspectionChapter(chapterId, chapterTitle) {
+    if (!IS_ADMIN) { toast('只有管理员才能执行此操作', 'error'); return; }
     if (currentInspectionIsPreset) {
         toast('预置模板不可修改', 'error');
         return;
@@ -553,14 +562,14 @@ function renderInspectionQueries(queries) {
     const isPreset = currentInspectionIsPreset === true;
     if (!queries || queries.length === 0) {
         let html = '<div class="empty-state" style="margin-top:12px;">暂无 SQL 查询。</div>';
-        if (!isPreset) {
+        if (!isPreset && IS_ADMIN) {
             html += '<button class="btn btn-xs btn-primary" style="margin-top:8px;" onclick="addInspectionQuery()">添加查询</button>';
         }
         container.innerHTML = html;
         return;
     }
     let html = '<h4>SQL 查询列表</h4>';
-    if (!isPreset) {
+    if (!isPreset && IS_ADMIN) {
         html += '<button class="btn btn-xs btn-primary" onclick="addInspectionQuery()">添加查询</button>';
     }
     html += '<ul class="query-list">';
@@ -569,7 +578,7 @@ function renderInspectionQueries(queries) {
         let actionsHtml = '';
         if (isPreset) {
             actionsHtml = `<button class="btn btn-xs btn-ghost" onclick="viewInspectionQuery(${q.id})">查看</button>`;
-        } else {
+        } else if (IS_ADMIN) {
             actionsHtml = `
                 <button class="btn btn-xs btn-ghost" onclick="editInspectionQueryInline(${q.id})">编辑</button>
                 <button class="btn btn-xs btn-danger" onclick="deleteInspectionQuery(${q.id}, '${escapeHtml(q.query_key)}')">删除</button>`;
@@ -590,6 +599,7 @@ function renderInspectionQueries(queries) {
 }
 
 function addInspectionQuery() {
+    if (!IS_ADMIN) { toast('只有管理员才能执行此操作', 'error'); return; }
     if (currentInspectionIsPreset) {
         toast('预置模板不可修改', 'error');
         return;
@@ -654,7 +664,7 @@ function renderQueryInlineEditForm(query, container, isNew) {
     html += `<div class="form-group"><label>描述（英文）</label><input type="text" class="form-input inline-q-desc-en" value="${escapeHtml(descEn)}" oninput="inspectionQueryUnsaved=true" /></div>`;
     html += `<div class="form-group"><label><input type="checkbox" class="inline-q-enabled" ${enabled ? 'checked' : ''} onchange="inspectionQueryUnsaved=true" /> 启用</label></div>`;
     html += '<div class="form-actions">';
-    html += `  <button class="btn btn-primary btn-sm" onclick="saveInspectionQueryInline(${q.id || 'null'}, ${isNew})">保存</button>`;
+    html += IS_ADMIN ? `  <button class="btn btn-primary btn-sm" onclick="saveInspectionQueryInline(${q.id || 'null'}, ${isNew})">保存</button>` : '';
     html += `  <button class="btn btn-sm" onclick="cancelInspectionQueryInline(${q.id || 'null'})">取消</button>`;
     html += '</div></div>';
     container.innerHTML = html;
@@ -692,7 +702,7 @@ function showInlineQueryForm(query) {
         + `<div class="form-group"><label>描述（英文）</label><input type="text" class="form-input inline-q-desc-en" value="${escapeHtml(descEn)}" oninput="inspectionQueryUnsaved=true" /></div>`
         + `<div class="form-group"><label><input type="checkbox" class="inline-q-enabled" ${enabled ? 'checked' : ''} onchange="inspectionQueryUnsaved=true" /> 启用</label></div>`
         + '<div class="form-actions">'
-        + `  <button class="btn btn-primary btn-sm" onclick="saveInspectionQueryInline('${isNew ? 'null' : q.id}', ${isNew})">保存</button>`
+        + (IS_ADMIN ? `  <button class="btn btn-primary btn-sm" onclick="saveInspectionQueryInline('${isNew ? 'null' : q.id}', ${isNew})">保存</button>` : '')
         + `  <button class="btn btn-sm" onclick="cancelInspectionQueryInline('${isNew ? 'null' : q.id}')">取消</button>`
         + '</div></div>';
     const formDiv = container.querySelector('.inline-edit-form');
@@ -717,6 +727,7 @@ function showInlineQueryForm(query) {
 }
 
 async function saveInspectionQueryInline(queryId, isNew) {
+    if (!IS_ADMIN) { toast('只有管理员才能执行此操作', 'error'); return; }
     if (currentInspectionIsPreset) {
         toast('预置模板不可修改', 'error');
         return;
@@ -819,6 +830,7 @@ function renderQueryInlineViewForm(query, container) {
 }
 
 async function deleteInspectionQuery(queryId, queryKey) {
+    if (!IS_ADMIN) { toast('只有管理员才能执行此操作', 'error'); return; }
     if (currentInspectionIsPreset) {
         toast('预置模板不可修改', 'error');
         return;
@@ -865,6 +877,7 @@ async function exportInspectionTemplate(templateId) {
 }
 
 function importInspectionTemplate() {
+    if (!IS_ADMIN) { toast('只有管理员才能执行此操作', 'error'); return; }
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.json';

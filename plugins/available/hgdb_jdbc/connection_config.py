@@ -44,15 +44,17 @@ class HgdbConnectionConfig:
         Returns:
             可用的 JDBC 连接 URL 字符串
         """
-        if self.jdbc_url and str(self.jdbc_url).strip().lower().startswith("jdbc:postgresql"):
-            return self.jdbc_url.strip()
-        _ct = max(1, int(self.connect_timeout_s or 15))
-        _st = max(1, int(self.socket_timeout_s or 30))
-        # 统一连接层：基础连接串由 modules.jdbc_connector 生成（每种库只差模板），
-        # 本插件追加 PG 系超时参数段
+        # 统一连接层：基础连接串 + PG 系超时参数段（connectTimeout/loginTimeout/
+        # socketTimeout）均由 modules.jdbc_connector build_jdbc_url 生成（透传
+        # connect_timeout_s/socket_timeout_s），本插件不再手拼（避免双重拼接）。
         from modules.jdbc_connector import build_jdbc_url as _build_jdbc_url
-        _base = _build_jdbc_url('hgdb', self.host, self.port, database=self.database)
-        return _base + f"?connectTimeout={_ct}&loginTimeout={_ct}&socketTimeout={_st}"
+        return _build_jdbc_url(
+            'hgdb', self.host, self.port,
+            database=self.database,
+            jdbc_url=self.jdbc_url,
+            connect_timeout_s=self.connect_timeout_s,
+            socket_timeout_s=self.socket_timeout_s,
+        )
 
     def build_properties(self):
         """构建 JDBC 连接属性（java.util.Properties，含 user / password）。

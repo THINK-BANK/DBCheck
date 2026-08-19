@@ -24,11 +24,11 @@ import getpass
 
 # 兼容函数 — 供 web_ui.py 旧代码调用
 
-def getData(ip, port, user, password, ssh_info=None, db_name=None, template_id=None):
+def getData(ip, port, user, password, ssh_info=None, db_name=None, template_id=None, driver_version=''):
     """
     原有 API - 创建 YashanDbInspector 实例
     """
-    inspector = YashanDbInspector(ip, port, user, password, db_name, ssh_info, template_id)
+    inspector = YashanDbInspector(ip, port, user, password, db_name, ssh_info, template_id, driver_version)
     ok, ver = inspector.connect()
     if not ok:
         return None
@@ -88,21 +88,63 @@ class YashanDbInspector(BaseInspectionEngine):
     继承 BaseInspectionEngine，只需实现 connect()
     """
 
-    def __init__(self, host, port, user, password, database=None, ssh_info=None, template_id=None):
+    def __init__(self, host, port, user, password, database=None, ssh_info=None, template_id=None, driver_version=''):
         super().__init__(host, port, user, password, database, ssh_info, template_id)
         self.db_type = 'yashandb'
         self._lang = get_lang()
+        self.driver_version = driver_version or ''
 
     def connect(self):
         """
-        连接崖山 YashanDB 数据库
-        使用 yasdb 驱动
-        yasdb.connect(host='...', port=1688, user='sys', password='...')
-        注意：yasdb.connect() 不需要 database 参数
+        连接崖山 YashanDB 数据库（统一 JDBC 优先，回退 yasdb）。
+
+        YashanDB 官方驱动 com.yashandb.jdbc.Driver / jdbc:yashandb://；
+        JDBC 不可用（无驱动/无 JVM 环境）时回退 yasdb 原生驱动。
         """
         try:
+            import os as _os
+            from modules.jdbc_connector import open_jdbc_connection
+            from modules.core.paths import PROJECT_ROOT
+            _conn, _meta = open_jdbc_connection(
+                'yashandb', self.host, int(self.port),
+                user=self.user, password=self.password,
+                database=self.database or 'yashandb',
+                driver_version=self.driver_version,
+                fallback_dirs=[_os.path.join(str(PROJECT_ROOT), 'drivers', 'yashandb')],
+            )
+            if _conn is None:
+                return self._connect_native((_meta or {}).get('error') or 'JDBC 连接失败')
+            self.conn = _conn
+            self.cursor = self.conn.cursor()
+
+            # 获取 YashanDB 版本号
+            version = self._query_version()
+            self.context['version'] = [{'VERSION': version}]
+
+            print(_t("yashandb_connect_success").format(host=self.host, port=self.port))
+            return True, version
+
+        except Exception as e:
+            return self._connect_native(str(e))
+
+    def _query_version(self):
+        """读取 YashanDB 版本号（兼容 V$VERSION / V$INSTANCE 两种视图）。"""
+        try:
+            self.cursor.execute("SELECT BANNER FROM V$VERSION WHERE ROWNUM=1")
+            return self.cursor.fetchone()[0]
+        except Exception:  # noqa: BLE001
+            try:
+                self.cursor.execute("SELECT VERSION FROM V$INSTANCE")
+                return self.cursor.fetchone()[0]
+            except Exception:  # noqa: BLE001
+                return 'Unknown'
+
+    def _connect_native(self, reason=''):
+        """回退：yasdb 原生驱动（pip install yasdb）。"""
+        try:
             if yashandb_driver is None:
-                return False, _t("yashandb_driver_missing") + " 请先安装 yasdb 驱动（pip install yasdb）。"
+                return False, (f'{reason}；且未安装 yasdb（pip install yasdb），'
+                               f'无法原生回退。请到「数据库驱动管理」上传 YashanDB JDBC 驱动 jar。')
             self.conn = yashandb_driver.connect(
                 host=self.host,
                 port=int(self.port),
@@ -112,18 +154,10 @@ class YashanDbInspector(BaseInspectionEngine):
             self.cursor = self.conn.cursor()
 
             # 获取 YashanDB 版本号
-            try:
-                self.cursor.execute("SELECT BANNER FROM V$VERSION WHERE ROWNUM=1")
-                version = self.cursor.fetchone()[0]
-            except Exception:
-                try:
-                    self.cursor.execute("SELECT VERSION FROM V$INSTANCE")
-                    version = self.cursor.fetchone()[0]
-                except Exception:
-                    version = 'Unknown'
+            version = self._query_version()
             self.context['version'] = [{'VERSION': version}]
 
-            print(_t("yashandb_connect_success").format(host=self.host, port=self.port))
+            print(f"YashanDB yasdb 回退连接成功: {self.host}:{self.port}（JDBC: {reason[:80]}...）" if reason else _t("yashandb_connect_success").format(host=self.host, port=self.port))
             return True, version
 
         except Exception as e:
@@ -131,7 +165,7 @@ class YashanDbInspector(BaseInspectionEngine):
             print(_t("yashandb_connect_fail").format(error=err_msg))
             import traceback
             traceback.print_exc()
-            return False, err_msg
+            return False, (f'{reason}；yasdb 回退也失败: {err_msg}' if reason else err_msg)
 
 # ============================================================
 # CLI 入口

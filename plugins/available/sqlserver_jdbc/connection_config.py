@@ -73,26 +73,20 @@ class MssqlJdbcConnectionConfig:
         Returns:
             可用的 JDBC 连接 URL 字符串
         """
-        # 统一连接层：基础连接串（透传/实例名/encrypt/trust 逻辑）由
-        # modules.jdbc_connector.build_jdbc_url 生成；本插件只追加专属扩展参数。
+        # 统一连接层：基础连接串 + 专属扩展段（透传/实例名/encrypt/trust/
+        # loginTimeout/applicationName/认证方式）均由 modules.jdbc_connector
+        # build_jdbc_url 生成，本插件不再手拼（避免双重拼接）。
         from modules.jdbc_connector import build_jdbc_url as _build_jdbc_url
-        _base = _build_jdbc_url(
+        return _build_jdbc_url(
             'sqlserver_jdbc', self.host, self.port,
             database=self.database,
             encrypt=bool(self.encrypt),
             trust_server_certificate=bool(self.trust_server_certificate),
             jdbc_url=self.jdbc_url,
             instance_name=self.instance_name,
+            login_timeout_s=self.login_timeout_s,
+            application_name=self.application_name,
         )
-        if self.jdbc_url and str(self.jdbc_url).strip().lower().startswith("jdbc:sqlserver"):
-            return self.jdbc_url.strip()
-        # 专属扩展参数段（loginTimeout/applicationName/认证方式，SQL Server 特有）
-        _extras = (
-            f";loginTimeout={int(self.login_timeout_s) if self.login_timeout_s and self.login_timeout_s > 0 else 10}"
-            f";applicationName={self.application_name or 'DBCheck'}"
-            ";authentication=NotSpecified"
-        )
-        return _base + _extras
 
     def build_properties(self) -> Dict[str, str]:
         """构建 JDBC 连接属性字典。

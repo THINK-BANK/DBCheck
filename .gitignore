@@ -161,3 +161,6 @@ modules/data/**
 #   2) data/reports/oracle_awr.html 为前序阶段已提交（force-add）的样例报告，
 #      整目录忽略会误撤该已提交文件，违反"不改动阶段4/5 已提交内容"约束。
 # 故仅以 surgical 条目补齐迁移期产物，保持现有合理条目不变。
+
+# 驱动登记随包种子（含用户驱动配置，本地打包生成，不入库）
+modules/config/drivers_seed.json

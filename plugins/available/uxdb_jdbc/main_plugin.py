@@ -302,24 +302,15 @@ class UxdbJdbcInspector(BaseInspectionEngine):
     # 连接层
     # ════════════════════════════════════════════════
     def connect(self) -> Tuple[bool, str]:
-        """连接 UXDB 数据库（JPype + JDBC）。
+        """连接 UXDB 数据库（统一连接层 JPype 模式）。
 
         Returns:
             (ok, msg)：ok 为 True 时 msg 是版本可读串；
                           ok 为 False 时 msg 是错误信息。
         """
         try:
-            import jpype
-            import jpype.imports
-
-            # 1. 确保 JVM 启动且驱动 jar 在 classpath（共享单例）
-            # 按绝对路径 + 唯一模块名加载本插件自有的 jdbc_jvm，避免被 db2_jdbc
-            # 等同名模块抢注（同名兄弟模块冲突）。
-            _jvm = _load_own_jdbc_jvm()
-            _jvm.ensure_jvm(specific_jars=self.jdbc_driver_path)
-            _jvm.register_uxdb_driver()
-
-            # 2. 构建连接配置（UxdbConnectionConfig 已在模块级按路径绑定，避免同名模块污染）
+            # 1. 构建连接配置（UxdbConnectionConfig 已在模块级按路径绑定；
+            #    build_jdbc_url 委托统一层）
             cfg = UxdbConnectionConfig(
                 host=self.host,
                 port=int(self.port),
@@ -330,15 +321,23 @@ class UxdbJdbcInspector(BaseInspectionEngine):
             )
             self.conn_cfg = cfg
 
-            from java.sql import DriverManager
+            # 2. 统一连接层：驱动解析 / JVM 启动 / URL 构造 / props 装配 / 建连。
+            #    驱动类由统一层注册表取 com.uxsino.uxdb.Driver（jar 内真实类，
+            #    已修正原注册表 uxdb.Driver 的类名错误）。
+            from modules.jdbc_connector import open_jdbc_connection
+            conn, meta = open_jdbc_connection(
+                'uxdb', self.host, self.port,
+                user=self.user, password=self.password,
+                driver_version=self.driver_version,
+                database=self.database or 'uxdb',
+                jdbc_url=self.jdbc_url or '',
+                mode='jpype',
+            )
+            if conn is None:
+                return False, meta['error']
 
-            url = cfg.build_jdbc_url()
-            # build_properties() 返回 java.util.Properties（含 user/password）
-            props = cfg.build_properties()
-            jdbc_conn = DriverManager.getConnection(url, props)
-
-            self.raw_jdbc_conn = jdbc_conn
-            self.conn = JdbcConnectionWrapper(jdbc_conn)
+            self.raw_jdbc_conn = conn
+            self.conn = JdbcConnectionWrapper(conn)
             self.cursor = self.conn.cursor()
 
             # 3. 读取版本

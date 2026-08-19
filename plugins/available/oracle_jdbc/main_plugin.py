@@ -175,63 +175,43 @@ class OracleJdbcInspector(BaseInspectionEngine):
 
     def connect(self):
         """
-        连接 Oracle 数据库（使用 JPype 启动 JVM，通过 JDBC 连接）
-        支持 SYSDBA 身份连接（sys 用户必须使用）
+        连接 Oracle 数据库（统一连接层 JPype 模式，支持 SYSDBA 身份连接）
 
         :return: (ok, msg) 元组
         """
         try:
-            import jpype
-            import jpype.imports
+            # 统一连接层：驱动解析 / JVM 启动 / URL 构造 / props 装配 / 建连
+            # （build_jdbc_url 的 use_sid/服务名/EZConnect 透传逻辑集中一处）
+            from modules.jdbc_connector import open_jdbc_connection
 
             print(f"[Oracle JDBC] 连接参数: host={self.host}, port={self.port}, user={self.user}, service_name={self.service_name}, sysdba={self.sysdba}")  # ← 调试
 
-            # 1. 启动 JVM（如果尚未启动）
-            if not jpype.isJVMStarted():
-                if not self.jdbc_driver_path or not os.path.exists(self.jdbc_driver_path):
-                    return False, "Oracle JDBC 驱动未在「数据库驱动管理」中登记，请到驱动管理页面上传 Oracle 驱动 jar 后重试"
-                jpype.startJVM(classpath=[self.jdbc_driver_path])
-
-            # 2. 注册 JDBC 驱动
-            from java.sql import DriverManager
-            from oracle.jdbc.driver import OracleDriver
-            from java.util import Properties
-            jpype.JClass('oracle.jdbc.driver.OracleDriver')()
-
-            # 3. 构建连接 URL（统一连接层：use_sid/服务名/EZConnect 透传逻辑集中一处）
-            from modules.jdbc_connector import build_jdbc_url as _build_jdbc_url
-            url = _build_jdbc_url(
+            # sys 用户必须以 SYSDBA 身份登录：经统一层 properties 透传
+            _props = {'internal_logon': 'sysdba'} if self.sysdba else None
+            conn, meta = open_jdbc_connection(
                 'oracle_jdbc', self.host, self.port,
+                user=self.user, password=self.password,
+                driver_version=self.driver_version,
                 service_name=self.service_name,
                 use_sid=bool(self.use_sid),
                 jdbc_url=self.jdbc_url,
+                mode='jpype',
+                properties=_props,
             )
+            if conn is None:
+                return False, meta['error']
 
-            # 4. 建立连接（支持 SYSDBA 身份）
-            if self.sysdba:
-                print(f"[Oracle JDBC] 使用 SYSDBA 身份连接...")  # ← 调试
-                # sys 用户必须以 SYSDBA 身份登录
-                props = Properties()
-                props.setProperty("user", self.user)
-                props.setProperty("password", self.password)
-                props.setProperty("internal_logon", "sysdba")
-                jdbc_conn = DriverManager.getConnection(url, props)
-                print(f"[Oracle JDBC] 以 SYSDBA 身份连接成功")
-            else:
-                print(f"[Oracle JDBC] 使用普通身份连接...")  # ← 调试
-                jdbc_conn = DriverManager.getConnection(url, self.user, self.password)
-            
-            # 5. 包装 JDBC 连接（兼容 Python DB-API 2.0）
-            self.conn = JdbcConnectionWrapper(jdbc_conn)
-            self.raw_jdbc_conn = jdbc_conn  # 保存原始连接（用于关闭）
+            # 2. 包装 JDBC 连接（兼容 Python DB-API 2.0）
+            self.conn = JdbcConnectionWrapper(conn)
+            self.raw_jdbc_conn = conn  # 保存原始连接（用于关闭）
             self.cursor = self.conn.cursor()  # 创建游标
 
-            # 6. 获取版本信息（使用 Python DB-API 风格）
+            # 3. 获取版本信息（使用 Python DB-API 风格）
             self.cursor.execute("SELECT version FROM v$instance")
             version_row = self.cursor.fetchone()
             version = version_row[0] if version_row else 'unknown'
 
-            # 7. 保存版本到 context（供 AI 诊断使用）
+            # 4. 保存版本到 context（供 AI 诊断使用）
             self.context['version'] = [{'VERSION': version}]
 
             print(f"[Oracle JDBC] 连接成功，版本: {version}")

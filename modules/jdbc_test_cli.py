@@ -49,13 +49,41 @@ monkey-patch 的干净进程里**，主进程只做 ``subprocess`` 调用 + 超�
 import json
 import os
 import sys
+
+
+# 项目根目录：本 CLI 独立运行时也需定位 drivers/ 目录（fallback_dirs）
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _ensure_project_root_on_path():
+    """确保项目根目录在 sys.path 上（开发态 `python modules/jdbc_test_cli.py`）。
+
+    冻结态由 PyInstaller 处理导入，无需干预；开发态直接执行本文件时
+    ``sys.path[0]`` 是 ``modules/``，需要把上级目录补进去才能 import modules.*。
+    注意：本函数必须在下方任何 ``from modules.* import`` 之前调用——解释器引导
+    阶段的 sys.path 自举，无法（也不应）依赖尚未导入的 modules.core.paths。
+    """
+    if getattr(sys, 'frozen', False):
+        return
+    _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if _root not in sys.path:
+        sys.path.insert(0, _root)
+
+
+# 立即执行：模块级 import modules.* 必须在本调用之后（开发态直接执行本文件时
+# sys.path[0] 是脚本所在目录 modules/，不含项目根，晚调用会 ModuleNotFoundError）。
+_ensure_project_root_on_path()
+
 from modules.driver_registry import resolve_jdbc_driver_jars
 
 # 结果行前缀：主进程按此前缀从 stdout 中提取唯一结果行
 RESULT_PREFIX = "__DBCHECK_JDBC_TEST_RESULT__"
 
-# 本 CLI 支持隔离执行的数据库类型（均为进程内 JVM/JPype 实现，或纯 Java JDBC）
-SUPPORTED_DB_TYPES = ('hgdb', 'db2', 'sqlserver_jdbc', 'dm', 'gbase')
+# 本 CLI 支持隔离执行的数据库类型（均为进程内 JVM/JPype 实现，或纯 Java JDBC）。
+# 与巡检子进程 JVM_INSPECTION_DB_TYPES / driver_registry.JDBC_PLUGIN_TO_CATALOG
+# 对齐为 8 类型（6 个 JDBC 插件 + 核心内置 dm/gbase）：
+#   hgdb / db2 / sqlserver_jdbc / oracle_jdbc / clickhouse / uxdb / dm / gbase
+SUPPORTED_DB_TYPES = ('hgdb', 'db2', 'sqlserver_jdbc', 'oracle_jdbc', 'clickhouse', 'uxdb', 'dm', 'gbase', 'ivorysql', 'pg', 'kingbase', 'yashandb', 'mysql', 'mariadb', 'tidb', 'oceanbase')
 
 
 def _test_gbase_jdbc(payload):
@@ -100,19 +128,6 @@ def _test_gbase_jdbc(payload):
         except Exception:
             pass
     return True, f'GBase 8s 连接成功（驱动：{basename}）'
-
-
-def _ensure_project_root_on_path():
-    """确保项目根目录在 sys.path 上（开发态 `python modules/jdbc_test_cli.py`）。
-
-    冻结态由 PyInstaller 处理导入，无需干预；开发态直接执行本文件时
-    ``sys.path[0]`` 是 ``modules/``，需要把上级目录补进去才能 import modules.*。
-    """
-    if getattr(sys, 'frozen', False):
-        return
-    _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    if _root not in sys.path:
-        sys.path.insert(0, _root)
 
 
 def _find_plugin_dir(db_type):
@@ -310,6 +325,408 @@ def _test_dm_jdbc(payload):
         return False, f'DM8 JDBC 连接失败：{e}'
 
 
+def _test_ivorysql_jdbc(payload):
+    """IvorySQL JDBC 连接测试——兼容 PostgreSQL 协议，复用 PG JDBC 驱动。
+
+    驱动 jar 优先「数据库驱动管理」登记的指定版本（kwargs.driver_version），
+    否则回退 drivers/postgresql/ 自动发现。与巡检引擎同一套统一连接层
+    （modules.jdbc_connector.open_jdbc_connection），JVM 在本隔离子进程
+    执行（未被 gevent monkey-patch），避免钉死主进程 hub。
+    """
+    _host = payload.get('host')
+    try:
+        _port = int(payload.get('port') or 5432)
+    except (TypeError, ValueError):
+        _port = 5432
+    _user = payload.get('user') or ''
+    _pw = payload.get('password') or ''
+    _kw = payload.get('kwargs') or {}
+    _dv = _kw.get('driver_version') or ''
+    _db = _kw.get('database') or 'ivorysql'
+
+    # TCP 预检：主机不可达时几秒内给出准确原因，不必启 JVM
+    _err = _tcp_preflight(_host, _port)
+    if _err:
+        return False, _err
+
+    try:
+        from modules.jdbc_connector import open_jdbc_connection
+        _conn, _meta = open_jdbc_connection(
+            'ivorysql', _host, _port, _user, _pw,
+            database=_db,
+            driver_version=_dv,
+            fallback_dirs=[os.path.join(str(PROJECT_ROOT), 'drivers', 'postgresql')],
+        )
+        if _conn is None:
+            return False, (_meta or {}).get('error') or 'IvorySQL JDBC 连接失败'
+        _cur = _conn.cursor()
+        try:
+            _cur.execute('SELECT 1')
+            _cur.fetchall()
+        finally:
+            _cur.close()
+            _conn.close()
+        return True, f'IvorySQL 连接成功（JDBC 驱动：{(_meta or {}).get("driver")}）'
+    except Exception as e:  # noqa: BLE001
+        return False, f'IvorySQL JDBC 连接失败：{e}'
+
+
+def _pg_fallback(kind, host, port, user, password, database, reason):
+    """PG 系原生回退（psycopg2）：JDBC 不可用时的兜底路径。
+
+    运行在本隔离子进程（未 gevent monkey-patch），psycopg2 原生调用安全。
+    返回 (ok, msg)，msg 合并 JDBC 失败原因便于排查。
+    """
+    try:
+        import psycopg2
+        _c = psycopg2.connect(host=host, port=int(port), user=user, password=password,
+                              dbname=database, connect_timeout=10)
+        _cur = _c.cursor()
+        try:
+            _cur.execute('SELECT version()')
+            _ver = _cur.fetchone()[0]
+            return True, f'{kind} 连接成功（psycopg2 回退）：{_ver}'
+        finally:
+            _cur.close()
+            _c.close()
+    except Exception as e2:  # noqa: BLE001
+        return False, f'{kind} JDBC 失败: {reason}；psycopg2 回退也失败: {e2}'
+
+
+def _test_pg_jdbc(payload):
+    """PostgreSQL JDBC 连接测试——统一连接层优先，回退 psycopg2。
+
+    驱动 jar 优先「数据库驱动管理」（catalog postgresql），否则回退
+    drivers/postgresql/ 自动发现。与巡检引擎同一套统一连接层。
+    """
+    _host = payload.get('host')
+    try:
+        _port = int(payload.get('port') or 5432)
+    except (TypeError, ValueError):
+        _port = 5432
+    _user = payload.get('user') or ''
+    _pw = payload.get('password') or ''
+    _kw = payload.get('kwargs') or {}
+    _dv = _kw.get('driver_version') or ''
+    _db = _kw.get('database') or 'postgres'
+
+    _err = _tcp_preflight(_host, _port)
+    if _err:
+        return False, _err
+
+    try:
+        from modules.jdbc_connector import open_jdbc_connection
+        _conn, _meta = open_jdbc_connection(
+            'pg', _host, _port, _user, _pw,
+            database=_db, driver_version=_dv,
+            fallback_dirs=[os.path.join(str(PROJECT_ROOT), 'drivers', 'postgresql')],
+        )
+        if _conn is None:
+            return _pg_fallback('PostgreSQL', _host, _port, _user, _pw, _db,
+                                (_meta or {}).get('error') or 'JDBC 连接失败')
+        _cur = _conn.cursor()
+        try:
+            _cur.execute('SELECT 1')
+            _cur.fetchall()
+        finally:
+            _cur.close()
+            _conn.close()
+        return True, f'PostgreSQL 连接成功（JDBC 驱动：{(_meta or {}).get("driver")}）'
+    except Exception as e:  # noqa: BLE001
+        return _pg_fallback('PostgreSQL', _host, _port, _user, _pw, _db, str(e))
+
+
+def _test_kingbase_jdbc(payload):
+    """KingbaseES JDBC 连接测试——统一连接层优先，回退 psycopg2。
+
+    KingbaseES V8 兼容 PG 协议；官方驱动 com.kingbase8.jdbc.Driver，
+    URL jdbc:kingbase8://（catalog key：kingbase）。
+    """
+    _host = payload.get('host')
+    try:
+        _port = int(payload.get('port') or 54321)
+    except (TypeError, ValueError):
+        _port = 54321
+    _user = payload.get('user') or ''
+    _pw = payload.get('password') or ''
+    _kw = payload.get('kwargs') or {}
+    _dv = _kw.get('driver_version') or ''
+    _db = _kw.get('database') or 'kingbase'
+
+    _err = _tcp_preflight(_host, _port)
+    if _err:
+        return False, _err
+
+    try:
+        from modules.jdbc_connector import open_jdbc_connection
+        _conn, _meta = open_jdbc_connection(
+            'kingbase', _host, _port, _user, _pw,
+            database=_db, driver_version=_dv,
+            fallback_dirs=[os.path.join(str(PROJECT_ROOT), 'drivers', 'kingbase')],
+        )
+        if _conn is None:
+            return _pg_fallback('KingbaseES', _host, _port, _user, _pw, _db,
+                                (_meta or {}).get('error') or 'JDBC 连接失败')
+        _cur = _conn.cursor()
+        try:
+            _cur.execute('SELECT 1')
+            _cur.fetchall()
+        finally:
+            _cur.close()
+            _conn.close()
+        return True, f'KingbaseES 连接成功（JDBC 驱动：{(_meta or {}).get("driver")}）'
+    except Exception as e:  # noqa: BLE001
+        return _pg_fallback('KingbaseES', _host, _port, _user, _pw, _db, str(e))
+
+
+def _test_yashandb_jdbc(payload):
+    """YashanDB JDBC 连接测试——统一连接层优先，回退 yasdb 原生驱动。
+
+    YashanDB 官方驱动 com.yashandb.jdbc.Driver，URL jdbc:yashandb://
+    （catalog key：yashandb）。原生回退依赖 pip 包 yasdb。
+    """
+    _host = payload.get('host')
+    try:
+        _port = int(payload.get('port') or 1688)
+    except (TypeError, ValueError):
+        _port = 1688
+    _user = payload.get('user') or ''
+    _pw = payload.get('password') or ''
+    _kw = payload.get('kwargs') or {}
+    _dv = _kw.get('driver_version') or ''
+    _db = _kw.get('database') or 'yashandb'
+
+    _err = _tcp_preflight(_host, _port)
+    if _err:
+        return False, _err
+
+    try:
+        from modules.jdbc_connector import open_jdbc_connection
+        _conn, _meta = open_jdbc_connection(
+            'yashandb', _host, _port, _user, _pw,
+            database=_db, driver_version=_dv,
+            fallback_dirs=[os.path.join(str(PROJECT_ROOT), 'drivers', 'yashandb')],
+        )
+        if _conn is None:
+            return _yashandb_fallback(_host, _port, _user, _pw, _db,
+                                      (_meta or {}).get('error') or 'JDBC 连接失败')
+        _cur = _conn.cursor()
+        try:
+            _cur.execute('SELECT 1')
+            _cur.fetchall()
+        finally:
+            _cur.close()
+            _conn.close()
+        return True, f'YashanDB 连接成功（JDBC 驱动：{(_meta or {}).get("driver")}）'
+    except Exception as e:  # noqa: BLE001
+        return _yashandb_fallback(_host, _port, _user, _pw, _db, str(e))
+
+
+def _yashandb_fallback(host, port, user, password, database, reason):
+    """YashanDB 原生回退（yasdb pip 包）。"""
+    try:
+        import yasdb
+        _c = yasdb.connect(user=user, password=password, host=host,
+                           port=int(port))
+        _cur = _c.cursor()
+        try:
+            _cur.execute('SELECT 1')
+            _cur.fetchall()
+            return True, 'YashanDB 连接成功（yasdb 原生回退）'
+        finally:
+            _cur.close()
+            _c.close()
+    except ImportError:
+        return False, (f'{reason}；且未安装 yasdb（pip install yasdb），'
+                       f'无法原生回退。请到「数据库驱动管理」上传 YashanDB JDBC 驱动 jar。')
+    except Exception as e2:  # noqa: BLE001
+        return False, f'YashanDB JDBC 失败: {reason}；yasdb 回退也失败: {e2}'
+
+
+def _mysql_fallback(kind, host, port, user, password, database, reason):
+    """MySQL 系原生回退（pymysql）：JDBC 不可用时的兜底路径。
+
+    运行在本隔离子进程（未 gevent monkey-patch），pymysql 原生调用安全。
+    返回 (ok, msg)，msg 合并 JDBC 失败原因便于排查。
+    """
+    try:
+        import pymysql
+        _kw = dict(host=host, port=int(port), user=user, password=password,
+                   connect_timeout=10, charset='utf8mb4')
+        if database:
+            _kw['database'] = database
+        _c = pymysql.connect(**_kw)
+        _cur = _c.cursor()
+        try:
+            _cur.execute('SELECT VERSION()')
+            _ver = _cur.fetchone()[0]
+            return True, f'{kind} 连接成功（pymysql 回退）：{_ver}'
+        finally:
+            _cur.close()
+            _c.close()
+    except ImportError:
+        return False, (f'{reason}；且未安装 pymysql（pip install pymysql），'
+                       f'无法原生回退。请到「数据库驱动管理」上传 {kind} JDBC 驱动 jar。')
+    except Exception as e2:  # noqa: BLE001
+        return False, f'{kind} JDBC 失败: {reason}；pymysql 回退也失败: {e2}'
+
+
+def _test_mysql_jdbc(payload):
+    """MySQL JDBC 连接测试——统一连接层优先，回退 pymysql。"""
+    _host = payload.get('host')
+    try:
+        _port = int(payload.get('port') or 3306)
+    except (TypeError, ValueError):
+        _port = 3306
+    _user = payload.get('user') or ''
+    _pw = payload.get('password') or ''
+    _kw = payload.get('kwargs') or {}
+    _dv = _kw.get('driver_version') or ''
+    _db = _kw.get('database') or 'mysql'
+
+    _err = _tcp_preflight(_host, _port)
+    if _err:
+        return False, _err
+
+    try:
+        from modules.jdbc_connector import open_jdbc_connection
+        _conn, _meta = open_jdbc_connection(
+            'mysql', _host, _port, _user, _pw,
+            database=_db, driver_version=_dv,
+            fallback_dirs=[os.path.join(str(PROJECT_ROOT), 'drivers', 'mysql')],
+        )
+        if _conn is None:
+            return _mysql_fallback('MySQL', _host, _port, _user, _pw, _db,
+                                   (_meta or {}).get('error') or 'JDBC 连接失败')
+        _cur = _conn.cursor()
+        try:
+            _cur.execute('SELECT 1')
+            _cur.fetchall()
+        finally:
+            _cur.close()
+            _conn.close()
+        return True, f'MySQL 连接成功（JDBC 驱动：{(_meta or {}).get("driver")}）'
+    except Exception as e:  # noqa: BLE001
+        return _mysql_fallback('MySQL', _host, _port, _user, _pw, _db, str(e))
+
+
+def _test_mariadb_jdbc(payload):
+    """MariaDB JDBC 连接测试——统一连接层优先，回退 pymysql。"""
+    _host = payload.get('host')
+    try:
+        _port = int(payload.get('port') or 3306)
+    except (TypeError, ValueError):
+        _port = 3306
+    _user = payload.get('user') or ''
+    _pw = payload.get('password') or ''
+    _kw = payload.get('kwargs') or {}
+    _dv = _kw.get('driver_version') or ''
+    _db = _kw.get('database') or 'mysql'
+
+    _err = _tcp_preflight(_host, _port)
+    if _err:
+        return False, _err
+
+    try:
+        from modules.jdbc_connector import open_jdbc_connection
+        _conn, _meta = open_jdbc_connection(
+            'mariadb', _host, _port, _user, _pw,
+            database=_db, driver_version=_dv,
+            fallback_dirs=[os.path.join(str(PROJECT_ROOT), 'drivers', 'mariadb')],
+        )
+        if _conn is None:
+            return _mysql_fallback('MariaDB', _host, _port, _user, _pw, _db,
+                                   (_meta or {}).get('error') or 'JDBC 连接失败')
+        _cur = _conn.cursor()
+        try:
+            _cur.execute('SELECT 1')
+            _cur.fetchall()
+        finally:
+            _cur.close()
+            _conn.close()
+        return True, f'MariaDB 连接成功（JDBC 驱动：{(_meta or {}).get("driver")}）'
+    except Exception as e:  # noqa: BLE001
+        return _mysql_fallback('MariaDB', _host, _port, _user, _pw, _db, str(e))
+
+
+def _test_tidb_jdbc(payload):
+    """TiDB JDBC 连接测试——兼容 MySQL 协议，统一连接层优先，回退 pymysql。"""
+    _host = payload.get('host')
+    try:
+        _port = int(payload.get('port') or 4000)
+    except (TypeError, ValueError):
+        _port = 4000
+    _user = payload.get('user') or ''
+    _pw = payload.get('password') or ''
+    _kw = payload.get('kwargs') or {}
+    _dv = _kw.get('driver_version') or ''
+    _db = _kw.get('database') or 'mysql'
+
+    _err = _tcp_preflight(_host, _port)
+    if _err:
+        return False, _err
+
+    try:
+        from modules.jdbc_connector import open_jdbc_connection
+        _conn, _meta = open_jdbc_connection(
+            'tidb', _host, _port, _user, _pw,
+            database=_db, driver_version=_dv,
+            fallback_dirs=[os.path.join(str(PROJECT_ROOT), 'drivers', 'mysql')],
+        )
+        if _conn is None:
+            return _mysql_fallback('TiDB', _host, _port, _user, _pw, _db,
+                                   (_meta or {}).get('error') or 'JDBC 连接失败')
+        _cur = _conn.cursor()
+        try:
+            _cur.execute('SELECT 1')
+            _cur.fetchall()
+        finally:
+            _cur.close()
+            _conn.close()
+        return True, f'TiDB 连接成功（JDBC 驱动：{(_meta or {}).get("driver")}）'
+    except Exception as e:  # noqa: BLE001
+        return _mysql_fallback('TiDB', _host, _port, _user, _pw, _db, str(e))
+
+
+def _test_oceanbase_jdbc(payload):
+    """OceanBase JDBC 连接测试——统一连接层优先，回退 pymysql。"""
+    _host = payload.get('host')
+    try:
+        _port = int(payload.get('port') or 2881)
+    except (TypeError, ValueError):
+        _port = 2881
+    _user = payload.get('user') or ''
+    _pw = payload.get('password') or ''
+    _kw = payload.get('kwargs') or {}
+    _dv = _kw.get('driver_version') or ''
+    _db = _kw.get('database') or ''
+
+    _err = _tcp_preflight(_host, _port)
+    if _err:
+        return False, _err
+
+    try:
+        from modules.jdbc_connector import open_jdbc_connection
+        _conn, _meta = open_jdbc_connection(
+            'oceanbase', _host, _port, _user, _pw,
+            database=_db or None, driver_version=_dv,
+            fallback_dirs=[os.path.join(str(PROJECT_ROOT), 'drivers', 'oceanbase')],
+        )
+        if _conn is None:
+            return _mysql_fallback('OceanBase', _host, _port, _user, _pw, _db,
+                                   (_meta or {}).get('error') or 'JDBC 连接失败')
+        _cur = _conn.cursor()
+        try:
+            _cur.execute('SELECT 1')
+            _cur.fetchall()
+        finally:
+            _cur.close()
+            _conn.close()
+        return True, f'OceanBase 连接成功（JDBC 驱动：{(_meta or {}).get("driver")}）'
+    except Exception as e:  # noqa: BLE001
+        return _mysql_fallback('OceanBase', _host, _port, _user, _pw, _db, str(e))
+
+
 def _test_dm_dmpython(payload, jdbc_reason=None):
     """DM8 回退方案：dmPython（需本机安装达梦客户端原生库 libdmcrypt.so）。
 
@@ -401,6 +818,30 @@ def run_test(payload):
     # 否则回退 drivers/gbase/ 自动发现。
     if db_type == 'gbase':
         return _test_gbase_jdbc(payload)
+
+    # IvorySQL（兼容 PG 协议）：统一 JDBC 连接层，复用 PostgreSQL 驱动
+    if db_type == 'ivorysql':
+        return _test_ivorysql_jdbc(payload)
+
+    # PostgreSQL / KingbaseES / YashanDB（PG 系）：统一 JDBC 连接层，
+    # JDBC 不可用时回退原生驱动（psycopg2 / yasdb）
+    if db_type == 'pg':
+        return _test_pg_jdbc(payload)
+    if db_type == 'kingbase':
+        return _test_kingbase_jdbc(payload)
+    if db_type == 'yashandb':
+        return _test_yashandb_jdbc(payload)
+
+    # MySQL 系（mysql/mariadb/tidb/oceanbase）：统一 JDBC 连接层，
+    # JDBC 不可用时回退 pymysql
+    if db_type == 'mysql':
+        return _test_mysql_jdbc(payload)
+    if db_type == 'mariadb':
+        return _test_mariadb_jdbc(payload)
+    if db_type == 'tidb':
+        return _test_tidb_jdbc(payload)
+    if db_type == 'oceanbase':
+        return _test_oceanbase_jdbc(payload)
 
     # 自定义 jdbc_url 可能指向别的地址（含多主机/故障转移），此时不做预检
     _kw = payload.get('kwargs') or {}

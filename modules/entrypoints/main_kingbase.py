@@ -71,16 +71,48 @@ class KingbaseESInspector(BaseInspectionEngine):
     继承 BaseInspectionEngine，只需实现 connect() 和 get_template_id()
     """
     
-    def __init__(self, host, port, user, password, database='kingbase', ssh_info=None, template_id=None):
+    def __init__(self, host, port, user, password, database='kingbase', ssh_info=None, template_id=None, driver_version=''):
         super().__init__(host, port, user, password, database, ssh_info, template_id)
         self.db_type = 'kingbase'  # 设置数据库类型
         self._lang = get_lang()
-        
+        self.driver_version = driver_version or ''
+
     def connect(self):
         """
-        连接 KingbaseES 数据库
-        使用 psycopg2 驱动（KingbaseES 基于 PostgreSQL 兼容）
+        连接 KingbaseES 数据库（统一 JDBC 优先，回退 psycopg2）。
+
+        KingbaseES V8 官方驱动 com.kingbase8.jdbc.Driver / jdbc:kingbase8://；
+        JDBC 驱动缺失或 JVM 异常时回退 psycopg2（子进程未 patch，安全）。
         """
+        try:
+            import os as _os
+            from modules.jdbc_connector import open_jdbc_connection
+            from modules.core.paths import PROJECT_ROOT
+            _conn, _meta = open_jdbc_connection(
+                'kingbase', self.host, int(self.port),
+                user=self.user, password=self.password,
+                database=self.database or 'kingbase',
+                driver_version=self.driver_version,
+                fallback_dirs=[_os.path.join(str(PROJECT_ROOT), 'drivers', 'kingbase')],
+            )
+            if _conn is None:
+                return self._connect_native((_meta or {}).get('error') or 'JDBC 连接失败')
+            self.conn = _conn
+            self.cursor = self.conn.cursor()
+
+            # 获取版本信息
+            self.cursor.execute("SELECT version()")
+            version = self.cursor.fetchone()[0]
+            self.context['version'] = [{'version': version}]
+
+            print("KingbaseES 连接成功: {}:{}".format(self.host, self.port))
+            return True, version
+
+        except Exception as e:
+            return self._connect_native(str(e))
+
+    def _connect_native(self, reason=''):
+        """回退：psycopg2（KingbaseES 兼容 PG 协议）。"""
         try:
             self.conn = kingbase_driver.connect(
                 host=self.host,
@@ -91,23 +123,22 @@ class KingbaseESInspector(BaseInspectionEngine):
                 connect_timeout=10
             )
             self.cursor = self.conn.cursor()
-            
+
             # 获取版本信息
             self.cursor.execute("SELECT version()")
             version = self.cursor.fetchone()[0]
             self.context['version'] = [{'version': version}]
-            
-            print("KingbaseES 连接成功: {}:{}".format(self.host, self.port))
+
+            print(f"KingbaseES psycopg2 回退连接成功: {self.host}:{self.port}（JDBC: {reason[:80]}...）" if reason else f"KingbaseES 连接成功: {self.host}:{self.port}")
             return True, version
-            
-        except Exception as e:
-            err_msg = str(e)
+        except Exception as e2:
+            err_msg = str(e2)
             print("KingbaseES 连接失败: {}".format(err_msg))
-            return False, err_msg
+            return False, (f'{reason}；psycopg2 回退也失败: {err_msg}' if reason else err_msg)
 
 # ── 保留原有 API 兼容性（供 web_ui.py 旧代码调用）────────────────────
-def getData(ip, port, user, password, database='kingbase', ssh_info=None, label=None, template_id=None):
-    inspector = KingbaseESInspector(ip, port, user, password, database, ssh_info, template_id)
+def getData(ip, port, user, password, database='kingbase', ssh_info=None, label=None, template_id=None, driver_version=''):
+    inspector = KingbaseESInspector(ip, port, user, password, database, ssh_info, template_id, driver_version)
     ok, ver = inspector.connect()
     if not ok:
         return None

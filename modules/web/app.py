@@ -4,7 +4,7 @@
 # Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
 
 """
-DBCheck Web UI - Flask 应用
+RaccoonX Web UI - Flask 应用
 数据库巡检工具 Web 界面
 """
 # gevent monkey patch 必须放在所有 import 之前
@@ -276,6 +276,11 @@ import time as _shutdown_time
 
 _CTRL_HANDLER_KEEPALIVE = None  # 模块级保活 Win32 回调，防止被 GC 回收后失效
 
+# 活跃子进程表（巡检/测试连接子进程）：主进程 Ctrl+C / os._exit 前必须整树杀掉，
+# 否则 JVM 子进程变孤儿继续占用资源/端口（表现为「进程结束不掉/重启端口被占」）。
+_ACTIVE_PROCS: set = set()
+_ACTIVE_PROCS_LOCK = _shutdown_threading.Lock()
+
 
 def _hard_exit():
     """C 层立即终止整个进程（含所有后台/非 daemon 线程）。
@@ -286,9 +291,39 @@ def _hard_exit():
 
 
 def _request_shutdown(sig=None, frame=None):
-    """请求关闭：立即强制退出（最短路，不依赖任何清理逻辑）。
-    接受可选 (sig, frame) 以兼容 signal/gevent 信号回调的调用约定。"""
+    """请求关闭：先清理活跃子进程（防孤儿 JVM），再立即强制退出。
+
+    清理环节异常绝不允许阻断退出——Ctrl+C 场景下 os._exit(0) 是唯一
+    必达目标（子进程残留最坏由系统回收，而进程不退是用户最痛的点）。
+    """
+    try:
+        _kill_active_subprocesses()
+    except Exception:  # noqa: BLE001
+        pass
     _hard_exit()
+
+
+def _kill_active_subprocesses():
+    """整树杀掉所有活跃子进程（巡检/测试连接 JVM 子进程）。
+
+    主进程走 os._exit(0) 强杀时不会触发任何清理钩子，若巡检子进程
+    （jdbc_inspection_cli，含 JVM）还在跑会变孤儿残留。这里在退出前
+    显式 kill，避免「Ctrl+C 后进程看似没退干净 / 重启端口被占」。
+    """
+    if not _ACTIVE_PROCS:
+        return
+    with _ACTIVE_PROCS_LOCK:
+        _procs = list(_ACTIVE_PROCS)
+    for _p in _procs:
+        try:
+            if _p.poll() is None:
+                _kill_process_tree(_p)
+        except Exception:  # noqa: BLE001
+            pass
+    # 处理完毕：从注册表移除（含已退出的项，避免残留）
+    with _ACTIVE_PROCS_LOCK:
+        for _p in _procs:
+            _ACTIVE_PROCS.discard(_p)
 
 
 def _signal_handler(sig, frame):
@@ -931,8 +966,10 @@ def _web_log_is_console_only(msg):
     # 后台采集内部日志
     if _m.startswith('[metrics]'):
         return True
-    # 连接状态类日志（既有规则，为最小变更予以保留）
-    if '连接成功' in msg or '连接失败' in msg:
+    # 连接成功类日志仅输出到后端控制台（避免刷屏）；连接失败属错误信息，
+    # 必须推送到前端巡检日志——巡检失败时用户排查的第一手依据（原规则把
+    # 连接失败也过滤，导致「巡检失败却没有任何错误日志」）。
+    if '连接成功' in msg:
         return True
     # 内部调试日志
     if _m.startswith('[DEBUG]'):
@@ -982,9 +1019,10 @@ def run_inspection_task(task_id, db_info, inspector_name, template_id=None, chap
         'mysql': dict(
             module_name='main_mysql',
             connect_test=test_mysql_connection,
-            connect_test_args=lambda info: [info['ip'], info['port'], info['user'], info['password']],
+            connect_test_args=lambda info: [info['ip'], info['port'], info['user'], info['password'], info.get('database'), info.get('driver_version', '')],
             getdata_args=lambda info: ([info['ip'], info['port'], info['user'], info['password']],
-                                       {'ssh_info': {}, 'template_id': template_id, 'database': info.get('database')}),
+                                       {'ssh_info': {}, 'template_id': template_id, 'database': info.get('database'),
+                                        'driver_version': info.get('driver_version', '')}),
             conn_attr='conn_db2',
             smart_analyze='smart_analyze_mysql',
             filename_key='webui.mysql_report_filename',
@@ -999,9 +1037,10 @@ def run_inspection_task(task_id, db_info, inspector_name, template_id=None, chap
         'mariadb': dict(
             module_name='main_mariadb',
             connect_test=test_mysql_connection,
-            connect_test_args=lambda info: [info['ip'], info['port'], info['user'], info['password']],
+            connect_test_args=lambda info: [info['ip'], info['port'], info['user'], info['password'], info.get('database'), info.get('driver_version', '')],
             getdata_args=lambda info: ([info['ip'], info['port'], info['user'], info['password']],
-                                       {'ssh_info': {}, 'template_id': template_id, 'database': info.get('database')}),
+                                       {'ssh_info': {}, 'template_id': template_id, 'database': info.get('database'),
+                                        'driver_version': info.get('driver_version', '')}),
             conn_attr='conn_db2',
             smart_analyze='smart_analyze_mariadb',
             filename_key='webui.mariadb_report_filename',
@@ -1018,11 +1057,12 @@ def run_inspection_task(task_id, db_info, inspector_name, template_id=None, chap
             connect_test=test_mysql_connection,
             connect_test_args=lambda info: [info['ip'], info['port'],
                                             (info['user'] + '@' + info['tenant']) if info.get('tenant') else info['user'],
-                                            info['password'], info.get('database', 'sys')],
+                                            info['password'], info.get('database', 'sys'), info.get('driver_version', '')],
             getdata_args=lambda info: ([info['ip'], info['port'],
                                         (info['user'] + '@' + info['tenant']) if info.get('tenant') else info['user'],
                                         info['password']],
-                                       {'ssh_info': {}, 'template_id': template_id, 'database': info.get('database', 'sys')}),
+                                       {'ssh_info': {}, 'template_id': template_id, 'database': info.get('database', 'sys'),
+                                        'driver_version': info.get('driver_version', '')}),
             conn_attr='conn_db2',
             smart_analyze='smart_analyze_mysql',
             filename_key='webui.oceanbase_report_filename',
@@ -1037,9 +1077,10 @@ def run_inspection_task(task_id, db_info, inspector_name, template_id=None, chap
         'pg': dict(
             module_name='main_pg',
             connect_test=test_pg_connection,
-            connect_test_args=lambda info: [info['ip'], info['port'], info['user'], info['password'], info.get('database', 'postgres')],
+            connect_test_args=lambda info: [info['ip'], info['port'], info['user'], info['password'], info.get('database', 'postgres'), info.get('driver_version', '')],
             getdata_args=lambda info: ([info['ip'], info['port'], info['user'], info['password']],
-                                       {'ssh_info': {}, 'template_id': template_id, 'database': info.get('database', 'postgres')}),
+                                       {'ssh_info': {}, 'template_id': template_id, 'database': info.get('database', 'postgres'),
+                                        'driver_version': info.get('driver_version', '')}),
             conn_attr='conn_db2',
             smart_analyze='smart_analyze_pg',
             filename_key='webui.pg_report_filename',
@@ -1054,9 +1095,10 @@ def run_inspection_task(task_id, db_info, inspector_name, template_id=None, chap
         'tidb': dict(
             module_name='main_tidb',
             connect_test=test_tidb_connection,
-            connect_test_args=lambda info: [info['ip'], info['port'], info['user'], info['password'], info.get('database', 'mysql')],
+            connect_test_args=lambda info: [info['ip'], info['port'], info['user'], info['password'], info.get('database', 'mysql'), info.get('driver_version', '')],
             getdata_args=lambda info: ([info['ip'], info['port'], info['user'], info['password']],
-                                       {'ssh_info': {}, 'template_id': template_id, 'database': info.get('database')}),
+                                       {'ssh_info': {}, 'template_id': template_id, 'database': info.get('database'),
+                                        'driver_version': info.get('driver_version', '')}),
             conn_attr='conn_db2',
             smart_analyze='smart_analyze_tidb',
             filename_key='webui.tidb_report_filename',
@@ -1136,9 +1178,10 @@ def run_inspection_task(task_id, db_info, inspector_name, template_id=None, chap
         'ivorysql': dict(
             module_name='main_ivorysql',
             connect_test=test_ivorysql_connection,
-            connect_test_args=lambda info: [info['ip'], info['port'], info['user'], info['password'], info.get('database', 'ivorysql')],
+            connect_test_args=lambda info: [info['ip'], info['port'], info['user'], info['password'], info.get('database', 'ivorysql'), info.get('driver_version', '')],
             getdata_args=lambda info: ([info['ip'], info['port'], info['user'], info['password']],
-                                       {'ssh_info': {}, 'template_id': template_id, 'database': info.get('database', 'ivorysql')}),
+                                       {'ssh_info': {}, 'template_id': template_id, 'database': info.get('database', 'ivorysql'),
+                                        'driver_version': info.get('driver_version', '')}),
             conn_attr='conn_db2',
             smart_analyze='smart_analyze_ivorysql',
             filename_key='webui.ivorysql_report_filename',
@@ -1153,9 +1196,10 @@ def run_inspection_task(task_id, db_info, inspector_name, template_id=None, chap
         'kingbase': dict(
             module_name='main_kingbase',
             connect_test=test_kingbase_connection,
-            connect_test_args=lambda info: [info['ip'], info['port'], info['user'], info['password'], info.get('database', 'kingbase')],
+            connect_test_args=lambda info: [info['ip'], info['port'], info['user'], info['password'], info.get('database', 'kingbase'), info.get('driver_version', '')],
             getdata_args=lambda info: ([info['ip'], info['port'], info['user'], info['password']],
-                                       {'ssh_info': {}, 'template_id': template_id, 'database': info.get('database', 'kingbase')}),
+                                       {'ssh_info': {}, 'template_id': template_id, 'database': info.get('database', 'kingbase'),
+                                        'driver_version': info.get('driver_version', '')}),
             conn_attr='conn_db2',
             smart_analyze='smart_analyze_kingbase',
             filename_key='webui.kingbase_report_filename',
@@ -1188,9 +1232,10 @@ def run_inspection_task(task_id, db_info, inspector_name, template_id=None, chap
         'yashandb': dict(
             module_name='main_yashandb',
             connect_test=test_yashandb_connection,
-            connect_test_args=lambda info: [info['ip'], info['port'], info['user'], info['password']],
+            connect_test_args=lambda info: [info['ip'], info['port'], info['user'], info['password'], info.get('database', 'yashandb'), info.get('driver_version', '')],
             getdata_args=lambda info: ([info['ip'], info['port'], info['user'], info['password']],
-                                       {'ssh_info': {}, 'template_id': template_id}),
+                                       {'ssh_info': {}, 'template_id': template_id, 'database': info.get('database', 'yashandb'),
+                                        'driver_version': info.get('driver_version', '')}),
             conn_attr='conn_db',
             smart_analyze='smart_analyze_yashandb',
             filename_key='webui.yashandb_report_filename',
@@ -1574,8 +1619,19 @@ def run_inspection_task(task_id, db_info, inspector_name, template_id=None, chap
                        'ai_advice': context.get('ai_advice', '')})
     except Exception as e:
         import traceback
-        traceback.print_exc(file=sys.stdout)
-        _emit('error', {'msg': _t('webui.err_inspection').format(task=cfg['error_task_name'], e=f"{e}\n{traceback.format_exc()}")})
+        _tb = traceback.format_exc()
+        # 巡检失败：错误信息必须可见（此前 traceback 走 stdout 非事件行被主进程
+        # 忽略、error 事件前端无监听 → 「巡检失败却没有任何错误日志」）。
+        # 双通道：控制台保留原始堆栈 + log 事件推送前端日志面板。
+        try:
+            sys.stdout.write(_tb + '\n')
+            sys.stdout.flush()
+        except Exception:  # noqa: BLE001
+            pass
+        _err_summary = _t('webui.err_inspection').format(task=cfg['error_task_name'], e=str(e))
+        _emit('log', {'msg': _err_summary})
+        _emit('log', {'msg': f'[{cfg["error_task_name"]}] 巡检失败堆栈:\n{_tb}'})
+        _emit('error', {'msg': f'{_err_summary}\n{_tb}'})
         if task:
             task['status'] = 'error'
             task['error_msg'] = str(e)
@@ -1757,93 +1813,79 @@ def run_index_task(task_id, db_info, output_format='txt'):
 
 
 # ── 连接测试函数 ────────────────────────────────────────────
-def test_mysql_connection(host, port, user, password, database=None):
-    try:
-        import pymysql
-        port = int(port)
-        if database:
-            conn = pymysql.connect(host=host, port=port, user=user, password=password,
-                                   database=database, connect_timeout=10, charset='utf8mb4')
-        else:
-            conn = pymysql.connect(host=host, port=port, user=user, password=password,
-                                   connect_timeout=10, charset='utf8mb4')
-        cur = conn.cursor()
-        cur.execute("SELECT VERSION()")
-        ver = cur.fetchone()[0]
-        cur.close()
-        conn.close()
-        return True, ver
-    except Exception as e:
-        return False, str(e)
-
-def test_tidb_connection(host, port, user, password, database=None):
-    """测试 TiDB 连接（与 MySQL 协议兼容）"""
-    try:
-        import pymysql
-        port = int(port)
-        if database:
-            conn = pymysql.connect(host=host, port=port, user=user, password=password,
-                                   database=database, connect_timeout=10, charset='utf8mb4')
-        else:
-            conn = pymysql.connect(host=host, port=port, user=user, password=password,
-                                   connect_timeout=10, charset='utf8mb4')
-        cur = conn.cursor()
-        cur.execute("SELECT VERSION()")
-        ver = cur.fetchone()[0]
-        cur.close()
-        conn.close()
-        return True, ver
-    except Exception as e:
-        return False, str(e)
-
-def test_pg_connection(host, port, user, password, database='postgres'):
-    try:
-        import psycopg2
-        conn = psycopg2.connect(host=host, port=int(port), user=user, password=password,
-                                database=database, connect_timeout=10)
-        # psycopg2 的 server_version 是整数 (如 140002 表示 14.0.2)
-        # 用 SQL 查询获取可读版本字符串
-        cur = conn.cursor()
-        cur.execute('SHOW server_version')
-        ver = cur.fetchone()[0]
-        cur.close()
-        conn.close()
-        return True, f"PostgreSQL {ver}"
-    except Exception as e:
-        return False, str(e)
-
-def test_kingbase_connection(host, port, user, password, database='kingbase'):
-    """测试 KingbaseES 连接（使用 psycopg2，与 PostgreSQL 协议兼容）"""
-    try:
-        import psycopg2
-        conn = psycopg2.connect(
-            host=host, port=int(port), user=user, password=password,
-            database=database, connect_timeout=10
-        )
-        cur = conn.cursor()
-        cur.execute('SELECT version();')
-        ver = cur.fetchone()[0]
-        cur.close()
-        conn.close()
-        return True, f"KingbaseES {ver}"
-    except Exception as e:
-        return False, str(e)
+def test_mysql_connection(host, port, user, password, database=None, driver_version=''):
+    """测试 MySQL 连接（统一 JDBC 子进程优先，回退 pymysql）。"""
+    return run_jdbc_test_subprocess('mysql', {
+        'host': host, 'port': port, 'user': user, 'password': password,
+        'database': database,
+    }, extra_kwargs={'driver_version': driver_version})
 
 
-def test_ivorysql_connection(host, port, user, password, database='ivorysql'):
-    """测试 IvorySQL 连接（使用 psycopg2，与 PostgreSQL 协议兼容）"""
-    try:
-        import psycopg2
-        conn = psycopg2.connect(host=host, port=int(port), user=user, password=password,
-                                database=database, connect_timeout=10)
-        cur = conn.cursor()
-        cur.execute('SELECT version()')
-        ver = cur.fetchone()[0]
-        cur.close()
-        conn.close()
-        return True, ver
-    except Exception as e:
-        return False, str(e)
+def test_mariadb_connection(host, port, user, password, database=None, driver_version=''):
+    """测试 MariaDB 连接（统一 JDBC 子进程优先，回退 pymysql）。
+
+    独立于 test_mysql_connection：MariaDB 走 jdbc:mariadb:// + org.mariadb.jdbc.Driver，
+    复用 mysql 会把测试路由到 MySQL 链路（catalog=mysql），登记了 MariaDB 专用驱动的
+    用户会误报「mysql 驱动未找到」。
+    """
+    return run_jdbc_test_subprocess('mariadb', {
+        'host': host, 'port': port, 'user': user, 'password': password,
+        'database': database,
+    }, extra_kwargs={'driver_version': driver_version})
+
+
+def test_oceanbase_connection(host, port, user, password, database=None, driver_version=''):
+    """测试 OceanBase 连接（统一 JDBC 子进程优先，回退 pymysql）。
+
+    独立于 test_mysql_connection：OceanBase 走 jdbc:oceanbase:// + com.oceanbase.jdbc.Driver；
+    user 需含租户拼接（root@tenant），由调用方（_ct_oceanbase）负责拼好后传入。
+    """
+    return run_jdbc_test_subprocess('oceanbase', {
+        'host': host, 'port': port, 'user': user, 'password': password,
+        'database': database,
+    }, extra_kwargs={'driver_version': driver_version})
+
+def test_tidb_connection(host, port, user, password, database=None, driver_version=''):
+    """测试 TiDB 连接（统一 JDBC 子进程优先，回退 pymysql）。"""
+    return run_jdbc_test_subprocess('tidb', {
+        'host': host, 'port': port, 'user': user, 'password': password,
+        'database': database,
+    }, extra_kwargs={'driver_version': driver_version})
+
+def test_pg_connection(host, port, user, password, database='postgres', driver_version=''):
+    """测试 PostgreSQL 连接（统一 JDBC 子进程隔离；JDBC 不可用回退 psycopg2）。
+
+    JVM 在独立子进程内执行，避免主进程 gevent hub 被钉死；与巡检引擎
+    同一套统一连接层（modules.jdbc_connector.open_jdbc_connection）。
+    """
+    return run_jdbc_test_subprocess('pg', {
+        'host': host, 'port': port, 'user': user, 'password': password,
+        'database': database,
+    }, extra_kwargs={'driver_version': driver_version})
+
+def test_kingbase_connection(host, port, user, password, database='kingbase', driver_version=''):
+    """测试 KingbaseES 连接（统一 JDBC 子进程隔离；JDBC 不可用回退 psycopg2）。
+
+    KingbaseES V8 官方驱动 com.kingbase8.jdbc.Driver / jdbc:kingbase8://；
+    与巡检引擎同一套统一连接层。
+    """
+    return run_jdbc_test_subprocess('kingbase', {
+        'host': host, 'port': port, 'user': user, 'password': password,
+        'database': database,
+    }, extra_kwargs={'driver_version': driver_version})
+
+
+def test_ivorysql_connection(host, port, user, password, database='ivorysql', driver_version=''):
+    """测试 IvorySQL 连接（统一 JDBC：兼容 PG 协议，复用 PostgreSQL 驱动）。
+
+    与其它 JDBC 类型一致，在独立子进程内建连（JVM 不进入主进程，
+    避免钉死 gevent hub）。驱动 jar 优先驱动管理登记的版本，
+    否则回退 drivers/postgresql/ 自动发现。
+    """
+    return run_jdbc_test_subprocess('ivorysql', {
+        'host': host, 'port': port, 'user': user, 'password': password,
+        'database': database,
+    }, extra_kwargs={'driver_version': driver_version})
 
 def _find_oracle_client_lib_dir(platform_key=None):
     """查找 Oracle Client 的 lib 目录，支持根目录和 lib/ 子目录
@@ -2008,18 +2050,16 @@ def test_dm_connection(host, port, user, password, driver_version=''):
         return False, err
 
 
-def test_yashandb_connection(host, port, user, password):
-    try:
-        import yasdb
-        conn = yasdb.connect(host=host, port=int(port), user=user, password=password)
-        cur = conn.cursor()
-        cur.execute("SELECT BANNER FROM V$VERSION WHERE ROWNUM=1")
-        ver = cur.fetchone()[0]
-        cur.close()
-        conn.close()
-        return True, ver
-    except Exception as e:
-        return False, str(e)
+def test_yashandb_connection(host, port, user, password, database='yashandb', driver_version=''):
+    """测试 YashanDB 连接（统一 JDBC 子进程隔离；JDBC 不可用回退 yasdb）。
+
+    YashanDB 官方驱动 com.yashandb.jdbc.Driver / jdbc:yashandb://；
+    与巡检引擎同一套统一连接层。
+    """
+    return run_jdbc_test_subprocess('yashandb', {
+        'host': host, 'port': port, 'user': user, 'password': password,
+        'database': database,
+    }, extra_kwargs={'driver_version': driver_version})
 
 
 def test_gbase_connection(host, port, user, password, database='testdb', gbase_server_name='gbase01', driver_version=''):
@@ -2312,14 +2352,33 @@ def _ct_mysql(data, flavor):
 
 
 def _ct_mariadb(data, flavor):
-    return _ct_mysql(data, flavor)
+    """MariaDB 连接测试：regular 走 MariaDB JDBC 子进程（jdbc:mariadb:// +
+    org.mariadb.jdbc.Driver，类型 'mariadb'）；pro 走 pymysql 直连。
+
+    历史 bug：曾复用 _ct_mysql → 测试连接被路由到 MySQL 链路（jdbc:mysql:// +
+    mysql catalog），登记了 MariaDB 专用驱动的用户会误报「mysql 驱动未找到」。
+    """
+    if flavor == 'regular':
+        ok, msg = test_mariadb_connection(data['host'], data['port'], data['user'],
+                                          data['password'], data.get('database'),
+                                          data.get('driver_version', '') or '')
+        return {'ok': ok, 'msg': msg}
+    import pymysql
+    _db = data.get('database') or None
+    _kw = dict(host=data['host'], port=data['port'], user=data['user'],
+               password=data['password'], connect_timeout=10)
+    if _db:
+        _kw['database'] = _db
+    pymysql.connect(**_kw).close()
+    return _conn_ok('pro')
 
 
 def _ct_oceanbase(data, flavor):
     _ob_user = data['user'] + '@' + data['tenant'] if data.get('tenant') else data['user']
     if flavor == 'regular':
-        ok, msg = test_mysql_connection(data['host'], data['port'], _ob_user,
-                                        data['password'], data.get('database'))
+        ok, msg = test_oceanbase_connection(data['host'], data['port'], _ob_user,
+                                            data['password'], data.get('database'),
+                                            data.get('driver_version', '') or '')
         return {'ok': ok, 'msg': msg}
     import pymysql
     _db = data.get('database') or 'sys'
@@ -2329,23 +2388,50 @@ def _ct_oceanbase(data, flavor):
 
 
 def _ct_pg(data, flavor, db_default='postgres'):
+    # 注意：data.get('database') 可能是空串/None（前端未填），必须 or db_default 兜底，
+    # 否则子进程测试函数里 '' or 'postgres' 会退到 PG 默认库，误报 database not exist。
+    _db = data.get('database') or db_default
     if flavor == 'regular':
         ok, msg = test_pg_connection(data['host'], data['port'], data['user'],
-                                     data['password'], data.get('database', db_default))
+                                     data['password'], _db, data.get('driver_version', '') or '')
         return {'ok': ok, 'msg': msg}
     import psycopg2
-    db = data.get('database', db_default)
     psycopg2.connect(host=data['host'], port=data['port'], user=data['user'],
-                     password=data['password'], dbname=db, connect_timeout=10).close()
+                     password=data['password'], dbname=_db, connect_timeout=10).close()
     return _conn_ok('pro')
 
 
 def _ct_ivorysql(data, flavor):
-    return _ct_pg(data, flavor, db_default='ivorysql')
+    """IvorySQL 连接测试：regular 走 IvorySQL JDBC 子进程（jdbc:postgresql:// + PG 驱动，
+    类型 'ivorysql' 保证 catalog 与默认库名正确）；pro 走 psycopg2 直连。"""
+    _db = data.get('database') or 'ivorysql'
+    if flavor == 'regular':
+        ok, msg = test_ivorysql_connection(data['host'], data['port'], data['user'],
+                                           data['password'], _db, data.get('driver_version', '') or '')
+        return {'ok': ok, 'msg': msg}
+    import psycopg2
+    psycopg2.connect(host=data['host'], port=data['port'], user=data['user'],
+                     password=data['password'], dbname=_db, connect_timeout=10).close()
+    return _conn_ok('pro')
 
 
 def _ct_kingbase(data, flavor):
-    return _ct_pg(data, flavor, db_default='kingbase')
+    """KingbaseES 连接测试：regular 走 KingbaseES JDBC 子进程（jdbc:kingbase8:// +
+    com.kingbase8.jdbc.Driver，类型 'kingbase'）；pro 走 psycopg2 直连。
+
+    历史 bug：曾复用 _ct_pg → regular 分支硬编码 test_pg_connection，把 Kingbase
+    测试连接路由到 PostgreSQL 链路（PG 驱动 + 默认库 postgres），Kingbase 服务器
+    无 postgres 库即报 FATAL: database "postgres" does not exist。
+    """
+    _db = data.get('database') or 'kingbase'
+    if flavor == 'regular':
+        ok, msg = test_kingbase_connection(data['host'], data['port'], data['user'],
+                                           data['password'], _db, data.get('driver_version', '') or '')
+        return {'ok': ok, 'msg': msg}
+    import psycopg2
+    psycopg2.connect(host=data['host'], port=data['port'], user=data['user'],
+                     password=data['password'], dbname=_db, connect_timeout=10).close()
+    return _conn_ok('pro')
 
 
 def _normalize_oracle_dsn(dsn, host, port):
@@ -2613,7 +2699,7 @@ def _ct_sqlserver_jdbc(data, flavor):
 def _ct_tidb(data, flavor):
     if flavor == 'regular':
         ok, msg = test_tidb_connection(data['host'], data['port'], data['user'],
-                                       data['password'], data.get('database'))
+                                       data['password'], data.get('database'), data.get('driver_version', '') or '')
         return {'ok': ok, 'msg': msg}
     import pymysql
     _db = data.get('database') or None
@@ -2627,7 +2713,9 @@ def _ct_tidb(data, flavor):
 
 def _ct_yashandb(data, flavor):
     if flavor == 'regular':
-        ok, msg = test_yashandb_connection(data['host'], data['port'], data['user'], data['password'])
+        ok, msg = test_yashandb_connection(data['host'], data['port'], data['user'],
+                                           data['password'], data.get('database') or 'yashandb',
+                                           data.get('driver_version', '') or '')
         return {'ok': ok, 'msg': msg}
     try:
         import yasdb
@@ -2725,13 +2813,13 @@ def _ct_mongodb(data, flavor):
 #   - 主进程只负责 spawn 子进程（同一个 exe 加 --jdbc-test-cli）+ 协作式轮询等待；
 #   - 等待期间用 gevent.sleep 让出执行权 → 界面全程可用；
 #   - 超时直接杀子进程树，JVM 随之消失，主进程不受任何残留影响。
-JDBC_SUBPROCESS_DB_TYPES = ('hgdb', 'db2', 'sqlserver_jdbc', 'oracle_jdbc', 'oracle')
+JDBC_SUBPROCESS_DB_TYPES = ('hgdb', 'db2', 'sqlserver_jdbc', 'oracle_jdbc', 'oracle', 'ivorysql', 'pg', 'kingbase', 'yashandb', 'mysql', 'mariadb', 'tidb', 'oceanbase')
 JDBC_TEST_TIMEOUT = 30  # 秒；需覆盖 JVM 冷启动(3~10s) + JDBC 登录超时(10~15s)
 
 # 需要整条巡检任务隔离到子进程的数据库类型（均依赖进程内 JVM/JPype）。
-# 与 driver_registry.JDBC_PLUGIN_TO_CATALOG 对齐：6 个 JDBC 插件 + 核心内置 dm/gbase，
+# 与 driver_registry.JDBC_PLUGIN_TO_CATALOG 对齐：6 个 JDBC 插件 + 核心内置 dm/gbase/ivorysql，
 # 任何新增 JDBC 类型必须同步加入，否则主进程内启 JVM 会钉死 gevent hub。
-JVM_INSPECTION_DB_TYPES = ('hgdb', 'db2', 'sqlserver_jdbc', 'oracle_jdbc', 'dm', 'gbase', 'clickhouse', 'uxdb')
+JVM_INSPECTION_DB_TYPES = ('hgdb', 'db2', 'sqlserver_jdbc', 'oracle_jdbc', 'dm', 'gbase', 'clickhouse', 'uxdb', 'ivorysql', 'pg', 'kingbase', 'yashandb', 'mysql', 'mariadb', 'tidb', 'oceanbase')
 JDBC_INSPECTION_TIMEOUT = 3600  # 巡检任务整体硬超时（秒）
 
 
@@ -2833,6 +2921,9 @@ def run_jdbc_test_subprocess(db_type, data, extra_kwargs=None, timeout=JDBC_TEST
                 open(_out_path, 'w', encoding='utf-8', errors='replace') as fout:
             proc = _sp.Popen(_jdbc_cli_command(), stdin=fin, stdout=fout,
                              stderr=_sp.STDOUT, env=env, cwd=str(PROJECT_ROOT), **_kw)
+            # 注册到活跃子进程表：主进程退出时整树清理（同步等待中遇 Ctrl+C 同样要杀）
+            with _ACTIVE_PROCS_LOCK:
+                _ACTIVE_PROCS.add(proc)
 
             deadline = time.monotonic() + timeout
             while proc.poll() is None:
@@ -2867,6 +2958,9 @@ def run_jdbc_test_subprocess(db_type, data, extra_kwargs=None, timeout=JDBC_TEST
             _kill_process_tree(proc)
         return False, f'连接测试子进程启动失败: {e}'
     finally:
+        with _ACTIVE_PROCS_LOCK:
+            if proc is not None:
+                _ACTIVE_PROCS.discard(proc)
         for _p in (_in_path, _out_path):
             try:
                 os.remove(_p)
@@ -2956,6 +3050,9 @@ def _run_inspection_subprocess(task_id, db_type, db_info, inspector_name,
                 open(_out_path, 'w', encoding='utf-8', errors='replace') as fout:
             proc = _sp.Popen(_insp_cli_command(), stdin=fin, stdout=fout,
                              stderr=_sp.STDOUT, env=env, cwd=str(PROJECT_ROOT), **_kw)
+            # 注册到活跃子进程表：主进程 Ctrl+C 退出时整树清理，防 JVM 孤儿残留
+            with _ACTIVE_PROCS_LOCK:
+                _ACTIVE_PROCS.add(proc)
 
         # ── 流式转发：轮询期间增量读取临时文件，实时把日志推给前端 ──
         # 之前是「等子进程退出后整文件读取」，导致前端日志全部堆积到巡检结束才弹出。
@@ -3054,6 +3151,9 @@ def _run_inspection_subprocess(task_id, db_type, db_info, inspector_name,
         if proc is not None and proc.poll() is None:
             _kill_process_tree(proc)
     finally:
+        with _ACTIVE_PROCS_LOCK:
+            if proc is not None:
+                _ACTIVE_PROCS.discard(proc)
         for _p in (_in_path, _out_path):
             try:
                 os.remove(_p)
@@ -3101,6 +3201,30 @@ def _ct_oracle_jdbc(data, flavor):
     )
     ok, msg = run_jdbc_test_subprocess('oracle_jdbc', data, _kwargs)
     return _jdbc_conn_result(ok, msg, flavor, 'Oracle (JDBC)')
+
+
+def _ct_clickhouse(data, flavor):
+    """ClickHouse (JDBC) 连接测试 —— 走子进程隔离。
+
+    与 oracle_jdbc 同源问题：clickhouse_jdbc 插件依赖 JPype 启 JVM，主进程
+    （gevent monkey-patch）内执行会钉死 hub。此前该类型未注册 tester，落到
+    _plugin_conn_fallback 的主进程路径 → 点测试连接界面卡死。统一收口子进程。
+    """
+    _kwargs = dict(database=data.get('database', '') or 'default',
+                   jdbc_url=data.get('jdbc_url') or None,
+                   ssl=bool(data.get('ssl', False)),
+                   driver_version=data.get('driver_version') or None)
+    ok, msg = run_jdbc_test_subprocess('clickhouse', data, _kwargs)
+    return _jdbc_conn_result(ok, msg, flavor, 'ClickHouse (JDBC)')
+
+
+def _ct_uxdb(data, flavor):
+    """UXDB (JDBC) 连接测试 —— 走子进程隔离（JPype 启 JVM 钉死 gevent hub）。"""
+    _kwargs = dict(database=data.get('database', ''),
+                   jdbc_url=data.get('jdbc_url') or None,
+                   driver_version=data.get('driver_version') or None)
+    ok, msg = run_jdbc_test_subprocess('uxdb', data, _kwargs)
+    return _jdbc_conn_result(ok, msg, flavor, 'UXDB (JDBC)')
 
 
 def _ct_db2(data, flavor):
@@ -3229,6 +3353,9 @@ register_connection_tester('sqlserver_jdbc', _ct_sqlserver_jdbc)
 register_connection_tester('hgdb', _ct_hgdb)
 # oracle_jdbc 同理：必须隔离到子进程，否则 JPype/JVM 在 monkey-patch 进程内冻结 hub
 register_connection_tester('oracle_jdbc', _ct_oracle_jdbc)
+# clickhouse / uxdb 同为 JPype 插件，此前未注册 tester → 主进程起 JVM 卡死，收口子进程
+register_connection_tester('clickhouse', _ct_clickhouse)
+register_connection_tester('uxdb', _ct_uxdb)
 
 
 def test_ssh_connection(host, port=22, username='root', password=None, key_file=None):
@@ -4667,6 +4794,12 @@ def api_list_icfg_templates():
 def api_create_icfg_template():
     """创建巡检模板"""
     try:
+        # 写操作仅管理员（巡检配置管理：创建/保存/删除）
+        if not session.get("is_admin", False):
+            return jsonify({"success": False, "message": "只有管理员才能执行此操作"}), 403
+        # 写操作仅管理员（巡检配置管理：创建/保存/删除）
+        if not session.get("is_admin", False):
+            return jsonify({"success": False, "message": "只有管理员才能执行此操作"}), 403
         d = request.json
         tid = create_template(
             db_type=d.get('db_type', ''),
@@ -4697,6 +4830,12 @@ def api_get_icfg_template(tid):
 def api_update_icfg_template(tid):
     """更新巡检模板"""
     try:
+        # 写操作仅管理员（巡检配置管理：创建/保存/删除）
+        if not session.get("is_admin", False):
+            return jsonify({"success": False, "message": "只有管理员才能执行此操作"}), 403
+        # 写操作仅管理员（巡检配置管理：创建/保存/删除）
+        if not session.get("is_admin", False):
+            return jsonify({"success": False, "message": "只有管理员才能执行此操作"}), 403
         d = request.json
         result = update_template(
             tid,
@@ -4716,6 +4855,12 @@ def api_update_icfg_template(tid):
 def api_delete_icfg_template(tid):
     """删除巡检模板（级联删除章节和查询）"""
     try:
+        # 写操作仅管理员（巡检配置管理：创建/保存/删除）
+        if not session.get("is_admin", False):
+            return jsonify({"success": False, "message": "只有管理员才能执行此操作"}), 403
+        # 写操作仅管理员（巡检配置管理：创建/保存/删除）
+        if not session.get("is_admin", False):
+            return jsonify({"success": False, "message": "只有管理员才能执行此操作"}), 403
         delete_template(tid)
         return jsonify({'success': True, 'message': '模板删除成功'})
     except Exception as e:
@@ -4765,6 +4910,12 @@ def api_list_icfg_chapters(tid):
 def api_create_icfg_chapter(tid):
     """在模板下创建章节"""
     try:
+        # 写操作仅管理员（巡检配置管理：创建/保存/删除）
+        if not session.get("is_admin", False):
+            return jsonify({"success": False, "message": "只有管理员才能执行此操作"}), 403
+        # 写操作仅管理员（巡检配置管理：创建/保存/删除）
+        if not session.get("is_admin", False):
+            return jsonify({"success": False, "message": "只有管理员才能执行此操作"}), 403
         d = request.json
         cid = create_chapter(
             template_id=tid,
@@ -4795,6 +4946,12 @@ def api_get_icfg_chapter(cid):
 def api_update_icfg_chapter(cid):
     """更新章节"""
     try:
+        # 写操作仅管理员（巡检配置管理：创建/保存/删除）
+        if not session.get("is_admin", False):
+            return jsonify({"success": False, "message": "只有管理员才能执行此操作"}), 403
+        # 写操作仅管理员（巡检配置管理：创建/保存/删除）
+        if not session.get("is_admin", False):
+            return jsonify({"success": False, "message": "只有管理员才能执行此操作"}), 403
         d = request.json
         update_chapter(
             cid,
@@ -4813,6 +4970,12 @@ def api_update_icfg_chapter(cid):
 def api_delete_icfg_chapter(cid):
     """删除章节（级联删除查询）"""
     try:
+        # 写操作仅管理员（巡检配置管理：创建/保存/删除）
+        if not session.get("is_admin", False):
+            return jsonify({"success": False, "message": "只有管理员才能执行此操作"}), 403
+        # 写操作仅管理员（巡检配置管理：创建/保存/删除）
+        if not session.get("is_admin", False):
+            return jsonify({"success": False, "message": "只有管理员才能执行此操作"}), 403
         delete_chapter(cid)
         return jsonify({'success': True, 'message': '章节删除成功'})
     except Exception as e:
@@ -4823,6 +4986,12 @@ def api_delete_icfg_chapter(cid):
 def api_reorder_icfg_chapters():
     """章节拖拽排序"""
     try:
+        # 写操作仅管理员（巡检配置管理：创建/保存/删除）
+        if not session.get("is_admin", False):
+            return jsonify({"success": False, "message": "只有管理员才能执行此操作"}), 403
+        # 写操作仅管理员（巡检配置管理：创建/保存/删除）
+        if not session.get("is_admin", False):
+            return jsonify({"success": False, "message": "只有管理员才能执行此操作"}), 403
         d = request.json
         template_id = d.get('template_id')
         chapter_ids = d.get('chapter_ids', [])
@@ -4848,6 +5017,12 @@ def api_list_icfg_queries(cid):
 def api_create_icfg_query(cid):
     """在章节下创建查询"""
     try:
+        # 写操作仅管理员（巡检配置管理：创建/保存/删除）
+        if not session.get("is_admin", False):
+            return jsonify({"success": False, "message": "只有管理员才能执行此操作"}), 403
+        # 写操作仅管理员（巡检配置管理：创建/保存/删除）
+        if not session.get("is_admin", False):
+            return jsonify({"success": False, "message": "只有管理员才能执行此操作"}), 403
         d = request.json
         qid = create_query(
             chapter_id=cid,
@@ -4878,6 +5053,12 @@ def api_get_icfg_query(qid):
 def api_update_icfg_query(qid):
     """更新查询"""
     try:
+        # 写操作仅管理员（巡检配置管理：创建/保存/删除）
+        if not session.get("is_admin", False):
+            return jsonify({"success": False, "message": "只有管理员才能执行此操作"}), 403
+        # 写操作仅管理员（巡检配置管理：创建/保存/删除）
+        if not session.get("is_admin", False):
+            return jsonify({"success": False, "message": "只有管理员才能执行此操作"}), 403
         d = request.json
         update_query(
             qid,
@@ -4896,6 +5077,12 @@ def api_update_icfg_query(qid):
 def api_delete_icfg_query(qid):
     """删除查询"""
     try:
+        # 写操作仅管理员（巡检配置管理：创建/保存/删除）
+        if not session.get("is_admin", False):
+            return jsonify({"success": False, "message": "只有管理员才能执行此操作"}), 403
+        # 写操作仅管理员（巡检配置管理：创建/保存/删除）
+        if not session.get("is_admin", False):
+            return jsonify({"success": False, "message": "只有管理员才能执行此操作"}), 403
         delete_query(qid)
         return jsonify({'success': True, 'message': '查询删除成功'})
     except Exception as e:
@@ -10849,6 +11036,32 @@ def api_drivers_activate(driver_id):
         return jsonify({'ok': False, 'error': str(e)[:200]})
 
 
+@app.route('/api/system/shutdown', methods=['POST'])
+def api_system_shutdown():
+    """本机强制退出（Git Bash/伪终端下 Ctrl+C 无效时的兜底通道）。
+
+    背景：mintty/MSYS2 伪终端里 Ctrl+C 的模拟信号无法投递到原生 Windows
+    Python，且无真实控制台事件——五层信号防线全部落空。此接口供本机
+    手动触发退出：`curl -X POST http://127.0.0.1:5003/api/system/shutdown
+    -H "X-Admin-Token: <启动时打印的管理令牌>"`。
+
+    安全：仅允许本机回环来源 + X-Admin-Token 校验（随机 64 hex，启动时
+    打印在控制台），局域网内无法调用。
+    """
+    try:
+        from modules.web.api import _ADMIN_TOKEN
+        _ra = (request.remote_addr or '')
+        if _ra not in ('127.0.0.1', '::1'):
+            return jsonify({'ok': False, 'error': '仅允许本机调用'}), 403
+        if request.headers.get('X-Admin-Token', '') != _ADMIN_TOKEN:
+            return jsonify({'ok': False, 'error': '管理令牌无效'}), 403
+    except Exception:  # noqa: BLE001
+        return jsonify({'ok': False, 'error': '校验失败'}), 500
+    # 先回 200 再强杀：daemon 线程 os._exit(0) 不阻塞也不等待
+    _shutdown_threading.Thread(target=_request_shutdown, daemon=True).start()
+    return jsonify({'ok': True, 'msg': '正在退出...'})
+
+
 def main():
     # ── 信号处理：确保 Ctrl+C / 关闭窗口 / SIGTERM 都能立即退出 ──
     # 设计要点（修复 gevent 模式 Ctrl+C 失效）：
@@ -10886,6 +11099,16 @@ def main():
     except Exception as e:
         print(f"[插件] 模板/基线种子数据初始化跳过: {e}")
 
+    # 驱动管理登记种子导入（打包分发后 drivers.db 为空库时，从随包
+    # modules/config/drivers_seed.json 恢复用户打包前的驱动登记；幂等）。
+    try:
+        from modules.driver_registry import seed_driver_registry
+        _seeded_drivers = seed_driver_registry()
+        if _seeded_drivers:
+            print(f"[驱动] 已从随包种子导入 {_seeded_drivers} 条驱动登记")
+    except Exception as e:
+        print(f"[驱动] 驱动登记种子导入跳过: {e}")
+
     # 确保巡检配置库存在：data/ 是运行时目录（不随包发布），打包后首次启动
     # 时 inspection.db 并不存在，需在此建库建表并写入预设模板/阈值/基线，
     # 否则「巡检配置管理」相关接口会报 "unable to open database file"。
@@ -10900,6 +11123,16 @@ def main():
     port = 5003
     print(_t('webui.startup_msg').format(port=port))
     print("[提示] 按 Ctrl+C 停止服务\n")
+    # Git Bash (mintty/MSYS2) 伪终端：Ctrl+C 的 MSYS2 模拟信号无法投递到原生
+    # Windows Python，且没有真实控制台事件 → 五层信号处理全部落空。提前告知
+    # 用户可用方案，避免「按 Ctrl+C 结束不掉进程」的困惑。
+    if os.environ.get('MSYSTEM') and not getattr(sys, 'frozen', False):
+        print("[提示] 当前运行在 Git Bash/MSYS2 伪终端下，Ctrl+C 可能无法结束本进程（mintty 信号无法投递到原生 Windows Python）。")
+        print("       可选退出方式：")
+        print("         ① 改用 PowerShell 或 cmd 启动（Ctrl+C 直接生效）；")
+        print("         ② Git Bash 下用 `winpty python web_ui.py` 启动；")
+        print("         ③ 本机触发退出：curl -X POST http://127.0.0.1:5003/api/system/shutdown -H \"X-Admin-Token: <上面的管理令牌>\"")
+        print("         ④ 强杀：taskkill /F /PID <pid>（tasklist | findstr python 查 pid）\n")
 
     # 1) Windows 控制台级处理器（OS 层，cmd/PowerShell 关闭窗口/Ctrl+C 必杀，
     #    gevent 吞不掉、PyInstaller 同样有效）+ 持续保活确保永远抢在最前

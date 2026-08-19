@@ -45,7 +45,7 @@ class OceanBaseInspector(BaseInspectionEngine):
     DEFAULT_PORT = 2881  # OceanBase MySQL 租户默认端口
 
     def __init__(self, host, port=2881, user='root', password='',
-                 database=None, ssh_info=None, template_id=None):
+                 database=None, ssh_info=None, template_id=None, driver_version=''):
         """
         初始化 OceanBase 巡检器
 
@@ -56,21 +56,48 @@ class OceanBaseInspector(BaseInspectionEngine):
         :param database: 租户名（tenant name），建议业务租户；sys 租户可管理多租户视图
         :param ssh_info: SSH 连接信息字典（可选）
         :param template_id: 巡检模板 ID（可选，指定后使用对应模板的 SQL）
+        :param driver_version: JDBC 驱动版本（可选，驱动管理登记；空=激活版本）
         """
         super().__init__(host, port, user, password, database, ssh_info, template_id)
         self.db_type = 'oceanbase'
+        self.driver_version = driver_version
 
     def connect(self):
         """
-        连接 OceanBase MySQL 租户（pymysql，端口默认 2881）
+        连接 OceanBase MySQL 租户（统一 JDBC 优先，回退 pymysql；端口默认 2881）
 
         返回:
             (ok, version) - ok 为 True 时 version 是版本号
             （形如 '5.7.25-OceanBase-...' / '4.2.1.0-OceanBase'），否则是错误信息
         """
-        import pymysql
         try:
-            # OceanBase MySQL 租户默认端口 2881；database 指向租户名（tenant）
+            import os as _os
+            from modules.jdbc_connector import open_jdbc_connection
+            from modules.core.paths import PROJECT_ROOT
+            _conn, _meta = open_jdbc_connection(
+                'oceanbase', self.host, int(self.port) or self.DEFAULT_PORT,
+                user=self.user, password=self.password,
+                database=self.database or None,  # 空=连到租户（不指定 db，URL 无 db 段）
+                driver_version=self.driver_version,
+                fallback_dirs=[_os.path.join(str(PROJECT_ROOT), 'drivers', 'oceanbase')],
+            )
+            if _conn is None:
+                return self._connect_native((_meta or {}).get('error') or 'JDBC 连接失败')
+            self.conn = _conn
+            self.cursor = self.conn.cursor()
+            self.cursor.execute("SELECT VERSION()")
+            ver = self.cursor.fetchone()[0]
+            return True, ver
+        except Exception as e:
+            return self._connect_native(str(e))
+
+    def _connect_native(self, reason=''):
+        """回退：pymysql 原生连接（JDBC 驱动缺失/JVM 异常时）。
+
+        巡检子进程未 gevent monkey-patch，pymysql 原生调用安全。
+        """
+        try:
+            import pymysql
             # OceanBase MySQL 租户：库名（database）为空时直接连到租户（不指定 database），
             # 与 test_mysql_connection 行为一致；不应强制 'sys'（sys 是独立管理租户，
             # 非业务租户内的合法库，强制会连接失败）。
@@ -89,9 +116,10 @@ class OceanBaseInspector(BaseInspectionEngine):
             self.cursor = self.conn.cursor()
             self.cursor.execute("SELECT VERSION()")
             ver = self.cursor.fetchone()[0]
+            print(f"[OceanBase] pymysql 回退连接成功（JDBC: {reason[:80]}...）" if reason else "[OceanBase] pymysql 连接成功")
             return True, ver
-        except Exception as e:
-            return False, str(e)
+        except Exception as e2:
+            return False, (f'{reason}；pymysql 回退也失败: {e2}' if reason else str(e2))
 
     def _customize_queries(self, sql_dict):
         """
@@ -235,14 +263,14 @@ class OceanBaseInspector(BaseInspectionEngine):
 
 # ── 保留原有 API 兼容性（供 web_ui.py / run_inspection.py 旧代码调用）────────
 def getData(ip, port=2881, user='root', password='', database=None,
-           ssh_info=None, template_id=None):
+           ssh_info=None, template_id=None, driver_version=''):
     """
     原有 API - 创建 OceanBaseInspector 实例
 
     注意：这个函数在重构过程中保留，用于兼容 web_ui.py / run_inspection.py 中的旧代码。
     新代码应该直接使用 OceanBaseInspector 类。
     """
-    inspector = OceanBaseInspector(ip, port, user, password, database, ssh_info, template_id)
+    inspector = OceanBaseInspector(ip, port, user, password, database, ssh_info, template_id, driver_version)
     ok, ver = inspector.connect()
     if not ok:
         return None

@@ -50,7 +50,7 @@
       "queries": [
         {
           "query_key": "mssql_databases",
-          "query_sql": "SELECT database_id, name, state_desc, recovery_model_desc, compatibility_level, is_read_only, is_auto_close_on, is_auto_shrink_on, create_date, collation_name FROM sys.databases ORDER BY database_id",
+          "query_sql": "SELECT database_id, name, state_desc, recovery_model_desc, compatibility_level, is_read_only, is_auto_close_on, is_auto_shrink_on, is_auto_create_stats_on, is_auto_update_stats_on, is_in_standby, is_encrypted, create_date, collation_name FROM sys.databases ORDER BY database_id",
           "query_description_zh": "数据库清单与状态",
           "query_description_en": "Database list and state"
         },

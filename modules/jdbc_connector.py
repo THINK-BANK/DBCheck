@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import os
 import sys
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from modules.driver_registry import JDBC_PLUGIN_TO_CATALOG, resolve_jdbc_driver_jars
 
@@ -50,9 +50,11 @@ JDBC_PROFILES: Dict[str, Dict[str, Any]] = {
         'port': 50000,
     },
     'hgdb': {
+        # 注意：必须 jdbc:highgo:// 而非 jdbc:postgresql:// —— HighGo 驱动
+        # （com.highgo.jdbc.Driver）acceptsURL 只认 'jdbc:highgo:' 前缀，
+        # 用 PG 前缀即使驱动已注册也会报 No suitable driver（jar 内实测）。
         'driver_class': 'com.highgo.jdbc.Driver',
-        # HighGo 兼容 PostgreSQL 协议
-        'url': 'jdbc:postgresql://{host}:{port}/{db}',
+        'url': 'jdbc:highgo://{host}:{port}/{db}',
         'port': 5866,
     },
     'clickhouse': {
@@ -62,9 +64,63 @@ JDBC_PROFILES: Dict[str, Dict[str, Any]] = {
         'db_default': 'default',
     },
     'uxdb': {
-        'driver_class': 'uxdb.Driver',
+        'driver_class': 'com.uxsino.uxdb.Driver',
         'url': 'jdbc:uxdb://{host}:{port}/{db}',
         'port': 33060,
+    },
+    'ivorysql': {
+        # IvorySQL 兼容 PostgreSQL 协议：用标准 PG 驱动 + jdbc:postgresql://
+        'driver_class': 'org.postgresql.Driver',
+        'url': 'jdbc:postgresql://{host}:{port}/{db}',
+        'port': 5432,
+        'db_default': 'ivorysql',
+    },
+    'pg': {
+        'driver_class': 'org.postgresql.Driver',
+        'url': 'jdbc:postgresql://{host}:{port}/{db}',
+        'port': 5432,
+        'db_default': 'postgres',
+    },
+    'kingbase': {
+        # KingbaseES V8 官方驱动/URL（kingbase8 协议）。
+        # 注意：jar 内真实驱动类为 com.kingbase8.Driver（非 com.kingbase8.jdbc.Driver，
+        # 后者是文档常见笔误，实测不在 jar 中，2026-08-19 修正）。
+        'driver_class': 'com.kingbase8.Driver',
+        'url': 'jdbc:kingbase8://{host}:{port}/{db}',
+        'port': 54321,
+        'db_default': 'kingbase',
+    },
+    'yashandb': {
+        'driver_class': 'com.yashandb.jdbc.Driver',
+        'url': 'jdbc:yashandb://{host}:{port}/{db}',
+        'port': 1688,
+        'db_default': 'yashandb',
+    },
+    'mysql': {
+        'driver_class': 'com.mysql.cj.jdbc.Driver',
+        'url': 'jdbc:mysql://{host}:{port}/{db}',
+        'port': 3306,
+        'db_default': 'mysql',
+    },
+    'mariadb': {
+        'driver_class': 'org.mariadb.jdbc.Driver',
+        'url': 'jdbc:mariadb://{host}:{port}/{db}',
+        'port': 3306,
+        'db_default': 'mysql',
+    },
+    'tidb': {
+        # TiDB 兼容 MySQL 协议：用 MySQL Connector/J + jdbc:mysql://
+        'driver_class': 'com.mysql.cj.jdbc.Driver',
+        'url': 'jdbc:mysql://{host}:{port}/{db}',
+        'port': 4000,
+        'db_default': 'mysql',
+    },
+    'oceanbase': {
+        # OceanBase MySQL 租户：database 指向租户名；不指定时连到租户（无 db 段）
+        'driver_class': 'com.oceanbase.jdbc.Driver',
+        'url': 'jdbc:oceanbase://{host}:{port}/{db}',
+        'port': 2881,
+        'db_default': '',
     },
     'dm': {
         'driver_class': 'dm.jdbc.driver.DmDriver',
@@ -158,7 +214,13 @@ def build_jdbc_url(
       ``jdbc:<db_type>://host:port`` 最简格式（仍可连，报错信息友好）。
     """
     if jdbc_url and str(jdbc_url).strip():
-        return str(jdbc_url).strip()
+        _u = str(jdbc_url).strip()
+        # HGDB 兼容：用户自定义 URL 若沿用 PG 协议前缀，改写为驱动
+        # acceptsURL 认的 jdbc:highgo://（其余原样保留，含 query 参数）；
+        # HighGo 驱动对 jdbc:postgresql:// 前缀一律 No suitable driver。
+        if db_type == 'hgdb' and _u.lower().startswith('jdbc:postgresql:'):
+            _u = 'jdbc:highgo:' + _u[len('jdbc:postgresql:'):]
+        return _u
 
     _prof = JDBC_PROFILES.get(db_type) or {}
     _tpl = _prof.get('url') or f'jdbc:{db_type}://{{host}}:{{port}}'
@@ -185,10 +247,31 @@ def build_jdbc_url(
             _url += f';encrypt=true;trustServerCertificate={_trust};sslProtocol=TLSv1.2'
         else:
             _url += ';encrypt=false'
+        # 专属扩展段（loginTimeout/applicationName/认证方式）由统一层拼接，
+        # 与插件 MssqlJdbcConnectionConfig 原行为逐字节一致。
+        _lt = int(extra.get('login_timeout_s') or 0)
+        _lt = _lt if _lt > 0 else 10
+        _url += (
+            f';loginTimeout={_lt}'
+            f";applicationName={extra.get('application_name') or 'DBCheck'}"
+            ';authentication=NotSpecified'
+        )
         return _url
 
     _svc = service_name or _prof.get('service_default') or _db
     _server = gbase_server_name or _prof.get('server_default') or 'gbase01'
+
+    # HGDB：追加 PG 系超时参数段（connectTimeout/loginTimeout/socketTimeout），
+    # 与插件 HgdbConnectionConfig 原行为逐字节一致（extra 透传超时秒数）。
+    if db_type == 'hgdb':
+        _ct = max(1, int(extra.get('connect_timeout_s') or 15))
+        _st = max(1, int(extra.get('socket_timeout_s') or 30))
+        _base = _tpl.format(
+            host=host, port=_port, db=_db, service=_svc, server=_server,
+            encrypt='true' if encrypt else 'false',
+            trust='true' if trust_server_certificate else 'false',
+        )
+        return _base + f'?connectTimeout={_ct}&loginTimeout={_ct}&socketTimeout={_st}'
 
     _url = _tpl.format(
         host=host,
@@ -216,6 +299,28 @@ def _sort_jars_by_version(jars: List[str]) -> List[str]:
     return sorted(jars, key=_ver, reverse=True)
 
 
+def _append_driver_deps(db_type: str, jars: List[str]) -> List[str]:
+    """附加驱动运行时依赖 jar（驱动 jar 未内置但 classpath 必需的依赖）。
+
+    现状：ClickHouse JDBC 驱动（clickhouse-jdbc all 版）不打包 slf4j-api，
+    驱动类加载时引用 org/slf4j/LoggerFactory → NoClassDefFoundError。
+    将 drivers/clickhouse/slf4j-api-*.jar 附加进 classpath 解决；其它类型
+    无附加依赖时原样返回。
+    """
+    if db_type == 'clickhouse':
+        import glob as _glob
+        try:
+            from modules.core.paths import PROJECT_ROOT
+            _dir = os.path.join(str(PROJECT_ROOT), 'drivers', 'clickhouse')
+            _deps = sorted(_glob.glob(os.path.join(_dir, 'slf4j-api-*.jar')))
+            for _dep in _deps:
+                if _dep not in jars:
+                    jars = list(jars) + [_dep]
+        except Exception:  # noqa: BLE001 - 依赖附加失败不影响主驱动
+            pass
+    return jars
+
+
 def resolve_driver_jars(db_type: str, driver_version: str = '', *,
                         fallback_dirs: Optional[List[str]] = None,
                         recursive: bool = False) -> Optional[List[str]]:
@@ -225,11 +330,12 @@ def resolve_driver_jars(db_type: str, driver_version: str = '', *,
     2) fallback_dirs 提供的目录 glob（如 drivers/dm8/、drivers/gbase/）；
        recursive=True 时含子目录（drivers/dm/ 下按版本分子目录），
        结果按文件名数字版本降序（高版本优先）。
+    返回值统一经过 _append_driver_deps 附加运行时依赖 jar。
     """
     try:
         _resolved = resolve_jdbc_driver_jars(db_type, driver_version or None)
         if _resolved:
-            return _resolved
+            return _append_driver_deps(db_type, _resolved)
     except Exception:  # noqa: BLE001
         pass
     for _d in (fallback_dirs or []):
@@ -239,7 +345,7 @@ def resolve_driver_jars(db_type: str, driver_version: str = '', *,
         _pat = os.path.join(_d, '**', '*.jar') if recursive else os.path.join(_d, '*.jar')
         _jars = _sort_jars_by_version(glob.glob(_pat, recursive=recursive))
         if _jars:
-            return _jars
+            return _append_driver_deps(db_type, _jars)
     return None
 
 
@@ -280,13 +386,35 @@ def open_jdbc_connection(
     encrypt: Optional[bool] = None,
     trust_server_certificate: Optional[bool] = None,
     fallback_dirs: Optional[List[str]] = None,
+    mode: str = 'jaydebeapi',
+    driver_class: Optional[str] = None,
+    properties: Optional[Dict[str, str]] = None,
+    on_error: Optional[Callable[[Exception, Dict[str, Any]],
+                                Optional[Tuple[str, Dict[str, str]]]]] = None,
     **extra: Any,
 ) -> Tuple[Any, Dict[str, Any]]:
-    """统一 JDBC 建连。
+    """统一 JDBC 建连（双模式）。
+
+    mode='jaydebeapi'（默认）：经 jaydebeapi.connect 建连（内置 dm/gbase 等）。
+    mode='jpype'：JPype 直连（DriverManager.getConnection），6 个 JDBC 插件
+    （oracle_jdbc/sqlserver_jdbc/db2/hgdb/clickhouse/uxdb）的 connect() 均走
+    此分支；专属容错通过 properties / on_error / **extra 注入，不在统一层特判
+    具体数据库。
+
+    Args:
+        mode: 'jaydebeapi' | 'jpype'。
+        driver_class: 覆盖注册表默认驱动类（一般不需要，注册表已对齐 jar 内真实类）。
+        properties: JPype 模式附加 JDBC 属性 dict（user/password 自动注入，显式键覆盖）。
+        on_error: JPype 模式建连失败回调，签名 on_error(e, ctx) -> (new_url,
+            new_props) | None；返回非 None 则用新参数重试一次（如 SQL Server
+            SSL 回退）。
+        **extra: 透传给 build_jdbc_url（如 sqlserver 的 instance_name /
+            login_timeout_s / application_name、hgdb 的 connect_timeout_s /
+            socket_timeout_s）。
 
     Returns:
         (conn, meta) 或 (None, {'error': ...})。
-        meta 含 driver / url / driver_class，供日志与错误提示。
+        meta 含 driver / url / driver_class / mode，供日志与错误提示。
     """
     _prof = JDBC_PROFILES.get(db_type) or {}
     _url = build_jdbc_url(
@@ -294,6 +422,7 @@ def open_jdbc_connection(
         database=database, service_name=service_name, use_sid=use_sid,
         gbase_server_name=gbase_server_name, encrypt=encrypt,
         trust_server_certificate=trust_server_certificate, jdbc_url=jdbc_url,
+        **extra,
     )
 
     _jars = resolve_driver_jars(db_type, driver_version, fallback_dirs=fallback_dirs)
@@ -303,35 +432,129 @@ def open_jdbc_connection(
             'error': f'{db_type} JDBC 驱动未找到：请到「数据库驱动管理」上传 {_catalog} 驱动，'
                      f'或放入 drivers/{_catalog}/ 目录',
             'driver': None, 'url': _url, 'driver_class': _prof.get('driver_class'),
+            'mode': mode,
         }
+
+    _start_jvm(_jars)
+
+    _driver_class = driver_class or _prof.get('driver_class')
+    _basename = os.path.basename(_jars[0]) if _jars else ''
+
+    if mode == 'jpype':
+        return _open_jpype_connection(
+            db_type, _url, user, password, _jars,
+            driver_class=_driver_class, properties=properties, on_error=on_error,
+        )
 
     try:
         import jaydebeapi
     except Exception as e:  # noqa: BLE001
         return None, {'error': f'未安装 jaydebeapi：{e}', 'driver': None,
-                      'url': _url, 'driver_class': _prof.get('driver_class')}
+                      'url': _url, 'driver_class': _driver_class, 'mode': mode}
 
-    _start_jvm(_jars)
-
-    _driver_class = _prof.get('driver_class')
-    _basename = os.path.basename(_jars[0]) if _jars else ''
     try:
         conn = jaydebeapi.connect(
             _driver_class, _url, [user, password], _jars,
         )
-        return conn, {'driver': _basename, 'url': _url, 'driver_class': _driver_class}
+        return conn, {'driver': _basename, 'url': _url,
+                      'driver_class': _driver_class, 'mode': mode}
     except Exception as e:  # noqa: BLE001
-        _err = f'{db_type} JDBC 连接失败: {e}\nJDBC URL: {_url}\n驱动: {_basename}'
-        # 达梦 -70089：服务端开启通信加密（COMM_ENCRYPT）时，驱动
-        # （DmCipherEncryptDLL.loadLibrary('zbCrypto')）需 JNI 加载本机达梦
-        # 客户端原生加密库；未安装客户端即报 -70089。与驱动版本新旧无关。
-        if db_type == 'dm' and ('-70089' in str(e) or 'Encryption module' in str(e)):
-            _err += (
-                '\n\n[达梦 -70089 修复指引] 当前达梦服务端开启了通信加密（COMM_ENCRYPT），'
-                'JDBC 驱动的加密模块（zbCrypto）依赖本机达梦客户端原生库。请任选其一：\n'
-                '  ① 服务端 dm.ini 将 COMM_ENCRYPT 设为 0（不加密）后重启实例；\n'
-                '  ② 本机安装达梦数据库客户端（含加密库，安装后其 bin 目录自动生效）；\n'
-                '  ③ 若服务端是 DM7/DM6，请改用对应版本的 JDBC 驱动。'
-            )
-        return None, {'error': _err,
-                      'driver': _basename, 'url': _url, 'driver_class': _driver_class}
+        return _jdbc_error_result(db_type, e, _url, _basename, _driver_class, mode)
+
+
+def _jdbc_error_result(
+    db_type: str,
+    e: Exception,
+    url: str,
+    basename: str,
+    driver_class: Optional[str],
+    mode: str = 'jaydebeapi',
+) -> Tuple[None, Dict[str, Any]]:
+    """错误归一化：统一错误文案 + 达梦 -70089 修复指引（两模式共用）。"""
+    _err = f'{db_type} JDBC 连接失败: {e}\nJDBC URL: {url}\n驱动: {basename}'
+    # 达梦 -70089：服务端开启通信加密（COMM_ENCRYPT）时，驱动
+    # （DmCipherEncryptDLL.loadLibrary('zbCrypto')）需 JNI 加载本机达梦
+    # 客户端原生加密库；未安装客户端即报 -70089。与驱动版本新旧无关。
+    if db_type == 'dm' and ('-70089' in str(e) or 'Encryption module' in str(e)):
+        _err += (
+            '\n\n[达梦 -70089 修复指引] 当前达梦服务端开启了通信加密（COMM_ENCRYPT），'
+            'JDBC 驱动的加密模块（zbCrypto）依赖本机达梦客户端原生库。请任选其一：\n'
+            '  ① 服务端 dm.ini 将 COMM_ENCRYPT 设为 0（不加密）后重启实例；\n'
+            '  ② 本机安装达梦数据库客户端（含加密库，安装后其 bin 目录自动生效）；\n'
+            '  ③ 若服务端是 DM7/DM6，请改用对应版本的 JDBC 驱动。'
+        )
+    return None, {'error': _err, 'driver': basename, 'url': url,
+                  'driver_class': driver_class, 'mode': mode}
+
+
+def _open_jpype_connection(
+    db_type: str,
+    url: str,
+    user: str,
+    password: str,
+    jars: List[str],
+    *,
+    driver_class: Optional[str] = None,
+    properties: Optional[Dict[str, str]] = None,
+    on_error: Optional[Callable[[Exception, Dict[str, Any]],
+                                Optional[Tuple[str, Dict[str, str]]]]] = None,
+) -> Tuple[Any, Dict[str, Any]]:
+    """JPype 直连建连：统一 JVM + 驱动注册 + Properties 装配 + DriverManager。
+
+    6 个 JDBC 插件的 connect() 均走此分支；专属容错（oracle sysdba props /
+    sqlserver SSL 回退 / db2 -4461 规避 / clickhouse HTTP 头）通过
+    properties / on_error 注入，不在此处特判具体数据库。
+    """
+    import jpype
+    import jpype.imports  # noqa: F401 - 注册 java 包导入钩子（幂等）
+
+    _driver_class = driver_class or JDBC_PROFILES.get(db_type, {}).get('driver_class')
+    _basename = os.path.basename(jars[0]) if jars else ''
+    try:
+        # 1. 驱动类显式加载并注册到 DriverManager。
+        #    不能只靠 JClass 实例化触发静态块：国产驱动（实测 HighGo
+        #    com.highgo.jdbc.Driver）不带静态自注册，JDBC 4 的
+        #    META-INF/services 自动发现又只在 DriverManager 首次初始化时
+        #    扫描 classpath，晚加载的 jar 不会被发现 → No suitable driver。
+        #    registerDriver 显式注册（DriverManager 内部 addIfAbsent 幂等），
+        #    对自带静态注册的官方驱动（Oracle/SQLServer/Db2/CH）无副作用。
+        from java.sql import DriverManager
+        _driver = jpype.JClass(_driver_class)()
+        DriverManager.registerDriver(_driver)
+        from java.util import Properties as _JProps
+
+        # 2. Properties 装配：user/password 自动注入，显式键覆盖
+        _props = _JProps()
+        _props.setProperty('user', str(user))
+        _props.setProperty('password', str(password))
+        for _k, _v in (properties or {}).items():
+            _props.setProperty(str(_k), str(_v))
+
+        # 3. 建连；失败时 on_error 回调返回 (new_url, new_props) 则重试一次
+        try:
+            conn = DriverManager.getConnection(url, _props)
+        except Exception as first_e:  # noqa: BLE001
+            if on_error is not None:
+                _retry = on_error(first_e, {
+                    'db_type': db_type, 'url': url,
+                    'properties': dict(properties or {}), 'user': user,
+                })
+                if _retry:
+                    _new_url, _new_props = _retry
+                    _p2 = _JProps()
+                    for _k, _v in (_new_props or {}).items():
+                        _p2.setProperty(str(_k), str(_v))
+                    try:
+                        conn = DriverManager.getConnection(_new_url, _p2)
+                    except Exception as second_e:  # noqa: BLE001
+                        raise RuntimeError(
+                            f'{first_e}（已尝试回退重试，但仍失败: {second_e}）'
+                        ) from second_e
+                else:
+                    raise
+            else:
+                raise
+        return conn, {'driver': _basename, 'url': url,
+                      'driver_class': _driver_class, 'mode': 'jpype'}
+    except Exception as e:  # noqa: BLE001
+        return _jdbc_error_result(db_type, e, url, _basename, _driver_class, 'jpype')

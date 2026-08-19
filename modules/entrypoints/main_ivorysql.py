@@ -72,43 +72,54 @@ class IvorySQLInspector(BaseInspectionEngine):
     继承 BaseInspectionEngine，只需实现 connect() 和 get_template_id()
     """
     
-    def __init__(self, host, port, user, password, database='ivorysql', ssh_info=None, template_id=None):
+    def __init__(self, host, port, user, password, database='ivorysql', ssh_info=None, template_id=None, driver_version=''):
         super().__init__(host, port, user, password, database, ssh_info, template_id)
         self.db_type = 'ivorysql'  # 设置数据库类型
         self._lang = get_lang()
-        
+        self.driver_version = driver_version or ''
+
     def connect(self):
         """
-        连接 IvorySQL 数据库
-        使用 psycopg2 驱动（IvorySQL 基于 PostgreSQL）
+        连接 IvorySQL 数据库（统一 JDBC 连接层）。
+
+        IvorySQL 兼容 PostgreSQL 协议，复用 PostgreSQL JDBC 驱动
+        （org.postgresql.Driver / jdbc:postgresql://）。驱动 jar 优先
+        「数据库驱动管理」登记版本（self.driver_version），否则回退
+        drivers/postgresql/ 自动发现。与 6 个 JDBC 插件同一套
+        modules.jdbc_connector.open_jdbc_connection。
         """
         try:
-            self.conn = ivorysql_driver.connect(
-                host=self.host,
-                port=int(self.port),
-                user=self.user,
-                password=self.password,
+            import os as _os
+            from modules.jdbc_connector import open_jdbc_connection
+            from modules.core.paths import PROJECT_ROOT
+            _conn, _meta = open_jdbc_connection(
+                'ivorysql', self.host, int(self.port),
+                user=self.user, password=self.password,
                 database=self.database or 'ivorysql',
-                connect_timeout=10
+                driver_version=self.driver_version,
+                fallback_dirs=[_os.path.join(str(PROJECT_ROOT), 'drivers', 'postgresql')],
             )
+            if _conn is None:
+                return False, (_meta or {}).get('error') or 'IvorySQL JDBC 连接失败'
+            self.conn = _conn
             self.cursor = self.conn.cursor()
-            
+
             # 获取版本信息
             self.cursor.execute("SELECT version()")
             version = self.cursor.fetchone()[0]
             self.context['version'] = [{'version': version}]
-            
+
             print(_t("ivorysql_connect_success").format(host=self.host, port=self.port))
             return True, version
-            
+
         except Exception as e:
             err_msg = str(e)
             print(_t("ivorysql_connect_fail").format(error=err_msg))
             return False, err_msg
 
 # ── 保留原有 API 兼容性（供 web_ui.py 旧代码调用）────────────────────
-def getData(ip, port, user, password, database='ivorysql', ssh_info=None, label=None, template_id=None):
-    inspector = IvorySQLInspector(ip, port, user, password, database, ssh_info, template_id)
+def getData(ip, port, user, password, database='ivorysql', ssh_info=None, label=None, template_id=None, driver_version=''):
+    inspector = IvorySQLInspector(ip, port, user, password, database, ssh_info, template_id, driver_version)
     ok, ver = inspector.connect()
     if not ok:
         return None

@@ -251,23 +251,15 @@ class ClickHouseJdbcInspector(BaseInspectionEngine):
     # 连接层
     # ════════════════════════════════════════════════
     def connect(self) -> Tuple[bool, str]:
-        """连接 ClickHouse 数据库（JPype + clickhouse-jdbc，JDBC-over-HTTP）。
+        """连接 ClickHouse 数据库（统一连接层 JPype 模式，JDBC-over-HTTP）。
 
         Returns:
             (ok, msg)：ok 为 True 时 msg 是版本可读串；
                           ok 为 False 时 msg 是错误信息。
         """
         try:
-            import jpype  # noqa: F401
-
-            # 1. 确保 JVM 启动且驱动 jar 在 classpath（共享单例）
-            # 按绝对路径 + 唯一模块名加载本插件自有的 jdbc_jvm，避免被 db2 等同名
-            # 模块抢注（同名兄弟模块冲突）
-            _jvm = _load_own_jdbc_jvm()
-            _jvm.ensure_jvm(specific_jars=self.jdbc_driver_path)
-            _jvm.register_clickhouse_driver()
-
-            # 2. 构建连接配置（ClickHouseConnectionConfig 已在模块级按路径绑定，避免同名模块污染）
+            # 1. 构建连接配置（ClickHouseConnectionConfig 已在模块级按路径绑定；
+            #    build_jdbc_url/build_properties 均委托统一层）
             cfg = ClickHouseConnectionConfig(
                 host=self.host,
                 port=int(self.port),
@@ -279,7 +271,7 @@ class ClickHouseJdbcInspector(BaseInspectionEngine):
                 custom_http_headers=self.custom_http_headers,
             )
 
-            # 3. 可选 SSH 隧道：把连接目标改写为 127.0.0.1:<local_port>（决策 ③）
+            # 2. 可选 SSH 隧道：把连接目标改写为 127.0.0.1:<local_port>（决策 ③）
             tunnel_cfg = cfg
             if getattr(self, 'ssh_info', None) and self.ssh_info.get('ssh_host'):
                 try:
@@ -314,14 +306,24 @@ class ClickHouseJdbcInspector(BaseInspectionEngine):
 
             self.conn_cfg = tunnel_cfg
 
-            from java.sql import DriverManager
+            # 3. 统一连接层：驱动解析 / JVM 启动 / URL 构造 / props 装配 / 建连。
+            #    认证映射（user/password -> X-ClickHouse-User/X-ClickHouse-Key）、
+            #    socket_timeout、ssl、自定义 HTTP 头均经 properties 透传。
+            from modules.jdbc_connector import open_jdbc_connection
+            conn, meta = open_jdbc_connection(
+                'clickhouse', tunnel_cfg.host, tunnel_cfg.port,
+                user=tunnel_cfg.user, password=tunnel_cfg.password,
+                driver_version=self.driver_version,
+                database=tunnel_cfg.database,
+                jdbc_url=tunnel_cfg.jdbc_url or '',
+                mode='jpype',
+                properties=tunnel_cfg.build_properties(),
+            )
+            if conn is None:
+                return False, meta['error']
 
-            url = tunnel_cfg.build_jdbc_url()
-            props = _java_properties(tunnel_cfg.build_properties())
-            jdbc_conn = DriverManager.getConnection(url, props)
-
-            self.raw_jdbc_conn = jdbc_conn
-            self.conn = JdbcConnectionWrapper(jdbc_conn)
+            self.raw_jdbc_conn = conn
+            self.conn = JdbcConnectionWrapper(conn)
             self.cursor = self.conn.cursor()
 
             # 4. 读取版本

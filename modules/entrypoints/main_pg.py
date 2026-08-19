@@ -28,7 +28,7 @@ class PostgreSQLInspector(BaseInspectionEngine):
     只需实现 connect() 方法，其他逻辑全部在基类中！
     """
     
-    def __init__(self, host, port, user, password, database=None, ssh_info=None, template_id=None):
+    def __init__(self, host, port, user, password, database=None, ssh_info=None, template_id=None, driver_version=''):
         """
         初始化 PostgreSQL 巡检器
 
@@ -39,19 +39,47 @@ class PostgreSQLInspector(BaseInspectionEngine):
         :param database: 要连接的数据库名（可选，默认 'postgres'）
         :param ssh_info: SSH 连接信息字典（可选）
         :param template_id: 巡检模板 ID（可选，指定后使用对应模板的 SQL）
+        :param driver_version: JDBC 驱动版本（可选，驱动管理登记；空=激活版本）
         """
         super().__init__(host, port, user, password, database, ssh_info, template_id)
         self.db_type = 'postgresql'
-    
+        self.driver_version = driver_version or ''
+
     def connect(self):
         """
-        连接 PostgreSQL 数据库
-        
+        连接 PostgreSQL 数据库（统一 JDBC 优先，回退 psycopg2）。
+
         返回:
             (ok, version) - ok 为 True 时 version 是版本号，否则是错误信息
         """
-        import psycopg2
         try:
+            import os as _os
+            from modules.jdbc_connector import open_jdbc_connection
+            from modules.core.paths import PROJECT_ROOT
+            _conn, _meta = open_jdbc_connection(
+                'pg', self.host, int(self.port),
+                user=self.user, password=self.password,
+                database=self.database or 'postgres',
+                driver_version=self.driver_version,
+                fallback_dirs=[_os.path.join(str(PROJECT_ROOT), 'drivers', 'postgresql')],
+            )
+            if _conn is None:
+                return self._connect_native((_meta or {}).get('error') or 'JDBC 连接失败')
+            self.conn = _conn
+            self.cursor = self.conn.cursor()
+            self.cursor.execute("SELECT version()")
+            ver = self.cursor.fetchone()[0]
+            return True, ver
+        except Exception as e:
+            return self._connect_native(str(e))
+
+    def _connect_native(self, reason=''):
+        """回退：psycopg2 原生连接（JDBC 驱动缺失/JVM 异常时）。
+
+        巡检子进程未 gevent monkey-patch，psycopg2 原生调用安全。
+        """
+        try:
+            import psycopg2
             self.conn = psycopg2.connect(
                 host=self.host,
                 port=self.port,
@@ -64,20 +92,21 @@ class PostgreSQLInspector(BaseInspectionEngine):
             self.cursor = self.conn.cursor()
             self.cursor.execute("SELECT version()")
             ver = self.cursor.fetchone()[0]
+            print(f"[PostgreSQL] psycopg2 回退连接成功（JDBC: {reason[:80]}...）" if reason else "[PostgreSQL] psycopg2 连接成功")
             return True, ver
-        except Exception as e:
-            return False, str(e)
+        except Exception as e2:
+            return False, (f'{reason}；psycopg2 回退也失败: {e2}' if reason else str(e2))
 
 
 # ── 保留原有 API 兼容性（供 web_ui.py 旧代码调用）────────────────────
-def getData(ip, port, user, password, database='postgres', ssh_info=None, label=None, template_id=None):
+def getData(ip, port, user, password, database='postgres', ssh_info=None, label=None, template_id=None, driver_version=''):
     """
     原有 API - 创建 PostgreSQLInspector 实例
 
     注意：这个函数在重构过程中保留，用于兼容 web_ui.py 中的旧代码。
     新代码应该直接使用 PostgreSQLInspector 类。
     """
-    inspector = PostgreSQLInspector(ip, port, user, password, database, ssh_info, template_id)
+    inspector = PostgreSQLInspector(ip, port, user, password, database, ssh_info, template_id, driver_version)
     ok, ver = inspector.connect()
     if not ok:
         return None
