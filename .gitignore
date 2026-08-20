@@ -163,7 +163,7 @@ modules/data/**
 # 故仅以 surgical 条目补齐迁移期产物，保持现有合理条目不变。
 
 # 驱动登记随包种子（含用户驱动配置，本地打包生成，不入库）
-modules/config/drivers_seed.json
+#modules/config/drivers_seed.json
 
 # 临时脚本/片段（一次性任务产物，不入库）
 _tmp_*.py
