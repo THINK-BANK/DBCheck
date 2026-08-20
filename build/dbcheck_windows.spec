@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-# DBCheck Windows 打包配置
+# RaccoonX Windows 打包配置
 
 import os
 
@@ -123,7 +123,7 @@ coll = COLLECT(
     exe,
     a.binaries,
     a.datas,
-    name='DBCheck-Windows',
+    name='RaccoonX-Windows',
     upx=True,
     upx_exclude=[],
     bootloader_ignore_signals=False,

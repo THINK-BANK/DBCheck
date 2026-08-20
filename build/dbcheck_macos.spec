@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-# DBCheck macOS 打包配置
+# RaccoonX macOS 打包配置
 
 import os
 
@@ -121,7 +121,7 @@ coll = COLLECT(
     exe,
     a.binaries,
     a.datas,
-    name='DBCheck-macOS',
+    name='RaccoonX-macOS',
     upx=False,
     upx_exclude=[],
     bootloader_ignore_signals=False,

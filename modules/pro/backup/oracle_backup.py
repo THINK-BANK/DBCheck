@@ -4,7 +4,7 @@
 # Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
 
 """
-DBCheck Pro Backup - Oracle Engine
+RaccoonX Backup - Oracle Engine
 基于 expdp (Data Pump) 的 Oracle 备份引擎
 """
 

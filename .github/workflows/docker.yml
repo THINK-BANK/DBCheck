@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version tag (e.g. v26.8.17.0)"
+        description: "Version tag (e.g. v26.8.20.0)"
         required: true
-        default: "v26.8.17.0"
+        default: "v26.8.20.0"
       push:
         description: "Also push to Docker Hub & GHCR?"
         required: false
@@ -81,7 +81,7 @@ jobs:
             ${{ env.GHCR_IMAGE }}:latest
             ${{ env.GHCR_IMAGE }}:${{ steps.version.outputs.version_num }}
           labels: |
-            org.opencontainers.image.title=DBCheck
+            org.opencontainers.image.title=RaccoonX
             org.opencontainers.image.description=Database Intelligent Inspection Tool
             org.opencontainers.image.source=https://github.com/fiyo/DBCheck
             org.opencontainers.image.version=${{ steps.version.outputs.version }}
@@ -131,7 +131,7 @@ jobs:
         uses: softprops/action-gh-release@v3.0.2
         with:
           tag_name: ${{ steps.version.outputs.version }}
-          name: DBCheck ${{ steps.version.outputs.version }}
+          name: RaccoonX ${{ steps.version.outputs.version }}
           body: |
             ## What's Changed
             ${{ steps.notes.outputs.notes }}

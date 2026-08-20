@@ -1,13 +1,13 @@
 #!/bin/bash
 # ============================================================
-# DBCheck Linux Build Script
+# RaccoonX Linux Build Script
 # Target: CentOS 7.9 / RHEL 7+
 # Requires: Python >= 3.10, pip, gcc
 # ============================================================
 set -e
 
 echo "========================================"
-echo "  DBCheck Linux Build Script"
+echo "  RaccoonX Linux Build Script"
 echo "========================================"
 echo ""
 
@@ -73,7 +73,7 @@ $PYTHON_CMD -m PyInstaller build/dbcheck_linux.spec --noconfirm
 echo "[5/5] Packaging release..."
 
 # Create start script
-BUILDDIR="dist/DBCheck-Linux"
+BUILDDIR="dist/RaccoonX-Linux"
 cat > "$BUILDDIR/start.sh" << 'STARTEOF'
 #!/bin/bash
 cd "$(dirname "$0")"
@@ -82,9 +82,9 @@ STARTEOF
 chmod +x "$BUILDDIR/start.sh"
 
 # Create tar.gz
-RELEASE_NAME="DBCheck-Linux-x86_64"
+RELEASE_NAME="RaccoonX-Linux-x86_64"
 cd dist
-tar czf "$RELEASE_NAME.tar.gz" DBCheck-Linux/
+tar czf "$RELEASE_NAME.tar.gz" RaccoonX-Linux/
 cd "$PROJECT_ROOT"
 
 RELEASE_SIZE=$(du -sh "dist/$RELEASE_NAME.tar.gz" | cut -f1)
@@ -96,4 +96,4 @@ echo "========================================"
 echo ""
 echo "Deploy to CentOS:"
 echo "  tar xzvf $RELEASE_NAME.tar.gz"
-echo "  cd DBCheck-Linux && bash start.sh"
+echo "  cd RaccoonX-Linux && bash start.sh"

@@ -2807,7 +2807,7 @@ KO.update({
     "webui.ssh_testing": "SSH 테스트 중...",
     "webui.ssh_user": "SSH 사용자 이름",
     "webui.start_fail": "시작 실패",
-    "webui.startup_msg": "DBCheck Web UI 시작 중: http://localhost:{port}",
+    "webui.startup_msg": "RaccoonX Web UI 시작 중: http://localhost:{port}",
     "webui.status_error": "점검 실패",
     "webui.status_pending": "실행 대기 중...",
     "webui.status_preparing": "준비 중...",

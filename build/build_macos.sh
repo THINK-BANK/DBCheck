@@ -1,13 +1,13 @@
 #!/bin/bash
 # ============================================================
-# DBCheck macOS Build Script
+# RaccoonX macOS Build Script
 # Target: macOS 12+ (Monterey and later)
 # Requires: Python >= 3.10, pip
 # ============================================================
 set -e
 
 echo "========================================"
-echo "  DBCheck macOS Build Script"
+echo "  RaccoonX macOS Build Script"
 echo "========================================"
 echo ""
 
@@ -77,10 +77,10 @@ case "$ARCH" in
     aarch64|arm64) ARCH="arm64" ;;
     x86_64) ARCH="x86_64" ;;
 esac
-RELEASE_NAME="DBCheck-macOS-$ARCH"
+RELEASE_NAME="RaccoonX-macOS-$ARCH"
 
 # Create start script
-BUILDDIR="dist/DBCheck-macOS"
+BUILDDIR="dist/RaccoonX-macOS"
 cat > "$BUILDDIR/start.sh" << 'STARTEOF'
 #!/bin/bash
 cd "$(dirname "$0")"
@@ -90,7 +90,7 @@ chmod +x "$BUILDDIR/start.sh"
 
 # Create tar.gz
 cd dist
-tar czf "$RELEASE_NAME.tar.gz" DBCheck-macOS/
+tar czf "$RELEASE_NAME.tar.gz" RaccoonX-macOS/
 cd "$PROJECT_ROOT"
 
 RELEASE_SIZE=$(du -sh "dist/$RELEASE_NAME.tar.gz" | cut -f1)
@@ -102,4 +102,4 @@ echo "========================================"
 echo ""
 echo "Deploy to macOS:"
 echo "  tar xzvf $RELEASE_NAME.tar.gz"
-echo "  cd DBCheck-macOS && bash start.sh"
+echo "  cd RaccoonX-macOS && bash start.sh"

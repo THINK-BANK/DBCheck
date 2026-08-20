@@ -42,7 +42,7 @@ echo    密码      : %PASSWORD%
 echo    认证库    : admin
 echo    认证机制  : SCRAM-SHA-256 (Mongo 7 默认)
 echo  ----------------------------------------------------------------
-echo  在 DBCheck Web UI 添加 MongoDB 数据源时填写：
+echo  在 RaccoonX Web UI 添加 MongoDB 数据源时填写：
 echo    host           = localhost
 echo    port           = %PORT%
 echo    user           = %USER%

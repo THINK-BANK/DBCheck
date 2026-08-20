@@ -15570,6 +15570,21 @@ async function executeFixSql(taskId, sql) {
   .drivers-table tbody tr.is-active { border-left: 3px solid var(--success, #10b981); }
   .drivers-table code { transition: all .15s ease; }
   .drivers-table code:hover { color: var(--text); border: 1px solid var(--border); }
+
+  /* ── 驱动管理操作按钮强化（激活/删除/图标）── */
+  .drivers-actions { gap: 8px; }
+  .btn-xs { padding: 5px 12px; font-size: 12px; border-radius: 7px; font-weight: 500; letter-spacing: .2px; }
+  .btn-xs.btn-ghost {
+    border: 1px solid var(--accent, #00C8A0); color: var(--accent, #00C8A0);
+    background: rgba(0,200,160,.05);
+  }
+  .btn-xs.btn-ghost:hover { background: var(--accent, #00C8A0); color: #04121a; border-color: var(--accent, #00C8A0); }
+  .btn-xs.btn-danger {
+    border: 1px solid rgba(248,81,73,.45); color: var(--danger, #f85149);
+    background: rgba(248,81,73,.07);
+  }
+  .btn-xs.btn-danger:hover { background: var(--danger, #f85149); color: #fff; }
+  .drivers-icon-btn { font-weight: 700; }
 </style>
 
 

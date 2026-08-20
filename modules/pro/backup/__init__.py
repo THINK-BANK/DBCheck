@@ -4,7 +4,7 @@
 # Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
 
 """
-DBCheck Pro Backup Module
+RaccoonX Backup Module
 数据库备份模块
 """
 

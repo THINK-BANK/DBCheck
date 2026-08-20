@@ -4,7 +4,7 @@
 # Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
 
 """
-DBCheck Pro Backup - MySQL Engine
+RaccoonX Backup - MySQL Engine
 基于 mysqldump 的 MySQL 备份引擎
 """
 

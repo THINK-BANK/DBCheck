@@ -1,6 +1,6 @@
 @echo off
 chcp 437 >nul
-title DBCheck Windows Build
+title RaccoonX Windows Build
 cd /d "%~dp0.."
 
 :: Use temp directory for PyInstaller intermediate files
@@ -9,7 +9,7 @@ set WORKPATH=%TEMP%\dbcheck_build_%RANDOM%
 set DISTPATH=dist
 
 echo ==========================================
-echo   DBCheck Windows Build Script
+echo   RaccoonX Windows Build Script
 echo   Target: Windows x64
 echo ==========================================
 echo.
@@ -34,8 +34,8 @@ if errorlevel 1 (
 
 :: --- Read version ---
 for /f "tokens=*" %%v in ('python -c "import json,sys; d=json.load(open('version.json','r',encoding='utf-8')); print(d['version'])"') do set VERSION=%%v
-if not defined VERSION set VERSION=v26.8.17.0
-echo [    ] DBCheck version: %VERSION%
+if not defined VERSION set VERSION=v26.8.20.0
+echo [    ] RaccoonX version: %VERSION%
 echo.
 
 :: --- Install dependencies ---
@@ -83,7 +83,7 @@ pyinstaller --clean --workpath "%WORKPATH%" --distpath "%DISTPATH%" build\dbchec
 if errorlevel 1 (
     echo.
     echo [ERROR] PyInstaller failed!
-    echo [    ] Common fix: close any running DBCheck instances, then retry.
+    echo [    ] Common fix: close any running RaccoonX instances, then retry.
     pause
     exit /b 1
 )
@@ -94,8 +94,8 @@ if exist "%WORKPATH%" (
 )
 
 :: Check output
-if not exist "%DISTPATH%\DBCheck-Windows" (
-    echo [ERROR] Build output not found at %DISTPATH%\DBCheck-Windows
+if not exist "%DISTPATH%\RaccoonX-Windows" (
+    echo [ERROR] Build output not found at %DISTPATH%\RaccoonX-Windows
     pause
     exit /b 1
 )

@@ -1,10 +1,10 @@
 #!/bin/bash
 # docker-entrypoint.sh
-# DBCheck Docker 容器启动脚本
+# RaccoonX Docker 容器启动脚本
 
 set -e
 
-echo "==> DBCheck v$(cat /app/VERSION.txt 2>/dev/null || echo 'unknown')"
+echo "==> RaccoonX v$(cat /app/VERSION.txt 2>/dev/null || echo 'unknown')"
 
 # Check available memory (warn if < 2GB)
 if [ -f /proc/meminfo ]; then

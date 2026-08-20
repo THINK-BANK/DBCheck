@@ -2809,7 +2809,7 @@ DE.update({
     "webui.ssh_testing": "SSH-Verbindung wird getestet...",
     "webui.ssh_user": "SSH-Benutzername",
     "webui.start_fail": "Start fehlgeschlagen",
-    "webui.startup_msg": "DBCheck Web UI wird gestartet: http://localhost:{port}",
+    "webui.startup_msg": "RaccoonX Web UI wird gestartet: http://localhost:{port}",
     "webui.status_error": "Inspektion fehlgeschlagen",
     "webui.status_pending": "Wartet auf Ausführung...",
     "webui.status_preparing": "Wird vorbereitet...",

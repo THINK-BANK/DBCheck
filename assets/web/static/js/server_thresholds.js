@@ -1,4 +1,4 @@
-// DBCheck - 服务器阈值配置前端逻辑
+// RaccoonX - 服务器阈值配置前端逻辑
 // 文件: static/js/server_thresholds.js
 
 // 分类分组定义

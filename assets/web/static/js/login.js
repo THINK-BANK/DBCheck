@@ -1,5 +1,5 @@
 /* ═════════════════════════════════════
-   DBCheck 登录页 JavaScript - 2026-06-06
+   RaccoonX 登录页 JavaScript - 2026-06-06
    ═════════════════════════════════════ */
 
 /* ─── 主题切换 ─── */
@@ -59,7 +59,7 @@ function loadVersion(){
   fetch('/version.json')
     .then(r => r.json())
     .then(d => {
-      const v = (d && d.version) || 'v26.8.17.0';
+      const v = (d && d.version) || 'v26.8.20.0';
       const el1 = document.getElementById('login-version');
       const el2 = document.getElementById('footer-version');
       if (el1) el1.textContent = v;

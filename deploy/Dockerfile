@@ -18,7 +18,7 @@
 # time (main_ivorysql -> openpyxl -> numpy). Pinning numpy<2 (1.26.x) uses the
 # baseline x86_64 wheel (SSE2 only) and imports everywhere. This is independent of
 # the multi-arch story below (ARM64 信创 fleets still want a native arm64 image).
-# NOTE: Oracle client libs in drivers.zip are x86_64; Oracle support is
+# NOTE: Oracle client libs in drivers/ are x86_64; Oracle support is
 #       unavailable on arm64 (non-fatal — the image still builds & serves 5003).
 #
 # Run:
@@ -71,29 +71,20 @@ RUN python -m venv /opt/venv \
 RUN /opt/venv/bin/pip install --no-cache-dir dmpython>=1.0.0 \
     || echo "WARNING: dmpython installation failed (DM8 will use JDBC driver if present)."
 
-# Download and extract drivers.zip from GitHub Releases (fatal if failed)
-# Provides: YashanDB wheel, Oracle client libs, etc. (all kept in the image)
-# NOTE: drivers.zip is hosted on GitHub Releases, ensure the URL is accessible during build.
-# If download fails, the build will error out intentionally (no silent skip).
-RUN curl -fSL "https://atomgit.com/wfgyj/DBCheck/releases/download/drivers/drivers.zip" \
-    -o /tmp/drivers.zip \
-    && unzip -o /tmp/drivers.zip -d /build/ \
-    && rm -f /tmp/drivers.zip \
-    || (echo "ERROR: drivers.zip download failed! Please check the URL or manually place drivers in drivers/ directory." && exit 1)
+# Copy application code（drivers/ 全部子目录及文件随构建上下文打包进镜像，
+# 无需再从 GitHub Releases 拉取 drivers.zip——构建期不再要求联网下载驱动包）
+COPY . .
 
-# Install YashanDB wheel (if downloaded successfully)
+# Docker 镜像仅运行于 Linux：剔除 Oracle instant client 的 windows_x64 平台文件
+# （drivers/ 随本地 COPY 带入，.dockerignore 已排除该子目录，此处再清一次双保险）
+RUN rm -rf /build/drivers/oracle_client/windows_x64
+
+# Install YashanDB wheel（drivers/yashandb/ 已随 COPY 进入镜像）
 RUN if [ -f /build/drivers/yashandb/yasdb-1.2.0-py3-none-any.whl ]; then \
         /opt/venv/bin/pip install --no-cache-dir /build/drivers/yashandb/yasdb-1.2.0-py3-none-any.whl; \
     else \
         echo "WARNING: yasdb wheel not found, YashanDB support disabled"; \
     fi
-
-# Copy application code
-COPY . .
-
-# Docker 镜像仅运行于 Linux：剔除 Oracle instant client 的 windows_x64 平台文件
-# （远程 drivers.zip 解压会带入，本地 COPY 经 .dockerignore 已排除，此处再清一次双保险）
-RUN rm -rf /build/drivers/oracle_client/windows_x64
 
 # Pre-compile .pyc for faster startup
 RUN /opt/venv/bin/python -m compileall /build 2>/dev/null || true
@@ -135,9 +126,9 @@ ENV PYTHONUNBUFFERED=1
 ENV PYTHONMEMORYLIMIT=2g
 
 # Create VERSION.txt (without v prefix, matches Docker tag format)
-# DBCHECK_VERSION 可在构建时覆盖: --build-arg DBCHECK_VERSION=v26.8.17.0
-ARG DBCHECK_VERSION=26.8.17.0
-RUN echo 26.8.17.0 > /app/VERSION.txt
+# DBCHECK_VERSION 可在构建时覆盖: --build-arg DBCHECK_VERSION=v26.8.20.0
+ARG DBCHECK_VERSION=26.8.20.0
+RUN echo 26.8.20.0 > /app/VERSION.txt
 
 # Ensure data and pro_data directories exist for volume mounts
 RUN mkdir -p /app/data /app/data/pro_data /app/data/reports

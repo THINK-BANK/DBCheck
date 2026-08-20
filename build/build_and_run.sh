@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 #
-# build_and_run.sh — 一键重建并运行 DBCheck Docker 镜像
+# build_and_run.sh — 一键重建并运行 RaccoonX Docker 镜像
 #
 # 用途：删除旧容器 → 重新构建镜像（上下文为仓库根目录）→ 启动容器 → 跟随日志
 # 适用：openEuler / Linux / WSL / Git Bash（x86_64 原生环境）
 #
 # 注意：
-#   - 构建期需联网：pip 装依赖 + 从 atomgit.com 下载 drivers.zip（下载失败会故意报错退出）
+#   - 构建期需联网：pip 装依赖；drivers/ 全部子目录随构建上下文直接打包（不再从网络下载 drivers.zip）
 #   - 镜像内 VERSION.txt 在 Dockerfile 中是硬编码字面量，--build-arg 改不了它，本脚本不传该参数
 #   - 数据通过 volume 持久化（/app/data 等），重建容器不会丢数据
 #
@@ -29,7 +29,7 @@ PLATFORM="${PLATFORM:-}"
 cd "${REPO_ROOT}"
 
 echo "=================================================="
-echo " DBCheck 一键构建并运行"
+echo " RaccoonX 一键构建并运行"
 echo " 仓库根目录 : ${REPO_ROOT}"
 echo " 镜像       : ${IMAGE}"
 echo " 容器名     : ${CONTAINER_NAME}"

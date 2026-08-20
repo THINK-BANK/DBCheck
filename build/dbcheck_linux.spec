@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-# DBCheck Linux 打包配置
+# RaccoonX Linux 打包配置
 
 import os
 
@@ -123,7 +123,7 @@ coll = COLLECT(
     exe,
     a.binaries,
     a.datas,
-    name='DBCheck-Linux',
+    name='RaccoonX-Linux',
     upx=False,
     upx_exclude=[],
     bootloader_ignore_signals=False,

@@ -4447,7 +4447,7 @@ def main():
     print("\n" + "=" * 50)
     print("✅ 初始化完成！")
     print(f"数据库文件：{db_path}")
-    print("现在你可以使用 DBCheck Web UI 来管理巡检配置。")
+    print("现在你可以使用 RaccoonX Web UI 来管理巡检配置。")
 
 
 def init_server_thresholds(db_path: str = None, force: bool = False):

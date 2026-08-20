@@ -1,5 +1,5 @@
 name: "🐛 Bug 报告 / Bug Report"
-description: "报告 DBCheck 的功能缺陷、报错或异常行为"
+description: "报告 RaccoonX(DBCheck) 的功能缺陷、报错或异常行为"
 title: "[Bug] "
 labels: ["bug"]
 body:
@@ -32,7 +32,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: "DBCheck 版本"
+      label: "RaccoonX 版本"
       description: "可在关于页或 `version.py` 查看，例如 v2.10.1"
       placeholder: "v2.10.1"
     validations:

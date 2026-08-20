@@ -1,6 +1,6 @@
 @echo off
 REM ============================================
-REM DBCheck 启动脚本 (含 RBAC 用户管理模块)
+REM RaccoonX 启动脚本 (含 RBAC 用户管理模块)
 REM Windows 版本
 REM 说明：本脚本位于 deploy/，自动切换到仓库根目录执行
 REM ============================================
@@ -8,7 +8,7 @@ REM ============================================
 cd /d "%~dp0.."
 
 echo ==========================================
-echo   DBCheck - 数据库健康巡检平台
+echo   RaccoonX - 数据库健康巡检平台
 echo   (RBAC 用户管理模块已集成)
 echo ==========================================
 
@@ -40,7 +40,7 @@ if not exist "data/pro_data\.rbac_seeded" (
 
 REM 启动应用
 echo.
-echo 启动 DBCheck Web 服务...
+echo 启动 RaccoonX Web 服务...
 echo   访问地址: http://localhost:5003
 echo   管理后台: http://localhost:5003/um/admin
 echo   登录页面: http://localhost:5003/um/login

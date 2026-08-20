@@ -4,7 +4,7 @@
 # Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
 
 """
-DBCheck Pro Backup - Manager
+RaccoonX Backup - Manager
 统一备份管理器
 """
 

@@ -82,7 +82,7 @@ def _acquire_single_instance():
             _pid = int(open(_lock, 'r', encoding='utf-8').read().strip() or '0')
             if psutil.pid_exists(_pid):
                 print(
-                    f"[DBCheck] 已有实例在运行（PID {_pid}），本进程退出以避免端口冲突。",
+                    f"[RaccoonX] 已有实例在运行（PID {_pid}），本进程退出以避免端口冲突。",
                     flush=True,
                 )
                 os._exit(0)

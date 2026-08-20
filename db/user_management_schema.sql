@@ -99,7 +99,7 @@ INSERT OR IGNORE INTO um_menu(menu_code, menu_name, parent_id, sort_order) VALUE
     ('apikey',           'API密钥',         0, 56),
     ('shares',           '共享管理',         0, 57),
     ('data-management',  '数据管理',         0, 66),
-    ('about',            '关于DBCheck',      0, 67);
+    ('about',            '关于RaccoonX',      0, 67);
 
 -- ============================================
 -- 6. 角色-菜单-权限关联表

@@ -1,5 +1,5 @@
 /**
- * DBCheck RBAC 前端权限守卫
+ * RaccoonX RBAC 前端权限守卫
  * 功能: 请求拦截器、Token 自动携带、401 跳转
  */
 
@@ -62,5 +62,5 @@
         }
     };
 
-    console.log('[DBCheck RBAC] 权限守卫已加载');
+    console.log('[RaccoonX RBAC] 权限守卫已加载');
 })();

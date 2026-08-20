@@ -4,7 +4,7 @@
 # Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
 
 """
-DBCheck Pro Backup - SQL Server Engine
+RaccoonX Backup - SQL Server Engine
 基于 T-SQL BACKUP DATABASE 的 SQL Server 备份引擎
 """
 

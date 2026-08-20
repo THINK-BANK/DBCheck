@@ -3,7 +3,7 @@
 # Copyright 2025-2026 fiyo (Jack Ge) <sdfiyon@gmail.com>
 # Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
 
-"""DBCheck English translation data"""
+"""RaccoonX English translation data"""
 
 EN = {
     # CLI main menu
@@ -354,7 +354,7 @@ EN = {
     "webui.err_conn_failed": "Connection failed: {e}",
     "webui.task_not_found": "Task not found",
     "webui.ws_connected_waiting": "[{ts}] Connected, waiting for task...",
-    "webui.startup_msg": "DBCheck Web UI starting: http://localhost:{port}",
+    "webui.startup_msg": "RaccoonX Web UI starting: http://localhost:{port}",
     "webui.dm_banner": "Dameng DM8",
     "webui.ai_backend": "AI Backend",
     "webui.ai_backend_disabled": "Disabled",

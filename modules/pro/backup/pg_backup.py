@@ -4,7 +4,7 @@
 # Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
 
 """
-DBCheck Pro Backup - PostgreSQL Engine
+RaccoonX Backup - PostgreSQL Engine
 基于 pg_dump 的 PostgreSQL 备份引擎
 """
 

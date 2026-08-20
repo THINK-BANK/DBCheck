@@ -2808,7 +2808,7 @@ JA.update({
     "webui.ssh_testing": "SSH のテスト...",
     "webui.ssh_user": "SSH ユーザー名",
     "webui.start_fail": "起動に失敗しました",
-    "webui.startup_msg": "DBCheck Web UI 開始中: http://localhost:{port}",
+    "webui.startup_msg": "RaccoonX Web UI 開始中: http://localhost:{port}",
     "webui.status_error": "検査失敗しました",
     "webui.status_pending": "実行待機中...",
     "webui.status_preparing": "準備中...",

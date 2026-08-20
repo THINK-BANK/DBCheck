@@ -334,7 +334,7 @@ ZI = {
     "webui.err_conn_failed": "连接失败: {e}",
     "webui.task_not_found": "任务不存在",
     "webui.ws_connected_waiting": "[{ts}] 已连接，正在等待任务...",
-    "webui.startup_msg": "DBCheck Web UI 启动中: http://localhost:{port}",
+    "webui.startup_msg": "RaccoonX Web UI 启动中: http://localhost:{port}",
     "webui.dm_banner": "达梦 DM8",
     "webui.ai_backend": "AI 后端",
     "webui.ai_backend_disabled": "禁用",

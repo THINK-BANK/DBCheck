@@ -3,7 +3,7 @@
 # Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
 
 """
-DBCheck RAG 知识库模块
+RaccoonX RAG 知识库模块
 
 向量存储：SQLite JSON 列 + numpy 余弦相似度（无需额外向量库依赖）
 Embedding：Ollama / OpenAI 协议兼容的远程 API

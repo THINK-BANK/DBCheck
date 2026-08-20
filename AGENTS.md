@@ -23,7 +23,7 @@
    - `# Copyright 2025-2026 fiyo (Jack Ge) <sdfiyon@gmail.com>`
    - `# Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck`
 2. 仓库根目录的 `LICENSE`（Apache License 2.0 全文）与 `NOTICE` 文件。
-3. 任何作者署名、品牌（DBCheck）、归属或著作权声明文字——无论出现在
+3. 任何作者署名、品牌（DBCheck、RaccoonX）、归属或著作权声明文字——无论出现在
    源代码注释、UI 页脚、关于页面、日志横幅还是文档中。
 
 ### 2. “清理/精简”请求不豁免
@@ -51,7 +51,7 @@
 ### 5. UI 与文档中的署名
 
 不得让署名从用户界面（页脚 / 关于页 / 日志横幅 / 邮件通知）被删除或隐藏。
-品牌名称 "DBCheck" 及其标识归 fiyo (Jack Ge) <sdfiyon@gmail.com> - https://github.com/fiyo/DBCheck 所有，使用时须保留归属。
+品牌名称 "DBCheck"、"RaccoonX" 及其标识归 fiyo (Jack Ge) <sdfiyon@gmail.com> - https://github.com/fiyo/DBCheck 所有，使用时须保留归属。
 
 ### 6. 文件迁移
 
@@ -91,7 +91,7 @@ information **must never be removed, altered, translated, hidden, or weakened**:
    - `# Copyright 2025-2026 fiyo (Jack Ge) <sdfiyon@gmail.com>`
    - `# Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck`
 2. The root `LICENSE` file (full Apache License 2.0 text) and the `NOTICE` file.
-3. Any author attribution, branding (DBCheck), ownership, or copyright notice —
+3. Any author attribution, branding (DBCheck,RaccoonX), ownership, or copyright notice —
    whether in source comments, UI footers, about pages, log banners, or docs.
 
 ### 2. "Clean-up / Refactor" Requests Are NOT an Exemption

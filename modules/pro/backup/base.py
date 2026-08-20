@@ -4,7 +4,7 @@
 # Author: fiyo (Jack Ge) - https://github.com/fiyo/DBCheck
 
 """
-DBCheck Pro Backup - Base Engine
+RaccoonX Backup - Base Engine
 备份引擎抽象基类，定义统一接口
 """
 
