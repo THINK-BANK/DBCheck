@@ -1,5 +1,13 @@
 # Changelog
 
+## v26.8.20.0 (2026-08-20)
+- **版本统一**：各源文件版本标记 v26.8.17.0 → v26.8.20.0（version.py / version.json / Dockerfile `VERSION.txt` / build 脚本 / CI / login.js / skill `dbcheck` `scripts/version.py` / deploy 脚本），消除版本漂移。
+- **JDBC 统一连接层（重磅）**：新增 `modules/jdbc_connector.py` 统一连接层，连接测试与 8 类 JDBC 巡检全部隔离到干净子进程执行（`jdbc_test_cli` / `jdbc_inspection_cli`），16 类数据库统一 JDBC 接入（PG 系 / MySQL 系批量收口），根治 gevent 下进程内 JVM/JPype 引发的界面卡死与死锁。
+- **JDBC 驱动版本选择**：`driver_registry` 支持按版本解析驱动 jar，5 个 JDBC 插件 `driver_version` 透传横向铺开，DM / GBase 接入驱动管理，修复 clickhouse / uxdb 测试路由。
+- **MySQL 系巡检报告修复（d0e3950）**：InnoDB 表空间列表 + 数据库级别权限章节去行转列（改为横向单行表）；修复 MySQL 巡检 InnoDB 表空间查询失败（Unknown table，运行时按版本自适应探测 modern/legacy 表名）。
+- **打包 / Docker 修正（7f84b0d）**：P0/P1 打包与 Docker 脚本修正；清理临时脚本并新增 `_tmp_*` 忽略规则（f77ceb8）。
+- **详情见**：`docs/release/v26.8.20.0-release-notes.md`。
+
 ## v26.8.13.0 (2026-08-13)
 - **版本统一**：各源文件版本标记 v26.8.12.1 → v26.8.13.0（version.py / version.json / Dockerfile `VERSION.txt` / build 脚本 / login.js / skill `dbcheck` `scripts/version.py` / README + README_zh 徽章 / deploy 脚本 / release 说明），消除版本漂移。
 - **安全加固**：SQL 编辑器强制只读（仅放行 SELECT / SHOW / EXPLAIN 等查询类命令，多语句含非只读整体拒绝 HTTP 403）+ 新增 Redis 只读命令分支（拒绝 DEL / FLUSH* / SET 等写删管理命令）（commit a7ad729）。
