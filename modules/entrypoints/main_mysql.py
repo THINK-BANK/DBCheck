@@ -98,10 +98,58 @@ class MySQLInspector(BaseInspectionEngine):
         except Exception as e2:
             return False, (f'{reason}；pymysql 回退也失败: {e2}' if reason else str(e2))
 
+    def _resolve_innodb_table(self, modern, legacy):
+        """解析 MySQL information_schema 的 InnoDB 表名。
+
+        INNODB_TABLESPACES / INNODB_DATAFILES 仅 MySQL 8.0.21+ 存在；
+        5.7 / 8.0 早期版本为 INNODB_SYS_TABLESPACES / INNODB_SYS_DATAFILES。
+        以「能否真正 SELECT」做运行时探测，比查 information_schema.TABLES 目录可靠；
+        两者皆不可用时返回 None（调用方降级为空结果，章节不再报 Unknown table）。
+
+        :param modern: 8.0.21+ 表名，如 'INNODB_TABLESPACES'
+        :param legacy: 旧版本表名，如 'INNODB_SYS_TABLESPACES'
+        :return: 实际可查询的表名；两者皆不可用时返回 None
+        """
+        conn = getattr(self, 'conn', None)
+        if conn is None:
+            return modern
+        for tbl in (modern, legacy):
+            try:
+                cur = conn.cursor()
+                cur.execute("SELECT 1 FROM information_schema.%s LIMIT 0" % tbl)
+                cur.fetchall()
+                cur.close()
+                return tbl
+            except Exception:
+                try:
+                    cur.close()
+                except Exception:
+                    pass
+        return None
+
     def _customize_queries(self, sql_dict):
-        """覆盖基类空实现：MySQL 单库巡检时，把相关查询过滤到指定 schema。"""
+        """覆盖基类空实现：MySQL 单库巡检时，把相关查询过滤到指定 schema；
+        并对 InnoDB 表空间/数据文件表名做版本探测（8.0.21+ 与旧版表名不同）。"""
         from modules.inspection.engine import scope_mysql_schema
         scope_mysql_schema(sql_dict, self.database)
+
+        # InnoDB 表空间/数据文件：表名随 MySQL 版本变化（8.0.21+ 才有
+        # INNODB_TABLESPACES / INNODB_DATAFILES，更早为 INNODB_SYS_*），
+        # 运行时探测；两者皆不可用时降级为空结果，避免 Unknown table 报错。
+        df_tbl = self._resolve_innodb_table('INNODB_DATAFILES', 'INNODB_SYS_DATAFILES')
+        ts_tbl = self._resolve_innodb_table('INNODB_TABLESPACES', 'INNODB_SYS_TABLESPACES')
+        if 'innodb_datafiles' in sql_dict:
+            sql_dict['innodb_datafiles'] = (
+                "SELECT * FROM information_schema.%s;" % df_tbl
+                if df_tbl else
+                "SELECT 'INNODB_DATAFILES_UNAVAILABLE' AS note WHERE 1=0;"
+            )
+        if 'innodb_tablespaces' in sql_dict:
+            sql_dict['innodb_tablespaces'] = (
+                "SELECT * FROM information_schema.%s;" % ts_tbl
+                if ts_tbl else
+                "SELECT 'INNODB_TABLESPACES_UNAVAILABLE' AS note WHERE 1=0;"
+            )
 
 
 # ── 保留原有 API 兼容性（供 web_ui.py 旧代码调用）────────────────────

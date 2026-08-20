@@ -2315,8 +2315,12 @@ class BaseInspectionEngine:
             doc = Document()
             
             # 这些查询始终以横向表格渲染（不转置为「字段:值」卡片），避免宽表行转列后页数爆炸。
-            # 适用于列数多、但每条记录应一行展示的章节（索引列表 / 缓冲池 / 锁等待等）。
-            force_horizontal_table_keys = {'index_status', 'buffer_pool', 'lock_wait'}
+            # 适用于列数多、但每条记录应一行展示的章节（索引列表 / 缓冲池 / 锁等待 /
+            # InnoDB 表空间列表 / 数据库级别权限等）。
+            force_horizontal_table_keys = {
+                'index_status', 'buffer_pool', 'lock_wait',
+                'innodb_tablespaces', 'innodb_datafiles', 'db_privileges',
+            }
             
             def _set_cell_bg(cell, hex_color):
                 from docx.oxml.ns import nsdecls
