@@ -349,23 +349,43 @@ def resolve_driver_jars(db_type: str, driver_version: str = '', *,
     return None
 
 
+# 最近一次 JVM 启动失败原因（_start_jvm 记录，供建连层透传给用户；
+# JPype 默认的 "Attempt to create Java package java without jvm" 会完全
+# 掩盖根因——如找不到 libjvm / JDK 版本不兼容 / 内存不足等）。
+_JVM_LAST_ERROR: Optional[str] = None
+
+
+def _is_jvm_started() -> bool:
+    """当前进程 JVM 是否已启动（幂等、无副作用）。"""
+    try:
+        import jpype
+        return bool(jpype.isJVMStarted())
+    except Exception:
+        return False
+
+
 def _start_jvm(jars: List[str]) -> None:
-    """启动 JVM：addClassPath 必须在 startJVM 之前；已启动则补 classpath。"""
+    """启动 JVM：classpath 直接作为 startJVM 参数（标准做法）；已启动则补 classpath。
+
+    JVM 启动失败**不再静默吞掉**：真实原因记录到 _JVM_LAST_ERROR，
+    由 _open_jpype_connection / jaydebeapi 分支在 JVM 未就绪时透传给用户，
+    便于定位（如 JAVA_HOME 缺失、libjvm 找不到、JDK 与驱动版本不兼容）。
+    """
+    global _JVM_LAST_ERROR
     import jpype
     setup_jvm_env()
     if not jpype.isJVMStarted():
         try:
-            for _jar in jars:
-                jpype.addClassPath(_jar)
-            jpype.startJVM()
-        except Exception:  # noqa: BLE001 - JVM 启动失败由调用方抛连接错误
-            pass
+            jpype.startJVM(classpath=list(jars))
+            _JVM_LAST_ERROR = None
+        except Exception as e:  # noqa: BLE001 - 记录真实原因，不吞
+            _JVM_LAST_ERROR = f'{type(e).__name__}: {e}'
     else:
         try:
             for _jar in jars:
                 jpype.addClassPath(_jar)
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as e:  # noqa: BLE001
+            _JVM_LAST_ERROR = f'{type(e).__name__}: {e}'
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -452,6 +472,15 @@ def open_jdbc_connection(
         return None, {'error': f'未安装 jaydebeapi：{e}', 'driver': None,
                       'url': _url, 'driver_class': _driver_class, 'mode': mode}
 
+    # JVM 未就绪 → 直接返回真实原因（jaydebeapi 底层同样依赖 jpype）
+    if not _is_jvm_started():
+        _reason = _JVM_LAST_ERROR or '未知原因（JVM 未启动）'
+        return None, {
+            'error': f'JVM 启动失败：{_reason}。请检查运行环境 Java/JDK 安装（JAVA_HOME）'
+                     f'与 jpype/JDK 版本兼容性',
+            'driver': _basename, 'url': _url, 'driver_class': _driver_class, 'mode': mode,
+        }
+
     try:
         conn = jaydebeapi.connect(
             _driver_class, _url, [user, password], _jars,
@@ -510,6 +539,18 @@ def _open_jpype_connection(
 
     _driver_class = driver_class or JDBC_PROFILES.get(db_type, {}).get('driver_class')
     _basename = os.path.basename(jars[0]) if jars else ''
+
+    # JVM 未就绪 → 直接返回真实原因（否则 JPype 只报误导性的
+    # "Attempt to create Java package java without jvm"）。
+    if not jpype.isJVMStarted():
+        _reason = _JVM_LAST_ERROR or '未知原因（JVM 未启动）'
+        return None, {
+            'error': f'JVM 启动失败：{_reason}。'
+                     f'请检查运行环境 Java/JDK 安装（JAVA_HOME）、jpype 与 JDK 版本兼容性；'
+                     f'Oracle 驱动 ojdbc6.jar 仅支持 JDK 6-8，JDK 9+ 请改用 ojdbc8/19c 驱动',
+            'driver': _basename, 'url': url, 'driver_class': _driver_class, 'mode': 'jpype',
+        }
+
     try:
         # 1. 驱动类显式加载并注册到 DriverManager。
         #    不能只靠 JClass 实例化触发静态块：国产驱动（实测 HighGo
