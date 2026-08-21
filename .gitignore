@@ -59,7 +59,7 @@ commit_msg.txt
 docker_images/*
 *.zip
 # Plugin runtime state (copied from available/ on enable)
-plugins/enabled/*
+#plugins/enabled/*
 
 # Inspection database (auto-generated)
 data/inspection.db
