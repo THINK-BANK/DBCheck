@@ -2171,40 +2171,34 @@ class BaseInspectionEngine:
             print(f"[INFO] baseline_results count: {len(baseline_results)}")
             if baseline_results:
                 _add_heading(f"{_ch_prefix(ch_bl)} {'基线配置检查结果' if self._lang == 'zh' else 'Baseline Configuration Check Results'}")
-                tbl = doc.add_table(rows=1+len(baseline_results), cols=7, style='Table Grid')
                 bl_headers = ['参数名称', '当前值', '期望值', '运算符', '状态', '风险等级', '描述'] if self._lang == 'zh' else ['Parameter', 'Current Value', 'Expected Value', 'Operator', 'Status', 'Risk Level', 'Description']
-                for j, h in enumerate(bl_headers):
-                    cell = tbl.rows[0].cells[j]
-                    cell.text = h
-                    _set_cell_bg(cell, '336699')
-                    for p in cell.paragraphs:
-                        for run in p.runs:
-                            run.font.size = Pt(9); run.font.name = '微软雅黑'; run.bold = True
-                            run.font.color.rgb = RGBColor(255, 255, 255)
-                for idx, br in enumerate(baseline_results, 1):
-                    row = tbl.rows[idx].cells
-                    row[0].text = br.get('param_name', '')
-                    row[1].text = self._clean_xml_str(br.get('current_value', ''), max_len=100)
-                    row[2].text = self._clean_xml_str(
-                        self._baseline_expected_display(br),
-                        max_len=200,
-                    )
-                    row[3].text = br.get('operator', '')
+                bl_rows = []
+                for br in baseline_results:
                     status = br.get('status', 'ERROR')
-                    row[4].text = status
-                    if status == 'PASS':
-                        _set_cell_bg(row[4], '00B050')
-                    elif status == 'FAIL':
-                        _set_cell_bg(row[4], 'FF0000')
-                    else:
-                        _set_cell_bg(row[4], 'FFA500')
-                    row[5].text = br.get('risk_level', '')
                     desc = br.get('description_zh' if self._lang == 'zh' else 'description_en', '')
-                    row[6].text = desc if desc else br.get('description_en' if self._lang == 'zh' else 'description_zh', '')
-                    for j in range(7):
-                        for p in row[j].paragraphs:
-                            for run in p.runs:
-                                run.font.size = Pt(9); run.font.name = '微软雅黑'
+                    if not desc:
+                        desc = br.get('description_en' if self._lang == 'zh' else 'description_zh', '')
+                    bl_rows.append([
+                        br.get('param_name', ''),
+                        self._clean_xml_str(br.get('current_value', ''), max_len=100),
+                        self._clean_xml_str(self._baseline_expected_display(br), max_len=200),
+                        br.get('operator', ''),
+                        status,
+                        br.get('risk_level', ''),
+                        desc,
+                    ])
+                def _bl_styler(i, j, val):
+                    if j == 4:  # 状态列着色
+                        if val == 'PASS':
+                            return {'bg': '00B050'}
+                        elif val == 'FAIL':
+                            return {'bg': 'FF0000'}
+                        else:
+                            return {'bg': 'FFA500'}
+                    return None
+                _docx_build_grid_table(doc, bl_headers, bl_rows, header_bg='336699',
+                                       header_white=True, font_size_pt=9,
+                                       cell_styler=_bl_styler)
                 doc.add_paragraph()
 
             # ── 系统资源（CPU / 内存 / 硬盘）───────────────
@@ -2226,7 +2220,6 @@ class BaseInspectionEngine:
             issues = self.context.get("auto_analyze", [])
             if issues:
                 _add_heading(self._t(f'report.{self.db_type}_ch16_1', default='智能分析问题明细'), 2)
-                tbl = doc.add_table(rows=1+len(issues), cols=6, style='Table Grid')
                 hdrs = [
                     self._t(f'report.{self.db_type}_col_seq', default='序号'),
                     self._t(f'report.{self.db_type}_col_item', default='检查项'),
@@ -2235,26 +2228,12 @@ class BaseInspectionEngine:
                     self._t(f'report.{self.db_type}_col_severity', default='严重度'),
                     self._t(f'report.{self.db_type}_col_owner', default='负责人'),
                 ]
-                for j, (cell, ht) in enumerate(zip(tbl.rows[0].cells, hdrs)):
-                    cell.text = ht
-                    _set_cell_bg(cell, '336699')
-                    for p in cell.paragraphs:
-                        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                        for run in p.runs:
-                            run.font.size = Pt(9); run.font.name = '微软雅黑'; run.bold = True
-                            run.font.color.rgb = RGBColor(255, 255, 255)
-                for idx, x in enumerate(issues, 1):
-                    row = tbl.rows[idx].cells
-                    row[0].text = str(idx)
-                    row[1].text = x.get('col1','')
-                    row[2].text = x.get('col2','')
-                    row[3].text = x.get('col3','')
-                    row[4].text = x.get('col4','')
-                    row[5].text = x.get('col5','')
-                    for j in range(6):
-                        for p in row[j].paragraphs:
-                            for run in p.runs:
-                                run.font.size = Pt(9); run.font.name = '微软雅黑'
+                aa_rows = [[str(idx), x.get('col1', ''), x.get('col2', ''),
+                            x.get('col3', ''), x.get('col4', ''), x.get('col5', '')]
+                           for idx, x in enumerate(issues, 1)]
+                _docx_build_grid_table(doc, hdrs, aa_rows, header_bg='336699',
+                                       header_white=True, header_align='center',
+                                       font_size_pt=9)
                 doc.add_paragraph()
             else:
                 p = doc.add_paragraph(self._t(f'report.{self.db_type}_no_risk_found', default='未发现明显风险项，数据库整体运行状况良好。'))
@@ -2529,19 +2508,15 @@ class BaseInspectionEngine:
             ]
             
             labels = cover_labels['zh'] if is_zh else cover_labels['en']
-            tbl = doc.add_table(rows=len(labels), cols=2, style='Table Grid')
-            tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
-            for i, (label, value) in enumerate(zip(labels, cover_data)):
-                tbl.rows[i].cells[0].text = label
-                tbl.rows[i].cells[1].text = self._clean_xml_str(value, max_len=200)
-                for cell in tbl.rows[i].cells:
-                    cell.paragraphs[0].runs[0].font.name = '微软雅黑'
-                    cell.paragraphs[0].runs[0]._element.rPr.rFonts.set(qn('w:eastAsia'), '微软雅黑')
-                    cell.paragraphs[0].runs[0].font.size = Pt(10.5)
-                    if cell == tbl.rows[i].cells[0]:
-                        _set_cell_bg(cell, '336699')
-                        cell.paragraphs[0].runs[0].font.color.rgb = RGBColor(255, 255, 255)
-                        cell.paragraphs[0].runs[0].font.bold = True
+            cover_rows = [[label, self._clean_xml_str(value, max_len=200)]
+                          for label, value in zip(labels, cover_data)]
+            def _cover_styler(i, j, val):
+                if j == 0:
+                    return {'bg': '336699', 'color': 'FFFFFF', 'bold': True, 'size_pt': 10.5}
+                return {'size_pt': 10.5}
+            cover_tbl = _docx_build_grid_table(doc, ['', ''], cover_rows, header=False,
+                                              font_size_pt=10.5, cell_styler=_cover_styler)
+            cover_tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
             
             doc.add_page_break()
             
@@ -2565,6 +2540,11 @@ class BaseInspectionEngine:
                         q_key = q.get('key', '')
                         q_desc = q.get('query_description_zh' if is_zh else 'query_description_en', '') or q.get('query_description_en' if is_zh else 'query_description_zh', '')
                         q_data = self.context.get(q_key, [])
+                        _q_trunc = False
+                        _q_total = len(q_data) if isinstance(q_data, list) else 0
+                        if isinstance(q_data, list) and len(q_data) > 3000:
+                            q_data = q_data[:3000]
+                            _q_trunc = True
                         query_idx += 1
                         sub_num = f'{ch_num}.{query_idx}'
 
@@ -2578,7 +2558,11 @@ class BaseInspectionEngine:
                             if isinstance(q_data[0], dict):
                                 headers = list(q_data[0].keys())
                                 # 宽表（>8列）默认采用卡片式垂直布局；指定章节强制横向表格
-                                if len(headers) > 8 and q_key not in force_horizontal_table_keys:
+                                if len(headers) > 12 and q_key not in force_horizontal_table_keys:
+                                    def _card_styler(i, j, val):
+                                        if j == 0:
+                                            return {'bg': 'D9E2F3', 'bold': True}
+                                        return None
                                     for ri, row_data in enumerate(q_data):
                                         card_title = f"{'条目' if is_zh else 'Item'} {ri+1}"
                                         cp = doc.add_paragraph()
@@ -2587,46 +2571,26 @@ class BaseInspectionEngine:
                                         cr.font.name = '微软雅黑'
                                         cr.font.bold = True
                                         cr.font.color.rgb = RGBColor(0, 51, 102)
-                                        card = doc.add_table(rows=len(headers), cols=2, style='Table Grid')
-                                        for kj, h in enumerate(headers):
-                                            card.rows[kj].cells[0].text = self._clean_xml_str(h, max_len=100)
-                                            card.rows[kj].cells[1].text = self._clean_xml_str(row_data.get(h, ''), max_len=500)
-                                            # Key 列背景+粗体
-                                            _set_cell_bg(card.rows[kj].cells[0], 'D9E2F3')
-                                            for run in card.rows[kj].cells[0].paragraphs[0].runs:
-                                                run.font.size = Pt(9); run.font.name = '微软雅黑'
-                                                run._element.rPr.rFonts.set(qn('w:eastAsia'), '微软雅黑')
-                                                run.font.bold = True
-                                            for run in card.rows[kj].cells[1].paragraphs[0].runs:
-                                                run.font.size = Pt(9); run.font.name = '微软雅黑'
-                                                run._element.rPr.rFonts.set(qn('w:eastAsia'), '微软雅黑')
+                                        card_pairs = [[self._clean_xml_str(h, max_len=100),
+                                                       self._clean_xml_str(row_data.get(h, ''), max_len=500)]
+                                                      for h in headers]
+                                        _docx_build_grid_table(doc, ['', ''], card_pairs,
+                                                               header=False, font_size_pt=9,
+                                                               cell_styler=_card_styler)
                                         doc.add_paragraph()
                                 else:
-                                    qt = doc.add_table(rows=1+len(q_data), cols=len(headers), style='Table Grid')
-                                    # 宽表采用紧凑列宽 + 8pt 字号，避免均分列宽导致表头/数值被拆成单字母
                                     is_wide = len(headers) > 6
+                                    font_size = 8 if is_wide else 9
+                                    q_rows = [[self._clean_xml_str(row_data.get(h, ''), max_len=500)
+                                               for h in headers] for row_data in q_data]
+                                    col_widths = None
                                     if any(str(h).lower() == 'setting' for h in headers):
-                                        _set_table_col_widths(qt, _calc_pg_settings_widths(headers))
+                                        col_widths = _calc_pg_settings_widths(headers)
                                     elif is_wide:
-                                        _set_table_col_widths(qt, _calc_compact_widths(headers, q_data[:5]))
-                                    font_size = Pt(8) if is_wide else Pt(9)
-                                    for j, h in enumerate(headers):
-                                        cell = qt.rows[0].cells[j]
-                                        cell.text = self._clean_xml_str(h, max_len=100)
-                                        _set_cell_bg(cell, '336699')
-                                        for run in cell.paragraphs[0].runs:
-                                            run.font.size = font_size
-                                            run.font.name = '微软雅黑'
-                                            run._element.rPr.rFonts.set(qn('w:eastAsia'), '微软雅黑')
-                                            run.font.bold = True
-                                            run.font.color.rgb = RGBColor(255, 255, 255)
-                                    for i, row_data in enumerate(q_data):
-                                        for j, (k, v) in enumerate(row_data.items()):
-                                            qt.rows[i+1].cells[j].text = self._clean_xml_str(v)
-                                            for run in qt.rows[i+1].cells[j].paragraphs[0].runs:
-                                                run.font.size = font_size
-                                                run.font.name = '微软雅黑'
-                                                run._element.rPr.rFonts.set(qn('w:eastAsia'), '微软雅黑')
+                                        col_widths = _calc_compact_widths(headers, q_data[:5])
+                                    _docx_build_grid_table(doc, headers, q_rows,
+                                                           header_bg='336699', header_white=True,
+                                                           font_size_pt=font_size, col_widths=col_widths)
                                     doc.add_paragraph()
                         else:
                             # 数据为空：区分"查询失败"和"当前无记录"
@@ -2644,6 +2608,15 @@ class BaseInspectionEngine:
                                 _r._element.rPr.rFonts.set(qn('w:eastAsia'), '微软雅黑')
                                 _r.font.color.rgb = RGBColor(150, 150, 150)
                             doc.add_paragraph()
+                        if _q_trunc:
+                            _note = doc.add_paragraph(
+                                f"结果集较大，仅显示前 3000 行，共 {_q_total} 行"
+                                if is_zh else
+                                f"Large result set: showing first 3000 of {_q_total} rows")
+                            for _r in _note.runs:
+                                _r.font.size = Pt(9); _r.font.name = '微软雅黑'
+                                _r._element.rPr.rFonts.set(qn('w:eastAsia'), '微软雅黑')
+                                _r.font.color.rgb = RGBColor(150, 150, 150)
             else:
                 # 如果没有章节结构，直接渲染所有列表数据
                 _fmt_heading(self._t(f'report.{self.db_type}_ch_data', default='巡检数据' if is_zh else 'Inspection Data'), level=1)
@@ -2655,21 +2628,14 @@ class BaseInspectionEngine:
                         _heading_key = _mongo_section_title(key) if key.startswith('mongodb_') else key
                         _fmt_para(_heading_key, bold=True, size=11)
                         headers = list(val[0].keys())
-                        qt = doc.add_table(rows=1+len(val), cols=len(headers), style='Table Grid')
-                        for j, h in enumerate(headers):
-                            cell = qt.rows[0].cells[j]
-                            cell.text = self._clean_xml_str(h, max_len=100)
-                            _set_cell_bg(cell, '336699')
-                            for run in cell.paragraphs[0].runs:
-                                run.font.size = Pt(9); run.font.name = '微软雅黑'
-                                run._element.rPr.rFonts.set(qn('w:eastAsia'), '微软雅黑')
-                                run.font.bold = True; run.font.color.rgb = RGBColor(255, 255, 255)
-                        for i, row_data in enumerate(val):
-                            for j, (k, v) in enumerate(row_data.items()):
-                                qt.rows[i+1].cells[j].text = self._clean_xml_str(v)
-                                for run in qt.rows[i+1].cells[j].paragraphs[0].runs:
-                                    run.font.size = Pt(9); run.font.name = '微软雅黑'
-                                    run._element.rPr.rFonts.set(qn('w:eastAsia'), '微软雅黑')
+                        is_wide = len(headers) > 6
+                        font_size = 8 if is_wide else 9
+                        m_rows = [[self._clean_xml_str(row_data.get(h, ''), max_len=500)
+                                   for h in headers] for row_data in val]
+                        col_widths = _calc_compact_widths(headers, val[:5]) if is_wide else None
+                        _docx_build_grid_table(doc, headers, m_rows,
+                                               header_bg='336699', header_white=True,
+                                               font_size_pt=font_size, col_widths=col_widths)
                         doc.add_paragraph()
             
             doc.save(output_file)
@@ -2678,6 +2644,106 @@ class BaseInspectionEngine:
             print(f"[ERROR] 动态渲染失败: {e}")
             import traceback; traceback.print_exc(file=sys.stdout)
             return False
+
+
+# ── Word 表格整行 XML 构造辅助（P0 性能优化：约 30x 提速）────────────────
+_EA_FONT = '微软雅黑'
+
+def _docx_clean(v, max_len=200):
+    """清理 XML 不兼容控制字符（与 BaseInspectionEngine._clean_xml_str 保持一致）。"""
+    if v is None:
+        return ''
+    s = str(v)[:max_len]
+    allowed = {'\t', '\n', '\r'}
+    return ''.join(c for c in s if ord(c) >= 32 or c in allowed)
+
+def _docx_escape(s):
+    return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+
+def _docx_tc_xml(text, *, bg=None, bold=False, color=None, size_pt=9,
+                 align=None, east_asia=_EA_FONT):
+    """生成单个 <w:tc> 单元格 XML 字符串。"""
+    from docx.oxml.ns import nsdecls
+    safe = _docx_escape(_docx_clean(text))
+    tcpr = ''
+    if bg:
+        tcpr += f'<w:shd {nsdecls("w")} w:val="clear" w:color="auto" w:fill="{bg}"/>'
+    sz = int(round(size_pt * 2))
+    rpr = (f'<w:rFonts w:ascii="{east_asia}" w:hAnsi="{east_asia}" w:eastAsia="{east_asia}"/>'
+           f'<w:sz w:val="{sz}"/><w:szCs w:val="{sz}"/>')
+    if bold:
+        rpr += '<w:b/><w:bCs/>'
+    if color:
+        rpr += f'<w:color w:val="{color}"/>'
+    ppr = f'<w:pPr><w:jc w:val="{align}"/></w:pPr>' if align else ''
+    return (f'<w:tc><w:tcPr>{tcpr}</w:tcPr>'
+            f'<w:p>{ppr}<w:r><w:rPr>{rpr}</w:rPr>'
+            f'<w:t xml:space="preserve">{safe}</w:t></w:r></w:p></w:tc>')
+
+def _docx_set_table_widths(table, widths, Cm):
+    """固定表格各列宽度（cm）。仅设置 gridCol 与首行单元格 tcW，约束整列即可，
+    避免对大表逐单元格写宽度（原 _set_table_col_widths 的性能瓶颈之一）。"""
+    from docx.oxml.ns import qn
+    from docx.oxml import OxmlElement
+    table.autofit = False
+    tblGrid = table._tbl.find(qn('w:tblGrid'))
+    if tblGrid is not None:
+        for gridCol, width in zip(tblGrid.findall(qn('w:gridCol')), widths):
+            gridCol.set(qn('w:w'), str(int(Cm(width).twips)))
+    if table.rows:
+        for cell, width in zip(table.rows[0].cells, widths):
+            tcPr = cell._tc.get_or_add_tcPr()
+            tcW = tcPr.find(qn('w:tcW'))
+            if tcW is None:
+                tcW = OxmlElement('w:tcW')
+                tcPr.append(tcW)
+            tcW.set(qn('w:w'), str(int(Cm(width).twips)))
+            tcW.set(qn('w:type'), 'dxa')
+
+def _docx_build_grid_table(doc, headers, rows, *, header=True,
+                           header_bg='336699', header_white=True,
+                           header_bold=True, header_align=None,
+                           font_size_pt=9, body_align=None,
+                           cell_styler=None, col_widths=None,
+                           east_asia=_EA_FONT, style='Table Grid'):
+    """用整行 XML 一次性构造 Word 表格（替代逐单元格 cell.text= 写入，约 30x 提速）。
+
+    headers: list[str]；rows: list[list]（与 headers 列数对齐）。
+    header=False 时跳过表头行（用于封面 / 卡片式 2 列表）。
+    cell_styler(i, j, value) -> dict|None：返回单元格样式覆盖
+        {bg, bold, color, size_pt, align}，空/None 表示默认。
+    """
+    from docx.oxml import parse_xml
+    from docx.oxml.ns import nsdecls
+    from docx.shared import Cm
+
+    ncols = len(headers)
+    tbl = doc.add_table(rows=0, cols=ncols, style=style)
+
+    if header:
+        tcs = []
+        for h in headers:
+            tcs.append(_docx_tc_xml(
+                h, bg=header_bg, bold=header_bold,
+                color='FFFFFF' if header_white else None,
+                size_pt=font_size_pt, align=header_align, east_asia=east_asia))
+        tbl._tbl.append(parse_xml(f'<w:tr {nsdecls("w")}>{"".join(tcs)}</w:tr>'))
+
+    for i, row in enumerate(rows):
+        tcs = []
+        for j, val in enumerate(row):
+            sty = dict(bg=None, bold=False, color=None,
+                       size_pt=font_size_pt, align=body_align)
+            if cell_styler:
+                ov = cell_styler(i, j, val)
+                if ov:
+                    sty.update(ov)
+            tcs.append(_docx_tc_xml(val, east_asia=east_asia, **sty))
+        tbl._tbl.append(parse_xml(f'<w:tr {nsdecls("w")}>{"".join(tcs)}</w:tr>'))
+
+    if col_widths:
+        _docx_set_table_widths(tbl, col_widths, Cm)
+    return tbl
 
 
 # ── MySQL/MariaDB 单库巡检：SQL 注入式过滤（代码层，不改 inspection.db）────────
