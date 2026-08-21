@@ -11101,13 +11101,29 @@ def main():
 
     # 驱动管理登记种子导入（打包分发后 drivers.db 为空库时，从随包
     # modules/config/drivers_seed.json 恢复用户打包前的驱动登记；幂等）。
+    # 随后再扫描 drivers/ 目录自动登记：Docker/exe 分发时种子 JSON 未必随包
+    # （本地生成、被 git 忽略），只要 jar 在，驱动管理页面即可开箱即用。
     try:
-        from modules.driver_registry import seed_driver_registry
+        from modules.driver_registry import seed_driver_registry, scan_driver_dirs
         _seeded_drivers = seed_driver_registry()
         if _seeded_drivers:
             print(f"[驱动] 已从随包种子导入 {_seeded_drivers} 条驱动登记")
+        _scanned_drivers = scan_driver_dirs()
+        if _scanned_drivers:
+            print(f"[驱动] 已扫描 drivers/ 目录自动登记 {_scanned_drivers} 条驱动")
     except Exception as e:
         print(f"[驱动] 驱动登记种子导入跳过: {e}")
+
+    # DocKB 官方文档知识库策展种子自动播种（幂等：仅追加缺失事实，
+    # 不清空/覆盖用户数据）。data/doc_kb.db 不随包分发，Docker/exe 首次
+    # 启动若不播种则 AI 诊断的官方事实召回为空。
+    try:
+        from modules.doc_kb.models import seed_from_json as seed_doc_kb
+        _doc_kb_seeded = seed_doc_kb()
+        if _doc_kb_seeded:
+            print(f"[DocKB] 已自动播种官方文档知识库 {_doc_kb_seeded} 条事实")
+    except Exception as e:
+        print(f"[DocKB] 官方文档知识库种子播种跳过: {e}")
 
     # 确保巡检配置库存在：data/ 是运行时目录（不随包发布），打包后首次启动
     # 时 inspection.db 并不存在，需在此建库建表并写入预设模板/阈值/基线，

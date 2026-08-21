@@ -13,8 +13,10 @@
 
 版权边界：只存「短事实摘录 + official_url 引用」，绝不整本搬运官方文档。
 """
+import os
 import re
 import sqlite3
+from pathlib import Path
 
 from modules.core import paths
 
@@ -192,6 +194,102 @@ def delete_fact(fid: int) -> bool:
     with _connect() as conn:
         cur = conn.execute("DELETE FROM doc_facts WHERE id = ?", (fid,))
         return cur.rowcount > 0
+
+
+# ─────────────────────────── 种子数据（随包自动播种）──────────────────────────
+def seed_from_json(seed_path=None) -> int:
+    """从随包策展种子 JSON 幂等播种官方文档事实（不覆盖既有数据）。
+
+    场景：Docker / exe 分发时 data/ 是全新运行时目录（data/doc_kb.db 不进
+    git 也不随包），若 AI 诊断要引用官方事实，首次启动必须自动播种，否则
+    DocKB 页面与检索均为空。本函数在应用启动时调用：
+
+    - 仅追加缺失项（按 (db_type, version, key) 判重），**绝不清空/覆盖**
+      用户既有数据，等价 scripts/seed_doc_kb.py 的 --keep 语义；
+    - 来源按 (db_type, version, official_url) 判重，避免重复插入；
+    - 种子文件默认 ``modules/config/doc_kb_seed.json``（随包、可入库）。
+
+    Returns:
+        本次新增的事实条数（0 表示跳过/无种子/全部已存在）。
+    """
+    import json as _json
+
+    try:
+        if seed_path is None:
+            seed_path = str(Path(__file__).resolve().parent.parent / "config" / "doc_kb_seed.json")
+        if not os.path.isfile(seed_path):
+            return 0
+        with open(seed_path, encoding="utf-8") as f:
+            seed = _json.load(f)
+        sources = seed.get("sources") or []
+        facts = seed.get("facts") or []
+        if not sources or not facts:
+            return 0
+
+        ensure_db()
+        with _connect() as conn:
+            # 已存在来源键：(db_type, version, official_url)
+            have_src = {
+                (r["db_type"], r["version"], r["official_url"])
+                for r in conn.execute("SELECT db_type, version, official_url FROM doc_sources")
+            }
+            # 已存在事实键：(db_type, version, key)
+            have_fact = {
+                (r["db_type"], r["version"], r["key"])
+                for r in conn.execute("SELECT db_type, version, key FROM doc_facts")
+            }
+            src_ids = []
+            for s in sources:
+                key = (s.get("db_type", ""), str(s.get("version") or ""), s.get("official_url", ""))
+                if key in have_src:
+                    row = conn.execute(
+                        "SELECT id FROM doc_sources WHERE db_type=? AND version=? AND official_url=?",
+                        (key[0], key[1], key[2]),
+                    ).fetchone()
+                    src_ids.append(row["id"])
+                    continue
+                cur = conn.execute(
+                    "INSERT INTO doc_sources (db_type, version, official_url, title, license_note, note)"
+                    " VALUES (?, ?, ?, ?, ?, ?)",
+                    (key[0], key[1], key[2], s.get("title"), s.get("license_note"), "curated seed"),
+                )
+                src_ids.append(int(cur.lastrowid))
+                have_src.add(key)
+
+            added = 0
+            for f in facts:
+                try:
+                    idx = int(f["source_idx"])
+                    sid = src_ids[idx]
+                    src = sources[idx]
+                except (KeyError, ValueError, IndexError):
+                    continue
+                # db_type / version 以来源为准（facts 仅携带 source_idx 关联）
+                db_type = str(src.get("db_type") or "")
+                version = str(src.get("version") or "all")
+                fkey = str(f.get("key") or "")
+                if not db_type or not fkey:
+                    continue
+                if (db_type, version, fkey) in have_fact:
+                    continue
+                conn.execute(
+                    "INSERT INTO doc_facts"
+                    " (source_id, db_type, version, category, key, value, excerpt,"
+                    "  official_url, severity, lang, created_by, updated_at)"
+                    " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))",
+                    (
+                        sid, db_type, version,
+                        str(f.get("category") or "param"), fkey,
+                        f.get("value"), f.get("excerpt"), f.get("official_url"),
+                        f.get("severity"), str(f.get("lang") or "both"),
+                        "seed",
+                    ),
+                )
+                have_fact.add((db_type, version, fkey))
+                added += 1
+        return added
+    except Exception:  # noqa: BLE001 — 种子播种失败绝不影响启动
+        return 0
 
 
 # ─────────────────────────── 检索（AI 诊断用）───────────────────────────

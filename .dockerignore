@@ -21,6 +21,8 @@ data
 pro_data
 logs
 *.log
+# 历史遗留运行态库（intelligence_diagnoses.db 等早期路径写错时遗留，代码已迁移到 data/）
+modules/data
 
 # 密钥与运行时配置（绝不进入镜像）
 dbc_config.json

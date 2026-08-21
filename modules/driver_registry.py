@@ -682,4 +682,117 @@ def export_drivers_seed(seed_path: Optional[str] = None) -> int:
 
 
 # ── 入口：模块导入即建表（幂等） ───────────────────────────
+
+
+def scan_driver_dirs() -> int:
+    """扫描 drivers/ 目录，把磁盘上已存在的 jar 自动登记到驱动注册表（幂等）。
+
+    场景：Docker / exe 分发时 drivers/（jar 文件）随包打入，但随包种子
+    ``modules/config/drivers_seed.json`` 可能未进镜像/包（该文件本地生成、
+    被 .gitignore 忽略、不随版本库分发），导致驱动管理页面每种数据库的
+    驱动列表为空。本函数以磁盘实况为准扫描登记——只要 jar 在，驱动管理
+    页面即可开箱即用，不再依赖种子文件是否随包。
+
+    布局兼容（与 _relocate_jar_path 一致的三层扫描）：
+      1) drivers/<db_type>/<version>/<jar>   —— 现行版本子目录布局
+      2) drivers/<db_type>/<jar>             —— 老平铺布局
+      3) drivers/<jar>                       —— 散落根目录（无法归类，跳过）
+    driver_class 优先取 DB_TYPE_CATALOG 的 driver_class_hint，空则留空
+    （用户可在驱动管理界面自行修改）。
+    幂等：UNIQUE(db_type, version, jar_filename) 冲突自动跳过；
+    用户已隐藏的 db_type（driver_type_hidden）不重新登记。
+
+    Returns:
+        本次新增登记的条数（0 表示无新增/无可扫描 jar）。
+    """
+    try:
+        root = Path(DRIVERS_DIR)
+        if not root.is_dir():
+            return 0
+        hint_map = {d['key']: (d.get('driver_class_hint') or '') for d in DB_TYPE_CATALOG}
+        hidden = _load_hidden_types()
+
+        # (db_type, version, jar_filename, jar_path, driver_class)
+        candidates: List[Tuple[str, str, str, str, str]] = []
+        for db_dir in sorted(root.iterdir()):
+            if not db_dir.is_dir() or db_dir.name.startswith('.'):
+                continue
+            db_type = db_dir.name
+            if db_type in hidden:
+                continue
+            hint = hint_map.get(db_type, '')
+            # 布局 1：drivers/<db_type>/<version>/<jar>
+            for vdir in sorted(db_dir.iterdir()):
+                if not vdir.is_dir() or vdir.name.startswith('.'):
+                    continue
+                for jf in sorted(vdir.iterdir()):
+                    if jf.is_file() and jf.suffix.lower() == '.jar':
+                        candidates.append((db_type, vdir.name, jf.name, str(jf), hint))
+            # 布局 2：drivers/<db_type>/<jar>
+            for jf in sorted(db_dir.iterdir()):
+                if jf.is_file() and jf.suffix.lower() == '.jar':
+                    candidates.append((db_type, '', jf.name, str(jf), hint))
+        if not candidates:
+            return 0
+
+        c = _conn()
+        have = {
+            (r['db_type'], r['version'], r['jar_filename'])
+            for r in c.execute('SELECT db_type, version, jar_filename FROM jdbc_driver_registry')
+        }
+        inserted = 0
+        for db_type, version, jfname, jpath, hint in candidates:
+            if (db_type, version, jfname) in have:
+                continue
+            try:
+                c.execute(
+                    'INSERT INTO jdbc_driver_registry'
+                    ' (db_type, version, driver_class, jar_filename, jar_path,'
+                    '  file_size, is_active, note)'
+                    ' VALUES (?,?,?,?,?,?,?,?)',
+                    (
+                        db_type,
+                        version,
+                        hint,
+                        jfname,
+                        jpath,
+                        int(os.path.getsize(jpath)) if os.path.exists(jpath) else 0,
+                        0,
+                        '扫描 drivers/ 目录自动登记',
+                    ),
+                )
+                have.add((db_type, version, jfname))
+                inserted += 1
+            except sqlite3.IntegrityError:
+                continue
+
+        # 每个 db_type 若当前无激活驱动，激活最新登记的「版本子目录」驱动
+        # （version 非空，主驱动）；仅当该类型无版本子目录驱动时，才回退
+        # 激活平铺布局 jar（避免把散落的依赖 jar 如 slf4j-api 误设为激活）。
+        for db_type in {d[0] for d in candidates if d[0]}:
+            cnt = c.execute(
+                'SELECT COUNT(*) FROM jdbc_driver_registry WHERE db_type=? AND is_active=1',
+                (db_type,),
+            ).fetchone()[0]
+            if cnt == 0:
+                row = c.execute(
+                    'SELECT id FROM jdbc_driver_registry WHERE db_type=? AND version<>""'
+                    ' ORDER BY uploaded_at DESC, id DESC LIMIT 1',
+                    (db_type,),
+                ).fetchone()
+                if row is None:
+                    row = c.execute(
+                        'SELECT id FROM jdbc_driver_registry WHERE db_type=?'
+                        ' ORDER BY uploaded_at DESC, id DESC LIMIT 1',
+                        (db_type,),
+                    ).fetchone()
+                if row:
+                    c.execute('UPDATE jdbc_driver_registry SET is_active=1 WHERE id=?', (row['id'],))
+        c.commit()
+        return inserted
+    except Exception:  # noqa: BLE001 — 扫描登记失败绝不影响启动
+        return 0
+
+
+# ── 入口：模块导入即建表（幂等） ───────────────────────────
 init_db()
