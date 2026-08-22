@@ -168,3 +168,6 @@ modules/data/**
 # 临时脚本/片段（一次性任务产物，不入库）
 _tmp_*.py
 _tmp_*.js
+data/drivers.db-shm
+data/drivers.db-wal
+docs/release/*.png
