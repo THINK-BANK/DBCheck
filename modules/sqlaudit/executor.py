@@ -133,10 +133,10 @@ def real_execute(task: dict, instance: dict, max_affected_rows: int, timeout: in
     返回 {"mode","status","executions","rollbacks","started_at","finished_at"}。
     任何单条失败或超影响行数 → 回滚整个任务事务并抛出 RuntimeError。
     """
-    if not instance:
-        raise ValueError("真实执行必须指定目标实例")
     if not task.get("exec_enabled"):
         raise ValueError("该任务未开启真实执行（提交时未勾选允许执行），出于安全拒绝执行")
+    if not instance:
+        raise ValueError("真实执行必须指定目标实例")
     # MVP3 审批闸门：阻断级任务禁止执行；高风险任务须先审批通过（approved_by 非空）
     risk = (task.get("risk_level") or "low").lower()
     if risk == "block":
@@ -214,7 +214,69 @@ def real_execute(task: dict, instance: dict, max_affected_rows: int, timeout: in
             conn.rollback()
         except Exception:  # noqa: BLE001
             pass
-        models.update_task_status(task["id"], "executed", executed_at=_now_iso())
+        # 真实执行失败时状态保持 approved，允许重试；只更新 executed_at 作为失败时间戳
+        # 便于审计定位，但不在 status 上标记 executed，避免任务被"锁死"
+        try:
+            models.update_task_status(task["id"], "approved", executed_at=_now_iso())
+        except Exception:  # noqa: BLE001
+            pass
+        raise
+    finally:
+        try:
+            conn.close()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def execute_rollback(task: dict, instance: dict, operator: str) -> dict:
+    """执行已生成的自动回滚方案（MVP3.5 一键回滚，P1 ⑤）。
+
+    仅执行 auto_rollback=True 且有 rollback_sql 的回滚项（即执行前已对 UPDATE/DELETE
+    做快照落备份表 / 生成反向 DML 的项）；仅建议级（auto_rollback=False）不在此自动执行。
+    整体置于单事务，任一条失败即整任务回滚并抛出 RuntimeError。
+    所有动作 append-only 落库（sql_audit_executions, mode='rollback'）。
+    """
+    if not instance:
+        raise ValueError("回滚执行必须指定目标实例")
+    if task.get("status") != "executed":
+        raise ValueError("仅已执行的任务可回滚")
+    rollbacks = models.get_rollbacks(task["id"])
+    targets = [r for r in rollbacks if r.get("auto_rollback") and r.get("rollback_sql")]
+    if not targets:
+        raise ValueError("该任务无可自动回滚的项（可能仅生成了建议级回滚）")
+    conn = plan_analyzer.connect_instance(instance)
+    started_all = _now_iso()
+    results = []
+    try:
+        _set_timeout(conn, task["db_type"], EXEC_TIMEOUT_DEFAULT)
+        for rb in targets:
+            started = _now_iso()
+            try:
+                cur = conn.cursor()
+                cur.execute(rb["rollback_sql"])
+                affected = cur.rowcount
+                finished = _now_iso()
+                models.insert_execution(
+                    task["id"], rb.get("item_id"), "rollback", rb["rollback_sql"],
+                    affected, "success", started, finished, None,
+                )
+                results.append({"item_id": rb.get("item_id"), "status": "success",
+                                "affected_rows": affected})
+            except Exception as e:  # noqa: BLE001
+                finished = _now_iso()
+                models.insert_execution(
+                    task["id"], rb.get("item_id"), "rollback", rb["rollback_sql"],
+                    None, "failed", started, finished, str(e),
+                )
+                raise RuntimeError(f"回滚项 #{rb.get('item_id')} 执行失败: {e}") from e
+        conn.commit()
+        return {"ok": True, "mode": "rollback", "results": results,
+                "started_at": started_all, "finished_at": _now_iso()}
+    except Exception:  # noqa: BLE001
+        try:
+            conn.rollback()
+        except Exception:  # noqa: BLE001
+            pass
         raise
     finally:
         try:

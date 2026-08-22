@@ -328,6 +328,18 @@ def update_task_status(task_id: int, status: str, **fields) -> None:
     conn.close()
 
 
+def update_task_instance(task_id: int, instance_id: str) -> None:
+    """为已提交任务补充/更正目标实例（用于执行前发现未指定实例时）。"""
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "UPDATE sql_audit_tasks SET instance_id=?, updated_at=? WHERE id=?",
+        (instance_id, _now(), task_id),
+    )
+    conn.commit()
+    conn.close()
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # MVP3.5：规则在线 CRUD（运维自调规则，无需改种子代码）
 # 业务标识用 rule_id（与种子规则一致），主键 id 自增；CRUD 均以 rule_id 定位。

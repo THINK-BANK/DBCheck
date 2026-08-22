@@ -752,6 +752,89 @@ async function executeFixSql(taskId, sql) {
   color: #fff;
 }
 
+/* ─── SQL 审核状态筛选 tab（P0） ─── */
+.sa-tab {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 12.5px;
+  line-height: 1;
+  padding: 7px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all var(--trans);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.sa-tab:hover { border-color: var(--accent); color: var(--text); }
+.sa-tab.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.sa-tab-cnt {
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(255,255,255,0.18);
+  border-radius: 999px;
+  padding: 1px 7px;
+  min-width: 18px;
+  text-align: center;
+}
+.sa-tab:not(.active) .sa-tab-cnt {
+  background: var(--border);
+  color: var(--text-muted);
+}
+
+/* ─── SQL 审核详情右侧抽屉（P1 ②） ─── */
+.sa-drawer-mask {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.45);
+  opacity: 0; visibility: hidden;
+  transition: opacity var(--trans), visibility var(--trans);
+  z-index: 9998;
+}
+.sa-drawer-mask.open { opacity: 1; visibility: visible; }
+.sa-drawer {
+  position: fixed; top: 0; right: 0; bottom: 0;
+  width: min(560px, 92vw);
+  z-index: 10000;
+  overflow: hidden;
+  pointer-events: none;
+  transition: right var(--trans);
+}
+/* AI 助手展开（桌面未折叠 / 移动滑出）时，抽屉自动让到其左侧 */
+#ai-chat-sidebar:not(.collapsed) ~ #sa-drawer,
+#ai-chat-sidebar.open ~ #sa-drawer { right: 432px; }
+.sa-drawer.open { pointer-events: auto; }
+.sa-drawer-inner {
+  height: 100vh; max-height: 100vh;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  box-shadow: -8px 0 32px rgba(0,0,0,0.28);
+  transform: translateX(100%);
+  transition: transform var(--trans);
+  overflow-y: auto;
+  padding: 20px 22px 40px;
+  color: var(--text);
+}
+.sa-drawer.open .sa-drawer-inner { transform: translateX(0); }
+#sa-drawer-body .card-title {
+  position: sticky; top: 0;
+  background: var(--surface);
+  padding: 10px 0 12px;
+  margin: 0 0 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* 窄屏：SQL 审核抽屉占满全屏，且忽略 AI 展开时的右侧让位 */
+@media (max-width: 900px) {
+  .sa-drawer { right: 0 !important; left: 0; width: auto; z-index: 10001; }
+  #ai-chat-sidebar:not(.collapsed) ~ #sa-drawer,
+  #ai-chat-sidebar.open ~ #sa-drawer { right: 0 !important; }
+}
+
 /* ─── Form ─── */
 .form-grid {
   display: grid; grid-template-columns: 1fr 1fr; gap: 16px 20px;
@@ -3554,6 +3637,48 @@ function showConfirmDialog(title, message) {
   });
 }
 
+// ─── 带输入的 div 弹窗（替换原生 prompt） ─────────────────────────────
+function showPromptDialog(title, message, defaultVal) {
+  return new Promise((resolve) => {
+    const backdropId = 'prompt-backdrop-' + Date.now();
+    const html =
+      '<div id="' + backdropId + '" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:999999;display:flex;align-items:center;justify-content:center">' +
+        '<div style="background:#1A2338;border:1px solid #2A3650;border-radius:12px;padding:24px;max-width:440px;width:90%;max-height:calc(100vh - 32px);overflow-y:auto;color:#CBD5E1;">' +
+          '<h3 style="margin:0 0 12px;color:#F8F9FA;font-size:16px">' + escHtml(title) + '</h3>' +
+          (message ? '<p style="margin:0 0 14px;color:#CBD5E1;font-size:14px;white-space:pre-wrap">' + escHtml(message) + '</p>' : '') +
+          '<input id="' + backdropId + '-input" type="text" value="' + escHtml(defaultVal || '') + '" style="width:100%;padding:9px 11px;background:#0F172A;border:1px solid #2A3650;border-radius:8px;color:#F8F9FA;font-size:13px;box-sizing:border-box" />' +
+          '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px">' +
+            '<button id="' + backdropId + '-cancel" style="padding:8px 16px;background:#2A3650;color:#CBD5E1;border:none;border-radius:6px;cursor:pointer;font-size:13px">取消</button>' +
+            '<button id="' + backdropId + '-ok" style="padding:8px 16px;background:#3B82F6;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px">确定</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    document.documentElement.insertAdjacentHTML('beforeend', html);
+    const backdrop = document.getElementById(backdropId);
+    const input = document.getElementById(backdropId + '-input');
+
+    let resolved = false;
+    function cleanUp(result) {
+      if (resolved) return;
+      resolved = true;
+      document.removeEventListener('keydown', onKey);
+      backdrop.remove();
+      resolve(result);
+    }
+    function onKey(e) {
+      if (e.key === 'Escape') { e.preventDefault(); cleanUp(null); }
+      else if (e.key === 'Enter') { e.preventDefault(); cleanUp(input.value); }
+    }
+    document.addEventListener('keydown', onKey);
+    backdrop.addEventListener('click', function(e) {
+      if (e.target === backdrop) { e.stopPropagation(); cleanUp(null); }
+    });
+    backdrop.querySelector('#' + backdropId + '-cancel').addEventListener('click', function() { cleanUp(null); });
+    backdrop.querySelector('#' + backdropId + '-ok').addEventListener('click', function() { cleanUp(input.value); });
+    setTimeout(() => input.focus(), 30);
+  });
+}
+
 // ─── RAG 知识库 ─────────────────────────────────────
 async function showRagPage() {
   // 先绑定按钮，不受后续加载影响
@@ -5573,7 +5698,7 @@ function formatBytes(bytes) {
     <!-- ── SQL 审核(MVP1) ── -->
     <div class="nav-section">变更安全</div>
     <div class="nav-item" onclick="showPage('sql-audit')" id="nav-sql-audit">
-      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.4 8.5 8 11 4.6-2.5 8-6 8-11V5l-8-3z"/><path d="M9 12l2 2 4-4"/></svg></span> <span>SQL 审核</span> <span style="margin-left:6px;background:#f59e0b;color:#1f2937;font-size:10px;font-weight:600;padding:1px 6px;border-radius:999px;vertical-align:middle">开发中</span>
+      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.4 8.5 8 11 4.6-2.5 8-6 8-11V5l-8-3z"/><path d="M9 12l2 2 4-4"/></svg></span> <span>SQL 审核</span>
     </div>
 
     <!-- ── 巡检编排(Pro) ── -->
@@ -6440,7 +6565,7 @@ function formatBytes(bytes) {
           </div>
           <div class="form-grid">
             <div class="field">
-              <label>目标实例（可选）</label>
+              <label>目标实例（执行/计划分析必选）</label>
               <select id="sa-instance-select" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px" onchange="saInstanceChanged(this)">
                 <option value="">-- 不指定实例 --</option>
               </select>
@@ -6448,11 +6573,7 @@ function formatBytes(bytes) {
             <div class="field">
               <label>数据库类型</label>
               <select id="sa-db-type" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">
-                <option value="mysql">MySQL</option>
-                <option value="postgresql">PostgreSQL</option>
-                <option value="oracle">Oracle</option>
-                <option value="sqlserver">SQL Server</option>
-                <option value="dm">达梦 DM8</option>
+                <option value="">加载中...</option>
               </select>
             </div>
             <div class="field">
@@ -6484,10 +6605,18 @@ function formatBytes(bytes) {
           <div class="card-title"><span>📋</span> 审核任务列表
             <button class="btn btn-ghost" style="margin-left:auto;padding:6px 12px;font-size:12px" onclick="loadSqlAudit()">↻ 刷新</button>
           </div>
+          <div id="sa-tabs" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;border-bottom:1px solid var(--border);padding-bottom:10px">
+            <button class="sa-tab active" data-status="all" onclick="saTab('all')">全部 <span class="sa-tab-cnt">0</span></button>
+            <button class="sa-tab" data-status="analyzed" onclick="saTab('analyzed')">待审核 <span class="sa-tab-cnt">0</span></button>
+            <button class="sa-tab" data-status="pending_approval" onclick="saTab('pending_approval')">待审批 <span class="sa-tab-cnt">0</span></button>
+            <button class="sa-tab" data-status="approved" onclick="saTab('approved')">已通过 <span class="sa-tab-cnt">0</span></button>
+            <button class="sa-tab" data-status="rejected" onclick="saTab('rejected')">已驳回 <span class="sa-tab-cnt">0</span></button>
+            <button class="sa-tab" data-status="executed" onclick="saTab('executed')">已执行 <span class="sa-tab-cnt">0</span></button>
+            <button class="sa-tab" data-status="blocked" onclick="saTab('blocked')">已阻断 <span class="sa-tab-cnt">0</span></button>
+          </div>
           <div class="reports-list" id="sa-task-list">
             <div style="text-align:center;color:var(--text-muted);padding:32px">加载中...</div>
           </div>
-          <div id="sa-detail" style="display:none;margin-top:16px"></div>
         </div>
 
         <div class="card">
@@ -11410,25 +11539,29 @@ function renderReports() {
 // ── SQL 审核（MVP2：多库方言 + 执行计划）─────────────────
 let saTasks = [];
 function saInstanceChanged(sel) {
-  // 用户选择数据源后，将实例原始 db_type 归一化到「数据库类型」下拉框的可选项，
-  // 自动选中对应项（如 sqlserver_jdbc→sqlserver、dameng/dm8→dm、hgdb/kingbase→postgresql）。
+  // 用户选择数据源后，自动把「数据库类型」下拉框设为该实例的 db_type 并禁用手动修改。
+  // 实例 db_type 已是标准化值（来自 dbtype_registry，与 /api/db_types 下拉项一致），
+  // 仅对少数历史拼写别名做兼容映射（如 sqlserver_jdbc→sqlserver、dm8/dameng→dm、mssql→sqlserver）；
+  // 不再把 hgdb/kingbase/ivorysql 等归一成 postgresql（它们各自是独立类型，SQL 审核应按原类型处理）。
+  const dtSel = document.getElementById('sa-db-type');
   const o = sel.selectedOptions[0];
   const raw = o ? (o.dataset.db || '') : '';
-  const map = {
-    'pg': 'postgresql', 'postgres': 'postgresql', 'ivorysql': 'postgresql',
-    'kingbase': 'postgresql', 'hgdb': 'postgresql',
-    'mariadb': 'mysql', 'tidb': 'mysql', 'oceanbase': 'mysql', 'gbase': 'mysql',
-    'sqlserver_jdbc': 'sqlserver', 'sqlserver': 'sqlserver', 'mssql': 'sqlserver',
-    'dameng': 'dm', 'dm8': 'dm', 'dm': 'dm',
-    'mysql': 'mysql', 'postgresql': 'postgresql', 'oracle': 'oracle'
+  if (!sel.value) {
+    // 未指定实例：恢复为可手动选择
+    if (dtSel) dtSel.disabled = false;
+    return;
+  }
+  const alias = {
+    'pg': 'postgresql', 'postgres': 'postgresql',
+    'sqlserver_jdbc': 'sqlserver', 'mssql': 'sqlserver',
+    'dameng': 'dm', 'dm8': 'dm',
   };
-  const v = map[(raw || '').toLowerCase()];
-  const dtSel = document.getElementById('sa-db-type');
+  const v = alias[(raw || '').toLowerCase()] || (raw || '').toLowerCase();
   if (dtSel) {
-    // 仅当归一化结果命中下拉项时才赋值，未命中则保持用户当前手动选择
-    if (v && Array.from(dtSel.options).some(opt => opt.value === v)) {
-      dtSel.value = v;
-    }
+    // 优先命中下拉项，其次用原始值兜底；均未命中则保持当前项
+    const hit = v && Array.from(dtSel.options).some(opt => opt.value === v) ? v : null;
+    if (hit) dtSel.value = hit;
+    dtSel.disabled = true; // 已指定实例，数据库类型由实例决定，禁止手动改
   }
 }
 async function loadSqlAudit() {
@@ -11443,6 +11576,19 @@ async function loadSqlAudit() {
       ).join('');
     }
   } catch(e) { /* 实例列表失败不影响提交 */ }
+  // 数据库类型下拉：复用 /api/db_types（含 is_jdbc 原生/JDBC 标记），P1 ④
+  try {
+    const rt2 = await fetch('/api/db_types');
+    const dt2 = await rt2.json();
+    const sel = document.getElementById('sa-db-type');
+    if (sel && Array.isArray(dt2)) {
+      const cur = sel.value;
+      sel.innerHTML = dt2.map(t =>
+        `<option value="${escHtml(t.value)}">${escHtml(t.label)}${t.is_jdbc ? ' · JDBC' : ' · 原生'}</option>`
+      ).join('');
+      if (cur && dt2.some(t => t.value === cur)) sel.value = cur;
+    }
+  } catch(e) { /* 类型下拉失败不影响提交 */ }
   // 任务列表
   try {
     const rt = await fetch('/api/sql-audit/tasks');
@@ -11457,11 +11603,41 @@ async function loadSqlAudit() {
   loadSqlAuditRules().catch(e => console.error('loadSqlAuditRules failed', e));
 }
 
+// P0：状态筛选 + 概览卡
+window.saFilterStatus = 'all';
+const SA_STATUS_META = {
+  analyzed:         {label:'待审核', color:'#3b82f6'},
+  pending_approval: {label:'待审批', color:'#f59e0b'},
+  approved:         {label:'已通过', color:'#22c55e'},
+  rejected:         {label:'已驳回', color:'#ef4444'},
+  executed:         {label:'已执行', color:'#8b5cf6'},
+  blocked:          {label:'已阻断', color:'#ec4899'},
+};
+function saTab(status) {
+  window.saFilterStatus = status;
+  document.querySelectorAll('#sa-tabs .sa-tab').forEach(b => {
+    b.classList.toggle('active', b.getAttribute('data-status') === status);
+  });
+  renderSqlAuditTasks();
+}
 function renderSqlAuditTasks() {
   const list = document.getElementById('sa-task-list');
+  // 同步更新小 tab 计数
+  const counts = {all: saTasks.length, analyzed:0, pending_approval:0, approved:0, rejected:0, executed:0, blocked:0};
+  saTasks.forEach(t => { const s = t.status; if (s in counts) counts[s]++; });
+  document.querySelectorAll('#sa-tabs .sa-tab').forEach(btn => {
+    const k = btn.getAttribute('data-status') || 'all';
+    const badge = btn.querySelector('.sa-tab-cnt');
+    if (badge) badge.textContent = String(counts[k] || 0);
+  });
   if (!list) return;
+  const filtered = (window.saFilterStatus === 'all') ? saTasks : saTasks.filter(t => t.status === window.saFilterStatus);
   if (!saTasks.length) {
     list.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:32px">暂无 SQL 审核任务</div>';
+    return;
+  }
+  if (!filtered.length) {
+    list.innerHTML = `<div style="text-align:center;color:var(--text-muted);padding:32px">当前筛选「${SA_STATUS_META[window.saFilterStatus]?SA_STATUS_META[window.saFilterStatus].label:'全部'}」下暂无任务</div>`;
     return;
   }
   const levelBadge = (lv) => {
@@ -11469,7 +11645,7 @@ function renderSqlAuditTasks() {
     const m = map[lv] || map.low;
     return `<span class="severity-tag ${m[0]}" style="font-size:11px;padding:2px 7px">${m[1]}</span>`;
   };
-  list.innerHTML = saTasks.map(t => `
+  list.innerHTML = filtered.map(t => `
     <div class="report-item" style="cursor:pointer" onclick="showSqlAuditDetail(${t.id})">
       <div class="ri-icon">🛡️</div>
       <div class="ri-info">
@@ -12301,27 +12477,32 @@ async function deleteSchemaDict(dbType, viewName, fieldName) {
 
 async function submitSqlAudit() {
   const sql = document.getElementById('sa-sql').value.trim();
-  if (!sql) { alert('请输入待审核 SQL'); return; }
+  if (!sql) { toastError('请输入待审核 SQL'); return; }
   const instSel = document.getElementById('sa-instance-select');
   const instId = instSel ? instSel.value : '';
   const dbType = document.getElementById('sa-db-type').value;
   const env = document.getElementById('sa-env').value;
+  const planEnabled = document.getElementById('sa-plan-enabled') ? document.getElementById('sa-plan-enabled').checked : false;
+  const execEnabled = document.getElementById('sa-exec-enabled') ? document.getElementById('sa-exec-enabled').checked : false;
+  if (!instId && planEnabled) { toastError('开启执行计划分析需要指定目标实例'); return; }
+  if (!instId && execEnabled) { toastError('允许真实执行需要指定目标实例'); return; }
+  if (!dbType) { toastError('请选择数据库类型'); return; }
   const btn = document.getElementById('sa-submit-btn');
   btn.disabled = true; btn.textContent = '审核中...';
   try {
     const res = await fetch('/api/sql-audit/submit', {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({instance_id: instId, db_type: dbType, env: env, sql_text: sql,
-        plan_enabled: document.getElementById('sa-plan-enabled') ? document.getElementById('sa-plan-enabled').checked : false,
-        exec_enabled: document.getElementById('sa-exec-enabled') ? (document.getElementById('sa-exec-enabled').checked && !!instId) : false})
+        plan_enabled: planEnabled,
+        exec_enabled: execEnabled})
     });
     const data = await res.json();
-    if (!data.ok) { alert('审核失败: ' + (data.error||'未知错误')); return; }
+    if (!data.ok) { toastError('审核失败: ' + (data.error||'未知错误')); return; }
     saTasks = [data.task, ...saTasks];
     renderSqlAuditTasks();
     showSqlAuditDetail(data.task.id);
   } catch(e) {
-    alert('提交失败: ' + e.message);
+    toastError('提交失败: ' + e.message);
   } finally {
     btn.disabled = false; btn.textContent = '开始审核';
   }
@@ -12336,18 +12517,33 @@ async function deleteSqlAuditTask(taskId) {
     if (!data.ok) { toastError('删除失败: ' + (data.error || '未知错误')); return; }
     saTasks = saTasks.filter(t => t.id !== taskId);
     renderSqlAuditTasks();
-    const panel = document.getElementById('sa-detail');
-    if (panel) panel.style.display = 'none';
+    closeSqlAuditDetail();
   } catch(e) {
     toastError('删除失败: ' + e.message);
   }
+}
+
+// ─── SQL 审核详情：右侧抽屉开关（P0/P1 ②） ─────────────────────────────
+function openSqlAuditDrawer() {
+  const drawer = document.getElementById('sa-drawer');
+  const mask = document.getElementById('sa-drawer-mask');
+  if (drawer) { drawer.classList.add('open'); drawer.setAttribute('aria-hidden', 'false'); }
+  if (mask) mask.classList.add('open');
+}
+function closeSqlAuditDetail() {
+  const drawer = document.getElementById('sa-drawer');
+  const mask = document.getElementById('sa-drawer-mask');
+  if (drawer) { drawer.classList.remove('open'); drawer.setAttribute('aria-hidden', 'true'); }
+  if (mask) mask.classList.remove('open');
+  const body = document.getElementById('sa-drawer-body');
+  if (body) body.innerHTML = '';
 }
 
 async function showSqlAuditDetail(taskId) {
   try {
     const res = await fetch('/api/sql-audit/tasks/' + taskId);
     const data = await res.json();
-    if (!data.ok) { alert(data.error); return; }
+    if (!data.ok) { toastError(data.error); return; }
     const t = data.task;
     const levelColor = {block:'#ef4444',high:'#f97316',mid:'#eab308',low:'#22c55e'};
     const cssLevel = (lv) => (lv === 'block' ? 'high' : lv);
@@ -12400,8 +12596,8 @@ async function showSqlAuditDetail(taskId) {
         ${planBlock(it.plan_json)}
       </div>`;
     }).join('');
-    const panel = document.getElementById('sa-detail');
-    panel.style.display = 'block';
+    const panel = document.getElementById('sa-drawer-body');
+    openSqlAuditDrawer();
     const canApprove = (window.__userRole === 'admin' || window.__userRole === 'operator');
     const isHigh = (t.risk_level === 'high' || t.risk_level === 'block');
     const blocked = (t.status === 'blocked');
@@ -12409,12 +12605,28 @@ async function showSqlAuditDetail(taskId) {
     if (blocked) {
       actionHtml += '<div class="status-banner err" style="margin:12px 0">🚫 该任务含阻断级风险，已禁止执行。如需变更请修改 SQL 后重新提交。</div>';
     } else {
-      const realDisabled = (isHigh && !t.approved_by) ? 'disabled style="opacity:.5;cursor:not-allowed"' : '';
-      const realTip = (isHigh && !t.approved_by) ? '需先审批通过' : '真实执行将修改目标库';
+      const noInstance = !t.instance_id;
+      const execEnabled = !!t.exec_enabled;
+      const alreadyExecuted = (t.status === 'executed');
+      const realDisabled = noInstance || (isHigh && !t.approved_by) || !execEnabled || alreadyExecuted ? 'disabled style="opacity:.5;cursor:not-allowed"' : '';
+      let realTip = '真实执行将修改目标库';
+      if (alreadyExecuted) realTip = '该任务已执行，如需再次执行请重新提交';
+      else if (!execEnabled) realTip = '未开启真实执行（提交时未勾选允许执行）';
+      else if (noInstance) realTip = '未指定目标实例，无法真实执行';
+      else if (isHigh && !t.approved_by) realTip = '需先审批通过';
       actionHtml += `<div style="display:flex;gap:10px;flex-wrap:wrap;margin:12px 0">
         <button class="btn btn-ghost" style="padding:7px 16px" onclick="dryRunSqlAudit(${t.id})">🔍 预演(dry-run)</button>
         <button class="btn btn-primary" ${realDisabled} style="padding:7px 16px" title="${realTip}" onclick="realExecSqlAudit(${t.id})">⚡ 真实执行</button>
       </div>`;
+      if (!execEnabled) {
+        actionHtml += '<div class="status-banner err" style="margin:8px 0">⚠ 该任务未开启真实执行（提交时未勾选允许执行），仅可预演/分析。如需真实执行请重新提交任务并勾选"允许真实执行"。</div>';
+      }
+      if (noInstance) {
+        actionHtml += `<div class="status-banner err" style="margin:8px 0;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span>⚠ 该任务未指定目标实例，真实执行与执行计划分析需要连接实例。</span>
+          <button class="btn btn-primary" style="padding:5px 14px;font-size:12px" onclick="bindSqlAuditInstance(${t.id})">指定实例</button>
+        </div>`;
+      }
       if (isHigh && !t.approved_by) {
         if (canApprove) {
           actionHtml += `<div style="display:flex;gap:10px;align-items:center;margin:8px 0;padding:8px 12px;background:var(--surface2);border-radius:8px;border:1px solid var(--border)">
@@ -12439,7 +12651,7 @@ async function showSqlAuditDetail(taskId) {
     ) : '';
     panel.innerHTML = `
       <div class="card-title"><span>🛡️</span> 审核报告 ${escHtml(t.task_no)}
-        <button class="btn btn-ghost" style="margin-left:auto;font-size:12px;padding:4px 10px" onclick="document.getElementById('sa-detail').style.display='none'">收起</button>
+        <button class="btn btn-ghost" style="margin-left:auto;font-size:12px;padding:4px 10px" onclick="closeSqlAuditDetail()">收起</button>
       </div>
       <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px;margin-bottom:12px">
         <span>提交人: ${escHtml(t.submitter||'')}</span>
@@ -12448,6 +12660,7 @@ async function showSqlAuditDetail(taskId) {
         <span>环境: ${escHtml(t.env||'')}</span>
         <span>语句数: ${t.sql_count}</span>
         <span>执行计划分析: <b style="color:${t.plan_enabled ? '#22c55e' : 'var(--text-muted)'}">${t.plan_enabled ? '✅ 已开启' : '关闭'}</b></span>
+        <span>真实执行: <b style="color:${t.exec_enabled ? '#22c55e' : '#ef4444'}">${t.exec_enabled ? '✅ 已开启' : '未开启'}</b></span>
         <span>任务风险: <b style="color:${levelColor[t.risk_level]||'#888'}">${escHtml(t.risk_level)} (${t.risk_score})</b></span>
         <span class="tag" style="font-size:11px">状态: ${escHtml(t.status||'')}</span>
       </div>
@@ -12457,7 +12670,59 @@ async function showSqlAuditDetail(taskId) {
       ${approvalsHtml}
       ${saExecHistoryHtml(t)}`;
   } catch(e) {
-    alert('加载详情失败: ' + e.message);
+    toastError('加载详情失败: ' + e.message);
+  }
+}
+
+async function bindSqlAuditInstance(taskId) {
+  try {
+    const ri = await fetch('/api/sql-audit/instances');
+    const di = await ri.json();
+    const instances = di.instances || [];
+    if (!instances.length) { toastError('暂无可用实例，请先在数据源管理中配置'); return; }
+    const options = instances.map(i => `<option value="${escHtml(i.id)}" data-db="${escHtml(i.db_type||'')}">${escHtml(i.name || i.id)} (${escHtml(i.db_type||'')})</option>`).join('');
+    const backdropId = 'sa-bind-instance-' + Date.now();
+    const html = '<div id="' + backdropId + '" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.55);z-index:999999;display:flex;align-items:center;justify-content:center;padding:16px">' +
+      '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:22px;min-width:300px;max-width:420px;width:100%">' +
+        '<div style="font-size:16px;font-weight:600;margin-bottom:14px">为审核任务指定目标实例</div>' +
+        '<select id="' + backdropId + '-sel" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:16px">' +
+          '<option value="">-- 请选择实例 --</option>' + options +
+        '</select>' +
+        '<div style="display:flex;justify-content:flex-end;gap:10px">' +
+          '<button id="' + backdropId + '-cancel" class="btn btn-ghost" style="padding:6px 14px">取消</button>' +
+          '<button id="' + backdropId + '-ok" class="btn btn-primary" style="padding:6px 14px">确定</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+    document.body.insertAdjacentHTML('beforeend', html);
+    const chosen = await new Promise(resolve => {
+      const clean = v => { document.getElementById(backdropId).remove(); resolve(v); };
+      document.getElementById(backdropId + '-cancel').addEventListener('click', () => clean(null));
+      document.getElementById(backdropId + '-ok').addEventListener('click', () => {
+        const v = document.getElementById(backdropId + '-sel').value;
+        if (!v) { toastError('请选择实例'); return; }
+        clean(v);
+      });
+      document.getElementById(backdropId).addEventListener('click', e => { if (e.target.id === backdropId) clean(null); });
+    });
+    if (!chosen) return;
+    const res = await fetch('/api/sql-audit/tasks/' + taskId + '/bind-instance', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({instance_id: chosen})
+    });
+    const data = await res.json();
+    if (!data.ok) { toastError('绑定失败: ' + (data.error || '')); return; }
+    const idx = saTasks.findIndex(x => x.id === taskId);
+    if (idx >= 0) saTasks[idx] = data.task;
+    renderSqlAuditTasks();
+    showSqlAuditDetail(taskId);
+    toastSuccess('已指定目标实例');
+    // 若任务开启了执行计划分析，绑定实例后自动跑 dry-run 刷新计划结果
+    if (data.task && data.task.plan_enabled) {
+      setTimeout(() => dryRunSqlAudit(taskId), 300);
+    }
+  } catch(e) {
+    toastError('绑定实例失败: ' + e.message);
   }
 }
 
@@ -12479,15 +12744,36 @@ function saExecHistoryHtml(t) {
   });
   rbs.forEach(r => {
     const ar = r.auto_rollback ? '<span style="color:#22c55e">可自动回滚</span>' : '<span style="color:#f59e0b">仅建议（不可自动回滚）</span>';
+    const rbBtn = r.auto_rollback
+      ? `<button class="btn btn-danger" style="margin-top:8px;padding:5px 14px;font-size:12px" onclick="rollbackSqlAudit(${t.id})">↩ 一键回滚</button>`
+      : '';
     h += `<div style="border:1px dashed var(--border);border-radius:6px;padding:8px;margin-bottom:6px;font-size:12px">
       ${ar}
       ${r.backup_ref ? ` · 备份表: <b>${escHtml(r.backup_ref)}</b>` : ''}
       ${r.rollback_sql ? `<pre style="white-space:pre-wrap;word-break:break-all;margin:6px 0 0;background:var(--surface2);padding:6px;border-radius:6px">${escHtml(r.rollback_sql)}</pre>` : ''}
       ${r.note ? `<div style="color:var(--text-muted);margin-top:4px">${escHtml(r.note)}</div>` : ''}
+      ${rbBtn}
     </div>`;
   });
   h += '</div>';
   return h;
+}
+
+async function rollbackSqlAudit(taskId) {
+  const ok = await showConfirmDialog('⚠ 一键回滚', '回滚将真实修改目标数据库，反向执行已生成的回滚 SQL（仅自动回滚项）。\n此操作不可撤销，确定继续吗？');
+  if (!ok) return;
+  const box = document.getElementById('sa-exec-result-' + taskId);
+  if (box) box.innerHTML = '<div style="font-size:12px;color:#f59e0b">回滚执行中...</div>';
+  try {
+    const res = await fetch('/api/sql-audit/tasks/' + taskId + '/rollback', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({confirm: true})
+    });
+    const data = await res.json();
+    if (!data.ok) { toastError('回滚失败: ' + (data.error || '')); if (box) box.innerHTML = `<div class="status-banner err">回滚失败: ${escHtml(data.error || '')}</div>`; return; }
+    toastSuccess('回滚已执行');
+    showSqlAuditDetail(taskId);
+  } catch (e) { toastError('回滚失败: ' + e.message); if (box) box.innerHTML = `<div class="status-banner err">回滚失败: ${escHtml(e.message)}</div>`; }
 }
 
 async function dryRunSqlAudit(taskId) {
@@ -12505,16 +12791,23 @@ async function dryRunSqlAudit(taskId) {
 }
 
 async function realExecSqlAudit(taskId) {
+  const task = saTasks.find(x => x.id === taskId);
+  if (!task || !task.instance_id) { toastError('该任务未指定目标实例，请先点击「指定实例」'); return; }
+  if (!task.exec_enabled) { toastError('该任务未开启真实执行（提交时未勾选允许执行），请重新提交任务'); return; }
+  if (task.status === 'executed') { toastError('该任务已执行，如需再次执行请重新提交'); return; }
+  const isHigh = (task.risk_level === 'high' || task.risk_level === 'block');
+  if (isHigh && !task.approved_by) { toastError('高风险任务须先审批通过'); return; }
   const ok = await showConfirmDialog('确认真实执行', '真实执行将修改目标数据库！系统会执行前快照并对 UPDATE/DELETE 生成回滚 SQL。\n仍要执行吗？');
   if (!ok) return;
-  const maxRows = prompt('影响行数上限（超过将自动回滚，默认 100000）：', '100000');
+  const maxRows = await showPromptDialog('影响行数上限', '超过该上限将自动回滚（默认 100000）：', '100000');
   if (maxRows === null) return;
+  const maxAffected = parseInt(maxRows, 10) || 100000;
   const box = document.getElementById('sa-exec-result-' + taskId);
   if (box) box.innerHTML = '<div style="font-size:12px;color:#f59e0b">真实执行中...</div>';
   try {
     const res = await fetch('/api/sql-audit/tasks/' + taskId + '/execute', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({mode: 'real', max_affected_rows: parseInt(maxRows, 10) || 100000})
+      body: JSON.stringify({mode: 'real', max_affected_rows: maxAffected})
     });
     const data = await res.json();
     if (!data.ok) { if (box) box.innerHTML = `<div class="status-banner err">执行失败: ${escHtml(data.error || '')}</div>`; return; }
@@ -12524,7 +12817,7 @@ async function realExecSqlAudit(taskId) {
 }
 
 async function approveSqlAudit(taskId, action) {
-  const comment = prompt(action === 'approve' ? '审批通过备注（可选）：' : '驳回原因：', '');
+  const comment = await showPromptDialog(action === 'approve' ? '审批通过' : '驳回任务', action === 'approve' ? '审批通过备注（可选）：' : '驳回原因：', '');
   if (comment === null) return;
   try {
     const res = await fetch('/api/sql-audit/tasks/' + taskId + '/approve', {
@@ -12532,10 +12825,20 @@ async function approveSqlAudit(taskId, action) {
       body: JSON.stringify({action: action, comment: comment})
     });
     const data = await res.json();
-    if (!data.ok) { alert('审批失败: ' + (data.error || '')); return; }
-    (typeof toastInfo === 'function' ? toastInfo : alert)('审批已提交');
+    if (!data.ok) { toastError('审批失败: ' + (data.error || '')); return; }
+    toastSuccess('审批已提交');
+    // 审批后把详情合并进 saTasks，保证前端缓存含 approved_by 等关键字段（列表接口可能未及时刷新）
+    try {
+      const dres = await fetch('/api/sql-audit/tasks/' + taskId);
+      const d = await dres.json();
+      if (d.ok && d.task) {
+        const idx = saTasks.findIndex(x => x.id === taskId);
+        if (idx >= 0) saTasks[idx] = Object.assign({}, saTasks[idx], d.task);
+        else saTasks.unshift(d.task);
+      }
+    } catch (e) { /* 合并失败不影响审批结果，下面仍刷新详情 */ }
     showSqlAuditDetail(taskId);
-  } catch (e) { alert('审批失败: ' + e.message); }
+  } catch (e) { toastError('审批失败: ' + e.message); }
 }
 
 function renderExecResult(taskId, data) {
@@ -19593,6 +19896,14 @@ async function deleteBackupHistory(recordId) {
     </div>
   </div>
 </aside>
+
+      <!-- SQL 审核详情：右侧抽屉（避免长页）；置于 AI 面板之后，便于用兄弟选择器联动其折叠状态 -->
+      <div id="sa-drawer-mask" class="sa-drawer-mask" onclick="closeSqlAuditDetail()"></div>
+      <aside id="sa-drawer" class="sa-drawer" aria-hidden="true">
+        <div class="sa-drawer-inner">
+          <div id="sa-drawer-body"></div>
+        </div>
+      </aside>
 
 <!-- 小屏幕 AI 面板浮动按钮 -->
 <button id="ai-chat-fab" onclick="toggleAiChatPanel()">💬</button>

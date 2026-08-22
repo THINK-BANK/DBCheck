@@ -311,6 +311,45 @@ def execute_task(task_id: int, mode: str = "dry_run", operator: str = "anonymous
             "executions": executions, "rollbacks": rollbacks, "summary": summary}
 
 
+def bind_task_instance(task_id: int, instance_id: str) -> dict:
+    """为已提交任务绑定/更正目标实例（执行前发现未指定时补充）。"""
+    models.init_db()
+    if not instance_id:
+        raise ValueError("instance_id 不能为空")
+    task = get_task(task_id)
+    if not task:
+        raise ValueError("任务不存在")
+    if task.get("status") == "executed":
+        raise ValueError("已执行的任务不允许再绑定实例")
+    from modules.pro.instance_manager import get_instance_manager
+    instance = get_instance_manager().get_instance_decrypted(instance_id)
+    if not instance:
+        raise ValueError("目标实例不存在或无权访问")
+    models.update_task_instance(task_id, instance_id)
+    return get_task(task_id)
+
+
+def execute_rollback(task_id: int, operator: str) -> dict:
+    """一键回滚（P1 ⑤）：执行任务已生成的自动回滚方案。
+
+    高危险操作，调用方需先校验审批角色并弹确认。仅执行 auto_rollback=True 项。
+    """
+    models.init_db()
+    task = get_task(task_id)
+    if not task:
+        raise ValueError("任务不存在")
+    if task.get("status") != "executed":
+        raise ValueError("仅已执行的任务可回滚")
+    if not task.get("instance_id"):
+        raise ValueError("该任务未关联实例，无法回滚")
+    from modules.pro.instance_manager import get_instance_manager
+    instance = get_instance_manager().get_instance_decrypted(task["instance_id"])
+    if not instance:
+        raise ValueError("目标实例不存在或无权访问")
+    from . import executor
+    return executor.execute_rollback(task, instance, operator)
+
+
 def approve_task(task_id: int, approver: str, action: str, comment: str = "") -> dict:
     """审批 SQL 审核任务（MVP3 审批流）。
 
@@ -345,7 +384,8 @@ def list_tasks(submitter: str = None, status: str = None, limit: int = 100) -> l
     conn = models.get_conn()
     cur = conn.cursor()
     sql = ("SELECT id, task_no, submitter, instance_id, env, db_type, sql_count, status, "
-           "risk_level, risk_score, created_at FROM sql_audit_tasks")
+           "risk_level, risk_score, created_at, approved_by, approved_at, "
+           "exec_enabled FROM sql_audit_tasks")
     where, params = [], []
     if submitter:
         where.append("submitter=?")

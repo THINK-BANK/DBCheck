@@ -129,6 +129,23 @@ def execute_task_route(task_id):
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+@bp.route("/tasks/<int:task_id>/bind-instance", methods=["POST"])
+def bind_instance_route(task_id):
+    """为已提交任务补充/更正目标实例。
+
+    请求体: {instance_id: str}
+    已执行的任务不可再绑定。
+    """
+    try:
+        username, _roles = _current_actor()
+        data = request.get_json(force=True, silent=True) or {}
+        instance_id = (data.get("instance_id") or "").strip()
+        task = service.bind_task_instance(task_id, instance_id)
+        return jsonify({"ok": True, "task": task})
+    except Exception as e:  # noqa: BLE001
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @bp.route("/tasks/<int:task_id>/approve", methods=["POST"])
 def approve_task_route(task_id):
     """审批 SQL 审核任务（需 admin / operator 角色）。
@@ -146,6 +163,26 @@ def approve_task_route(task_id):
         comment = data.get("comment", "")
         task = service.approve_task(task_id, username, action, comment)
         return jsonify({"ok": True, "task": task})
+    except Exception as e:  # noqa: BLE001
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@bp.route("/tasks/<int:task_id>/rollback", methods=["POST"])
+def rollback_task_route(task_id):
+    """一键回滚（P1 ⑤）：执行任务已生成的自动回滚方案。
+
+    高危险操作，需 admin / operator 角色。请求体: {confirm: true}（二次确认）。
+    仅执行 auto_rollback=True 的回滚项。
+    """
+    try:
+        username, roles = _current_actor()
+        if roles and not (APPROVER_ROLES & set(roles)):
+            return jsonify({"ok": False, "error": "权限不足：回滚需 admin 或 operator 角色"}), 403
+        data = request.get_json(force=True, silent=True) or {}
+        if not data.get("confirm"):
+            return jsonify({"ok": False, "error": "需二次确认 confirm=true"}), 400
+        result = service.execute_rollback(task_id, username)
+        return jsonify(result)
     except Exception as e:  # noqa: BLE001
         return jsonify({"ok": False, "error": str(e)}), 500
 
