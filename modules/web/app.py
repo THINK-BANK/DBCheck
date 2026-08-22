@@ -6859,10 +6859,17 @@ def api_db_types():
     新增插件类型只要启用即在下拉中出现，无需改此函数。
     """
     result = []
+    # 原生驱动类型白名单（走非 JDBC 驱动）：其余一律视为 JDBC 驱动。
+    # 由业务事实决定，不在 dbtype_registry 另加字段。新增 JDBC 类数据库无需改这里。
+    _NATIVE_DB_TYPES = {
+        'tdsqlc_mysql', 'oracle', 'sqlserver',
+        'redis', 'redis-cluster', 'mongodb',
+    }
     for meta in load_all_db_types():
         result.append({
             'value': meta.db_type,
             'label': meta.label,
+            'is_jdbc': meta.db_type not in _NATIVE_DB_TYPES,
             'description': meta.description,
             'icon': meta.icon,
             'emoji': meta.emoji,

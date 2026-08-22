@@ -600,9 +600,17 @@ async function executeFixSql(taskId, sql) {
 
 /* ─── DB Type Selector ─── */
 .type-grid {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
 }
+@media (max-width: 1100px) { .type-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+@media (max-width: 920px)  { .type-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 720px)  { .type-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 520px)  { .type-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .type-card {
+  position: relative;            /* 为右上角斜角 ribbon 定位 */
+  min-width: 0;
   border: 1.5px solid var(--border);
   border-radius: var(--radius);
   padding: 12px 14px;
@@ -688,10 +696,36 @@ async function executeFixSql(taskId, sql) {
 }
 .type-card .tc-desc {
   font-size: 11px; color: var(--text-muted); line-height: 1.35;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  overflow: hidden;
   max-width: 100%;
+  word-break: break-word;
+}
+/* ─── 右上角斜角 ribbon：区分「原生」/「JDBC」 ─── */
+.type-card .tc-ribbon {
+  position: absolute;
+  top: 0; right: 0;
+  width: 64px; height: 64px;
+  overflow: hidden;
+  border-top-right-radius: var(--radius);
+  pointer-events: none;
+}
+.type-card .tc-ribbon > span {
+  position: absolute;
+  top: 13px; right: -18px;
+  width: 92px;
+  transform: rotate(45deg);
+  text-align: center;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .5px;
+  line-height: 16px;
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,.25);
+}
+.type-card .tc-ribbon.ribbon-jdbc > span {
+  background: #1A6CFF;          /* 大蓝：JDBC 插件变体 */
+}
+.type-card .tc-ribbon.ribbon-native > span {
+  background: #8A94A6;          /* 浅灰：原生驱动 */
 }
 /* ─── 数据库类型分类过滤 chips ─── */
 .db-type-filter-chips {
@@ -22807,8 +22841,12 @@ const STATIC_DB_PH_MAP = {'pg':'postgres','ivorysql':'ivorysql','kingbase':'king
         : '🗄️';
       const pluginBadge = dbType.is_plugin ? ' <span class="beta-tag">Plugin</span>' : '';
       const compatBadge = dbType.compat_tag ? ` <span class="compat-tag">${dbType.compat_tag}</span>` : '';
+      // 右上角斜角 ribbon：后端 is_jdbc=true 为 JDBC 驱动（大蓝标），false 为原生驱动（浅灰标）
+      const isJdbcVariant = dbType.is_jdbc === true || dbType.is_jdbc === 'true';
+      const ribbonHtml = `<div class="tc-ribbon ${isJdbcVariant ? 'ribbon-jdbc' : 'ribbon-native'}"><span>${isJdbcVariant ? 'JDBC' : '原生'}</span></div>`;
 
       card.innerHTML = `
+        ${ribbonHtml}
         <div class="tc-header">
           <div class="tc-logo">${iconHtml}</div>
           <div class="tc-check" id="chk-${dbType.value}"></div>
