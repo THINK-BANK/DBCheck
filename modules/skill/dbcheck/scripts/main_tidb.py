@@ -910,9 +910,7 @@ class WordTemplateGenerator:
         table = self.doc.add_table(rows=8, cols=2)
         table.style = 'Table Grid'
         table.alignment = WD_TABLE_ALIGNMENT.CENTER
-        table.autofit = True
-        table.columns[0].width = Cm(4.5)
-        table.columns[1].width = Cm(11)
+        table.autofit = True  # 根据窗口自动调整表格宽度
 
         # 表头颜色
         header_color = RGBColor(15, 75, 135)
@@ -980,9 +978,7 @@ class WordTemplateGenerator:
         heading_run.font.bold = True
         table = self.doc.add_table(rows=2, cols=2)
         table.style = 'Table Grid'
-        table.autofit = True
-        table.columns[0].width = Cm(4)
-        table.columns[1].width = Cm(10)
+        table.autofit = True  # 根据窗口自动调整表格宽度
         cells = table.rows[0].cells
         cells[0].text = self._t('report.fallback_overall_health')
         cells[1].text = "{{ health_status }}"
@@ -1016,9 +1012,7 @@ class WordTemplateGenerator:
         sub_heading_run.font.bold = True
         table = self.doc.add_table(rows=2, cols=4)
         table.style = 'Table Grid'
-        table.autofit = True
-        for i in range(4):
-            table.columns[i].width = Cm(3.5)
+        table.autofit = True  # 根据窗口自动调整表格宽度
         hdr_cells = table.rows[0].cells
         hdr_cells[0].text = 'CPU使用率'
         hdr_cells[1].text = '物理核心数'
@@ -1043,9 +1037,7 @@ class WordTemplateGenerator:
         sub_heading_run.font.bold = True
         table = self.doc.add_table(rows=2, cols=4)
         table.style = 'Table Grid'
-        table.autofit = True
-        for i in range(4):
-            table.columns[i].width = Cm(3.5)
+        table.autofit = True  # 根据窗口自动调整表格宽度
         hdr_cells = table.rows[0].cells
         hdr_cells[0].text = '总内存(GB)'
         hdr_cells[1].text = '已使用(GB)'
@@ -1070,10 +1062,8 @@ class WordTemplateGenerator:
         sub_heading_run.font.bold = True
         table = self.doc.add_table(rows=1, cols=2)
         table.style = 'Table Grid'
-        table.autofit = True
+        table.autofit = True  # 根据窗口自动调整表格宽度
         table.alignment = WD_TABLE_ALIGNMENT.CENTER
-        table.columns[0].width = Cm(8)
-        table.columns[1].width = Cm(4)
         hdr_cells = table.rows[0].cells
         hdr_cells[0].text = '挂载点'
         hdr_cells[1].text = '使用率'
@@ -1107,8 +1097,7 @@ class WordTemplateGenerator:
         table = self.doc.add_table(rows=5, cols=2)
         table.style = 'Table Grid'
         table.autofit = True
-        table.columns[0].width = Cm(4)
-        table.columns[1].width = Cm(10)
+        table.autofit = True  # 根据窗口自动调整表格宽度
         hdr_cells = table.rows[0].cells
         hdr_cells[0].text = '配置项'
         hdr_cells[1].text = '当前值'
@@ -1139,8 +1128,7 @@ class WordTemplateGenerator:
         table = self.doc.add_table(rows=5, cols=2)
         table.style = 'Table Grid'
         table.autofit = True
-        table.columns[0].width = Cm(4)
-        table.columns[1].width = Cm(10)
+        table.autofit = True  # 根据窗口自动调整表格宽度
         hdr_cells = table.rows[0].cells
         hdr_cells[0].text = '配置项'
         hdr_cells[1].text = '当前值'
@@ -1171,8 +1159,7 @@ class WordTemplateGenerator:
         table = self.doc.add_table(rows=5, cols=2)
         table.style = 'Table Grid'
         table.autofit = True
-        table.columns[0].width = Cm(4)
-        table.columns[1].width = Cm(10)
+        table.autofit = True  # 根据窗口自动调整表格宽度
         hdr_cells = table.rows[0].cells
         hdr_cells[0].text = '配置项'
         hdr_cells[1].text = '当前值'
@@ -1215,8 +1202,7 @@ class WordTemplateGenerator:
         table = self.doc.add_table(rows=2, cols=2)
         table.style = 'Table Grid'
         table.autofit = True
-        table.columns[0].width = Cm(4)
-        table.columns[1].width = Cm(10)
+        table.autofit = True  # 根据窗口自动调整表格宽度
         hdr_cells = table.rows[0].cells
         hdr_cells[0].text = '查询总数'
         hdr_cells[1].text = '值'
@@ -1238,8 +1224,7 @@ class WordTemplateGenerator:
         table = self.doc.add_table(rows=3, cols=2)
         table.style = 'Table Grid'
         table.autofit = True
-        table.columns[0].width = Cm(4)
-        table.columns[1].width = Cm(10)
+        table.autofit = True  # 根据窗口自动调整表格宽度
         hdr_cells = table.rows[0].cells
         hdr_cells[0].text = '锁类型'
         hdr_cells[1].text = '值'
@@ -1264,8 +1249,7 @@ class WordTemplateGenerator:
         table = self.doc.add_table(rows=3, cols=2)
         table.style = 'Table Grid'
         table.autofit = True
-        table.columns[0].width = Cm(4)
-        table.columns[1].width = Cm(10)
+        table.autofit = True  # 根据窗口自动调整表格宽度
         hdr_cells = table.rows[0].cells
         hdr_cells[0].text = '异常类型'
         hdr_cells[1].text = '值'
@@ -1301,11 +1285,7 @@ class WordTemplateGenerator:
         sub_heading_run.font.bold = True
         table = self.doc.add_table(rows=1, cols=4)
         table.style = 'Table Grid'
-        table.autofit = True
-        table.columns[0].width = Cm(4)
-        table.columns[1].width = Cm(3)
-        table.columns[2].width = Cm(3)
-        table.columns[3].width = Cm(3)
+        table.autofit = True  # 根据窗口自动调整表格宽度
         hdr_cells = table.rows[0].cells
         hdr_cells[0].text = '数据库名'
         hdr_cells[1].text = '表行数'
@@ -1335,13 +1315,7 @@ class WordTemplateGenerator:
         sub_heading_run.font.bold = True
         table = self.doc.add_table(rows=1, cols=6)
         table.style = 'Table Grid'
-        table.autofit = True
-        table.columns[0].width = Cm(2)
-        table.columns[1].width = Cm(2)
-        table.columns[2].width = Cm(2)
-        table.columns[3].width = Cm(2)
-        table.columns[4].width = Cm(2)
-        table.columns[5].width = Cm(3)
+        table.autofit = True  # 根据窗口自动调整表格宽度
         hdr_cells = table.rows[0].cells
         hdr_cells[0].text = 'ID'
         hdr_cells[1].text = '用户'
@@ -1388,12 +1362,7 @@ class WordTemplateGenerator:
         sub_heading_run.font.bold = True
         table = self.doc.add_table(rows=1, cols=5)
         table.style = 'Table Grid'
-        table.autofit = True
-        table.columns[0].width = Cm(3)
-        table.columns[1].width = Cm(3)
-        table.columns[2].width = Cm(2)
-        table.columns[3].width = Cm(3)
-        table.columns[4].width = Cm(3)
+        table.autofit = True  # 根据窗口自动调整表格宽度
         hdr_cells = table.rows[0].cells
         hdr_cells[0].text = '用户名'
         hdr_cells[1].text = '主机'
@@ -2641,8 +2610,7 @@ class saveDoc(object):  # TiDB
             doc.add_paragraph()
             table = doc.add_table(rows=8, cols=2)
             table.style = 'Table Grid'
-            table.columns[0].width = Cm(4)
-            table.columns[1].width = Cm(10)
+            table.autofit = True  # 根据窗口自动调整表格宽度
             data_map = [
                 (self._t("report.fallback_db_name"), self.context.get('co_name', [{}])[0].get('CO_NAME', 'N/A')),
                 (self._t("report.fallback_server_addr"), f"{self.context.get('ip', [{}])[0].get('IP', 'N/A')}:{self.context.get('port', [{}])[0].get('PORT', 'N/A')}"),
@@ -3359,8 +3327,7 @@ class saveDoc(object):  # TiDB
         """
         table = doc.add_table(rows=1+len(items), cols=2)
         table.style = 'Table Grid'
-        table.columns[0].width = Cm(col1_width)
-        table.columns[1].width = Cm(col2_width)
+        table.autofit = True  # 根据窗口自动调整表格宽度
         hdr = table.rows[0].cells
         hdr[0].text = self._t('report.fallback_item_col')
         hdr[1].text = self._t('report.fallback_value_col')

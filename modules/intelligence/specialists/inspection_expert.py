@@ -21,6 +21,27 @@ class InspectionExpert(Specialist):
     def analyze(self, ctx: SharedContext) -> List[Finding]:
         out: List[Finding] = []
 
+        # ── 根据用户输入的诊断目标调整分析重点 ──
+        goal = (ctx.goal or "").lower()
+        focus_risks = True
+        focus_perf = True
+        focus_config = True
+
+        if goal:
+            # 根据诊断目标调整分析重点
+            if any(kw in goal for kw in ["性能", "慢", "cpu", "响应", "延迟", "卡", "performance", "slow"]):
+                focus_risks = True
+                focus_perf = True
+                focus_config = False
+            elif any(kw in goal for kw in ["配置", "参数", "config", "参数"]):
+                focus_risks = True
+                focus_config = True
+                focus_perf = False
+            elif any(kw in goal for kw in ["空间", "容量", "磁盘", "storage", "disk", "表空间"]):
+                focus_risks = True
+                focus_config = False
+                focus_perf = False
+
         # ── 优先：直接调用巡检引擎，针对所选数据源产出实时报告 ──
         inst = ctx.inputs.get("target_instance")
         if inst:

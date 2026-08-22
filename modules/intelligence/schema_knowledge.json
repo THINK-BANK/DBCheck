@@ -1,0 +1,1138 @@
+{
+  "description": "系统表/视图字段知识库 - 供自然语言探查专员动态生成SQL使用",
+  "version": "3.0",
+  "databases": {
+    "oracle": {
+      "description": "Oracle 数据库",
+      "views": {
+        "DBA_TABLESPACES": {
+          "description": "所有表空间信息",
+          "keywords": [
+            "表空间",
+            "tablespace",
+            "bigfile",
+            "表空间类型"
+          ],
+          "fields": {
+            "TABLESPACE_NAME": {
+              "type": "VARCHAR2",
+              "desc": "表空间名"
+            },
+            "BIGFILE": {
+              "type": "VARCHAR2",
+              "desc": "是否 BIGFILE (YES/NO)"
+            },
+            "STATUS": {
+              "type": "VARCHAR2",
+              "desc": "状态"
+            },
+            "CONTENTS": {
+              "type": "VARCHAR2",
+              "desc": "类型"
+            },
+            "FILE_NAME": {
+              "type": "VARCHAR2",
+              "desc": "数据文件名"
+            },
+            "BLOCK_SIZE": {
+              "type": "NUMBER",
+              "desc": "块大小"
+            },
+            "MAX_SIZE": {
+              "type": "NUMBER",
+              "desc": "最大尺寸"
+            }
+          }
+        },
+        "USER_TABLESPACES": {
+          "description": "当前用户表空间",
+          "keywords": [
+            "表空间",
+            "tablespace",
+            "我的表空间"
+          ],
+          "fields": {
+            "TABLESPACE_NAME": {
+              "type": "VARCHAR2",
+              "desc": "表空间名"
+            },
+            "BIGFILE": {
+              "type": "VARCHAR2",
+              "desc": "是否 BIGFILE"
+            },
+            "STATUS": {
+              "type": "VARCHAR2",
+              "desc": "状态"
+            }
+          }
+        },
+        "DBA_TABLES": {
+          "description": "所有表信息",
+          "keywords": [
+            "表",
+            "table",
+            "表数量"
+          ],
+          "fields": {
+            "OWNER": {
+              "type": "VARCHAR2",
+              "desc": "所属用户"
+            },
+            "TABLE_NAME": {
+              "type": "VARCHAR2",
+              "desc": "表名"
+            },
+            "TABLESPACE_NAME": {
+              "type": "VARCHAR2",
+              "desc": "表空间"
+            },
+            "NUM_ROWS": {
+              "type": "NUMBER",
+              "desc": "行数"
+            },
+            "BLOCKS": {
+              "type": "NUMBER",
+              "desc": "块数"
+            }
+          }
+        },
+        "DBA_USERS": {
+          "description": "所有用户",
+          "keywords": [
+            "用户",
+            "user",
+            "账号"
+          ],
+          "fields": {
+            "USERNAME": {
+              "type": "VARCHAR2",
+              "desc": "用户名"
+            },
+            "ACCOUNT_STATUS": {
+              "type": "VARCHAR2",
+              "desc": "账号状态"
+            },
+            "CREATED": {
+              "type": "DATE",
+              "desc": "创建时间"
+            }
+          }
+        },
+        "DBA_DATA_FILES": {
+          "description": "数据文件",
+          "keywords": [
+            "数据文件",
+            "datafile",
+            "文件大小"
+          ],
+          "fields": {
+            "FILE_NAME": {
+              "type": "VARCHAR2",
+              "desc": "文件名"
+            },
+            "TABLESPACE_NAME": {
+              "type": "VARCHAR2",
+              "desc": "表空间"
+            },
+            "BYTES": {
+              "type": "NUMBER",
+              "desc": "大小(字节)"
+            }
+          }
+        }
+      }
+    },
+    "tdsqlc_mysql": {
+      "description": "TDSQL-C MySQL (腾讯云数据库 MySQL 版)",
+      "views": {
+        "information_schema.TABLES": {
+          "description": "表信息",
+          "keywords": [
+            "表",
+            "table",
+            "表数量"
+          ],
+          "fields": {
+            "TABLE_SCHEMA": {
+              "type": "varchar",
+              "desc": "数据库名"
+            },
+            "TABLE_NAME": {
+              "type": "varchar",
+              "desc": "表名"
+            },
+            "TABLE_ROWS": {
+              "type": "bigint",
+              "desc": "行数"
+            },
+            "DATA_LENGTH": {
+              "type": "bigint",
+              "desc": "数据大小"
+            },
+            "ENGINE": {
+              "type": "varchar",
+              "desc": "存储引擎"
+            }
+          }
+        },
+        "information_schema.PROCESSLIST": {
+          "description": "进程列表",
+          "keywords": [
+            "进程",
+            "连接"
+          ],
+          "fields": {
+            "ID": {
+              "type": "bigint",
+              "desc": "进程ID"
+            },
+            "USER": {
+              "type": "varchar",
+              "desc": "用户"
+            },
+            "HOST": {
+              "type": "varchar",
+              "desc": "主机"
+            },
+            "TIME": {
+              "type": "int",
+              "desc": "时间"
+            }
+          }
+        }
+      }
+    },
+    "mysql": {
+      "description": "MySQL 数据库",
+      "views": {
+        "information_schema.TABLES": {
+          "description": "表信息",
+          "keywords": [
+            "表",
+            "table",
+            "表数量"
+          ],
+          "fields": {
+            "TABLE_SCHEMA": {
+              "type": "varchar",
+              "desc": "数据库名"
+            },
+            "TABLE_NAME": {
+              "type": "varchar",
+              "desc": "表名"
+            },
+            "TABLE_ROWS": {
+              "type": "bigint",
+              "desc": "行数"
+            },
+            "DATA_LENGTH": {
+              "type": "bigint",
+              "desc": "数据大小"
+            },
+            "INDEX_LENGTH": {
+              "type": "bigint",
+              "desc": "索引大小"
+            },
+            "ENGINE": {
+              "type": "varchar",
+              "desc": "存储引擎"
+            }
+          }
+        },
+        "information_schema.COLUMNS": {
+          "description": "列信息",
+          "keywords": [
+            "列",
+            "column",
+            "字段"
+          ],
+          "fields": {
+            "TABLE_SCHEMA": {
+              "type": "varchar",
+              "desc": "数据库名"
+            },
+            "TABLE_NAME": {
+              "type": "varchar",
+              "desc": "表名"
+            },
+            "COLUMN_NAME": {
+              "type": "varchar",
+              "desc": "列名"
+            },
+            "DATA_TYPE": {
+              "type": "varchar",
+              "desc": "数据类型"
+            },
+            "IS_NULLABLE": {
+              "type": "varchar",
+              "desc": "是否可空"
+            }
+          }
+        },
+        "information_schema.PROCESSLIST": {
+          "description": "进程列表",
+          "keywords": [
+            "进程",
+            "process",
+            "连接",
+            "慢查询"
+          ],
+          "fields": {
+            "ID": {
+              "type": "bigint",
+              "desc": "进程ID"
+            },
+            "USER": {
+              "type": "varchar",
+              "desc": "用户"
+            },
+            "HOST": {
+              "type": "varchar",
+              "desc": "主机"
+            },
+            "DB": {
+              "type": "varchar",
+              "desc": "数据库"
+            },
+            "COMMAND": {
+              "type": "varchar",
+              "desc": "命令"
+            },
+            "TIME": {
+              "type": "int",
+              "desc": "运行时间"
+            },
+            "STATE": {
+              "type": "varchar",
+              "desc": "状态"
+            },
+            "INFO": {
+              "type": "varchar",
+              "desc": "SQL语句"
+            }
+          }
+        },
+        "information_schema.INDEXES": {
+          "description": "索引信息",
+          "keywords": [
+            "索引",
+            "index"
+          ],
+          "fields": {
+            "TABLE_SCHEMA": {
+              "type": "varchar",
+              "desc": "数据库名"
+            },
+            "TABLE_NAME": {
+              "type": "varchar",
+              "desc": "表名"
+            },
+            "INDEX_NAME": {
+              "type": "varchar",
+              "desc": "索引名"
+            },
+            "COLUMN_NAME": {
+              "type": "varchar",
+              "desc": "列名"
+            },
+            "NON_UNIQUE": {
+              "type": "int",
+              "desc": "是否唯一"
+            }
+          }
+        }
+      }
+    },
+    "mariadb": {
+      "description": "MariaDB 数据库 (与 MySQL 兼容)",
+      "views": {
+        "information_schema.TABLES": {
+          "description": "表信息",
+          "keywords": [
+            "表",
+            "table",
+            "表数量"
+          ],
+          "fields": {
+            "TABLE_SCHEMA": {
+              "type": "varchar",
+              "desc": "数据库名"
+            },
+            "TABLE_NAME": {
+              "type": "varchar",
+              "desc": "表名"
+            },
+            "TABLE_ROWS": {
+              "type": "bigint",
+              "desc": "行数"
+            },
+            "ENGINE": {
+              "type": "varchar",
+              "desc": "存储引擎"
+            }
+          }
+        },
+        "information_schema.PROCESSLIST": {
+          "description": "进程列表",
+          "keywords": [
+            "进程",
+            "process",
+            "连接"
+          ],
+          "fields": {
+            "ID": {
+              "type": "bigint",
+              "desc": "进程ID"
+            },
+            "USER": {
+              "type": "varchar",
+              "desc": "用户"
+            },
+            "COMMAND": {
+              "type": "varchar",
+              "desc": "命令"
+            },
+            "TIME": {
+              "type": "int",
+              "desc": "时间"
+            }
+          }
+        }
+      }
+    },
+    "tidb": {
+      "description": "TiDB 数据库 (与 MySQL 兼容)",
+      "views": {
+        "information_schema.TABLES": {
+          "description": "表信息",
+          "keywords": [
+            "表",
+            "table"
+          ],
+          "fields": {
+            "TABLE_SCHEMA": {
+              "type": "varchar",
+              "desc": "数据库名"
+            },
+            "TABLE_NAME": {
+              "type": "varchar",
+              "desc": "表名"
+            },
+            "TABLE_ROWS": {
+              "type": "bigint",
+              "desc": "行数"
+            },
+            "ENGINE": {
+              "type": "varchar",
+              "desc": "引擎"
+            }
+          }
+        },
+        "information_schema.TIKV_REGION_PEERS": {
+          "description": "TiKV 分区信息",
+          "keywords": [
+            "region",
+            "tikv",
+            "分区"
+          ],
+          "fields": {
+            "REGION_ID": {
+              "type": "bigint",
+              "desc": "Region ID"
+            },
+            "STORE_ID": {
+              "type": "bigint",
+              "desc": "Store ID"
+            },
+            "ROLE": {
+              "type": "varchar",
+              "desc": "角色"
+            }
+          }
+        }
+      }
+    },
+    "postgresql": {
+      "description": "PostgreSQL 数据库",
+      "views": {
+        "pg_tablespace": {
+          "description": "表空间",
+          "keywords": [
+            "表空间",
+            "tablespace"
+          ],
+          "fields": {
+            "spcname": {
+              "type": "name",
+              "desc": "表空间名"
+            },
+            "spcowner": {
+              "type": "oid",
+              "desc": "所有者"
+            }
+          }
+        },
+        "pg_tables": {
+          "description": "表信息",
+          "keywords": [
+            "表",
+            "table"
+          ],
+          "fields": {
+            "schemaname": {
+              "type": "name",
+              "desc": "模式名"
+            },
+            "tablename": {
+              "type": "name",
+              "desc": "表名"
+            },
+            "tableowner": {
+              "type": "name",
+              "desc": "所有者"
+            },
+            "tablespace": {
+              "type": "name",
+              "desc": "表空间"
+            }
+          }
+        },
+        "pg_stat_database": {
+          "description": "数据库统计",
+          "keywords": [
+            "统计",
+            "活动",
+            "性能"
+          ],
+          "fields": {
+            "datname": {
+              "type": "name",
+              "desc": "数据库名"
+            },
+            "numbackends": {
+              "type": "int",
+              "desc": "连接数"
+            },
+            "xact_commit": {
+              "type": "bigint",
+              "desc": "提交次数"
+            },
+            "xact_rollback": {
+              "type": "bigint",
+              "desc": "回滚次数"
+            },
+            "blks_read": {
+              "type": "bigint",
+              "desc": "读取块数"
+            },
+            "blks_hit": {
+              "type": "bigint",
+              "desc": "命中块数"
+            },
+            "tup_returned": {
+              "type": "bigint",
+              "desc": "返回行数"
+            },
+            "tup_fetched": {
+              "type": "bigint",
+              "desc": "抓取行数"
+            },
+            "tup_inserted": {
+              "type": "bigint",
+              "desc": "插入行数"
+            },
+            "tup_updated": {
+              "type": "bigint",
+              "desc": "更新行数"
+            },
+            "tup_deleted": {
+              "type": "bigint",
+              "desc": "删除行数"
+            },
+            "deadlocks": {
+              "type": "bigint",
+              "desc": "死锁次数"
+            }
+          }
+        },
+        "pg_stat_activity": {
+          "description": "活动会话",
+          "keywords": [
+            "会话",
+            "连接",
+            "进程"
+          ],
+          "fields": {
+            "pid": {
+              "type": "int",
+              "desc": "进程ID"
+            },
+            "usename": {
+              "type": "name",
+              "desc": "用户名"
+            },
+            "application_name": {
+              "type": "varchar",
+              "desc": "应用名"
+            },
+            "state": {
+              "type": "varchar",
+              "desc": "状态"
+            },
+            "query": {
+              "type": "text",
+              "desc": "查询语句"
+            },
+            "wait_event_type": {
+              "type": "varchar",
+              "desc": "等待事件"
+            },
+            "backend_start": {
+              "type": "timestamp",
+              "desc": "开始时间"
+            }
+          }
+        }
+      }
+    },
+    "hgdb": {
+      "description": "HighGo (瀚高) 数据库 (与 PostgreSQL 兼容)",
+      "views": {
+        "pg_tablespace": {
+          "description": "表空间",
+          "keywords": [
+            "表空间",
+            "tablespace"
+          ],
+          "fields": {
+            "spcname": {
+              "type": "name",
+              "desc": "表空间名"
+            }
+          }
+        },
+        "pg_tables": {
+          "description": "表信息",
+          "keywords": [
+            "表",
+            "table"
+          ],
+          "fields": {
+            "schemaname": {
+              "type": "name",
+              "desc": "模式名"
+            },
+            "tablename": {
+              "type": "name",
+              "desc": "表名"
+            }
+          }
+        }
+      }
+    },
+    "uxdb": {
+      "description": "优炫数据库 UXDB (与 PostgreSQL 兼容)",
+      "views": {
+        "pg_tablespace": {
+          "description": "表空间",
+          "keywords": [
+            "表空间",
+            "tablespace"
+          ],
+          "fields": {
+            "spcname": {
+              "type": "name",
+              "desc": "表空间名"
+            }
+          }
+        },
+        "pg_tables": {
+          "description": "表信息",
+          "keywords": [
+            "表",
+            "table"
+          ],
+          "fields": {
+            "schemaname": {
+              "type": "name",
+              "desc": "模式名"
+            },
+            "tablename": {
+              "type": "name",
+              "desc": "表名"
+            }
+          }
+        }
+      }
+    },
+    "yashandb": {
+      "description": "YashanDB (崖山数据库)",
+      "views": {
+        "DBA_TABLESPACES": {
+          "description": "表空间",
+          "keywords": [
+            "表空间",
+            "tablespace"
+          ],
+          "fields": {
+            "TABLESPACE_NAME": {
+              "type": "VARCHAR",
+              "desc": "表空间名"
+            },
+            "STATUS": {
+              "type": "VARCHAR",
+              "desc": "状态"
+            }
+          }
+        },
+        "DBA_USERS": {
+          "description": "用户",
+          "keywords": [
+            "用户",
+            "user"
+          ],
+          "fields": {
+            "USERNAME": {
+              "type": "VARCHAR",
+              "desc": "用户名"
+            },
+            "ACCOUNT_STATUS": {
+              "type": "VARCHAR",
+              "desc": "状态"
+            }
+          }
+        }
+      }
+    },
+    "gbase": {
+      "description": "GBase 数据库 (南大通用)",
+      "views": {
+        "DBA_TABLESPACES": {
+          "description": "表空间",
+          "keywords": [
+            "表空间",
+            "tablespace"
+          ],
+          "fields": {
+            "TABLESPACE_NAME": {
+              "type": "VARCHAR",
+              "desc": "表空间名"
+            },
+            "STATUS": {
+              "type": "VARCHAR",
+              "desc": "状态"
+            }
+          }
+        },
+        "DBA_USERS": {
+          "description": "用户",
+          "keywords": [
+            "用户",
+            "user"
+          ],
+          "fields": {
+            "USERNAME": {
+              "type": "VARCHAR",
+              "desc": "用户名"
+            },
+            "ACCOUNT_STATUS": {
+              "type": "VARCHAR",
+              "desc": "状态"
+            }
+          }
+        },
+        "DBA_TABLES": {
+          "description": "表",
+          "keywords": [
+            "表",
+            "table"
+          ],
+          "fields": {
+            "OWNER": {
+              "type": "VARCHAR",
+              "desc": "所有者"
+            },
+            "TABLE_NAME": {
+              "type": "VARCHAR",
+              "desc": "表名"
+            }
+          }
+        }
+      }
+    },
+    "oceanbase": {
+      "description": "OceanBase 数据库 (与 MySQL 兼容)",
+      "views": {
+        "oceanbase.DBA_TABLESPACES": {
+          "description": "表空间",
+          "keywords": [
+            "表空间",
+            "tablespace"
+          ],
+          "fields": {
+            "TABLESPACE_NAME": {
+              "type": "VARCHAR",
+              "desc": "表空间名"
+            },
+            "STATUS": {
+              "type": "VARCHAR",
+              "desc": "状态"
+            },
+            "BLOCK_SIZE": {
+              "type": "BIGINT",
+              "desc": "块大小"
+            }
+          }
+        },
+        "oceanbase.DBA_USERS": {
+          "description": "用户",
+          "keywords": [
+            "用户",
+            "user"
+          ],
+          "fields": {
+            "USERNAME": {
+              "type": "VARCHAR",
+              "desc": "用户名"
+            },
+            "ACCOUNT_STATUS": {
+              "type": "VARCHAR",
+              "desc": "状态"
+            }
+          }
+        },
+        "oceanbase.DBA_TABLES": {
+          "description": "表信息",
+          "keywords": [
+            "表",
+            "table"
+          ],
+          "fields": {
+            "OWNER": {
+              "type": "VARCHAR",
+              "desc": "所有者"
+            },
+            "TABLE_NAME": {
+              "type": "VARCHAR",
+              "desc": "表名"
+            },
+            "TABLESPACE_NAME": {
+              "type": "VARCHAR",
+              "desc": "表空间"
+            }
+          }
+        }
+      }
+    },
+    "dm": {
+      "description": "达梦数据库 DM",
+      "views": {
+        "DBA_TABLESPACES": {
+          "description": "表空间",
+          "keywords": [
+            "表空间",
+            "tablespace"
+          ],
+          "fields": {
+            "TABLESPACE_NAME": {
+              "type": "VARCHAR",
+              "desc": "表空间名"
+            },
+            "STATUS": {
+              "type": "VARCHAR",
+              "desc": "状态"
+            },
+            "TYPE": {
+              "type": "VARCHAR",
+              "desc": "类型"
+            }
+          }
+        },
+        "DBA_USERS": {
+          "description": "用户",
+          "keywords": [
+            "用户",
+            "user"
+          ],
+          "fields": {
+            "USERNAME": {
+              "type": "VARCHAR",
+              "desc": "用户名"
+            },
+            "ACCOUNT_STATUS": {
+              "type": "VARCHAR",
+              "desc": "状态"
+            }
+          }
+        },
+        "DBA_TABLES": {
+          "description": "表",
+          "keywords": [
+            "表",
+            "table"
+          ],
+          "fields": {
+            "OWNER": {
+              "type": "VARCHAR",
+              "desc": "所有者"
+            },
+            "TABLE_NAME": {
+              "type": "VARCHAR",
+              "desc": "表名"
+            }
+          }
+        }
+      }
+    },
+    "kingbase": {
+      "description": "人大金仓 KingbaseES (与 PostgreSQL 兼容)",
+      "views": {
+        "USER_TABLESPACES": {
+          "description": "表空间",
+          "keywords": [
+            "表空间",
+            "tablespace"
+          ],
+          "fields": {
+            "TABLESPACE_NAME": {
+              "type": "VARCHAR",
+              "desc": "表空间名"
+            }
+          }
+        },
+        "USER_USERS": {
+          "description": "用户",
+          "keywords": [
+            "用户",
+            "user"
+          ],
+          "fields": {
+            "USERNAME": {
+              "type": "VARCHAR",
+              "desc": "用户名"
+            }
+          }
+        }
+      }
+    },
+    "sqlserver": {
+      "description": "SQL Server 数据库",
+      "views": {
+        "sys.tables": {
+          "description": "表信息",
+          "keywords": [
+            "表",
+            "table"
+          ],
+          "fields": {
+            "name": {
+              "type": "nvarchar",
+              "desc": "表名"
+            },
+            "schema_id": {
+              "type": "int",
+              "desc": "Schema ID"
+            },
+            "create_date": {
+              "type": "datetime",
+              "desc": "创建时间"
+            },
+            "modify_date": {
+              "type": "datetime",
+              "desc": "修改时间"
+            }
+          }
+        },
+        "sys.database_files": {
+          "description": "数据库文件",
+          "keywords": [
+            "文件",
+            "file",
+            "大小"
+          ],
+          "fields": {
+            "name": {
+              "type": "nvarchar",
+              "desc": "文件名"
+            },
+            "physical_name": {
+              "type": "nvarchar",
+              "desc": "物理文件名"
+            },
+            "type": {
+              "type": "tinyint",
+              "desc": "类型"
+            },
+            "size": {
+              "type": "int",
+              "desc": "大小(8KB页)"
+            },
+            "max_size": {
+              "type": "int",
+              "desc": "最大大小"
+            }
+          }
+        },
+        "sys.dm_exec_sessions": {
+          "description": "活动会话",
+          "keywords": [
+            "会话",
+            "session",
+            "连接"
+          ],
+          "fields": {
+            "session_id": {
+              "type": "smallint",
+              "desc": "会话ID"
+            },
+            "login_time": {
+              "type": "datetime",
+              "desc": "登录时间"
+            },
+            "host_name": {
+              "type": "nvarchar",
+              "desc": "主机名"
+            },
+            "program_name": {
+              "type": "nvarchar",
+              "desc": "程序名"
+            },
+            "status": {
+              "type": "varchar",
+              "desc": "状态"
+            }
+          }
+        }
+      }
+    },
+    "clickhouse": {
+      "description": "ClickHouse 数据库",
+      "views": {
+        "system.tables": {
+          "description": "表信息",
+          "keywords": [
+            "表",
+            "table"
+          ],
+          "fields": {
+            "database": {
+              "type": "String",
+              "desc": "数据库名"
+            },
+            "name": {
+              "type": "String",
+              "desc": "表名"
+            },
+            "engine": {
+              "type": "String",
+              "desc": "引擎"
+            },
+            "total_rows": {
+              "type": "UInt64",
+              "desc": "总行数"
+            },
+            "total_bytes": {
+              "type": "UInt64",
+              "desc": "总大小"
+            }
+          }
+        },
+        "system.databases": {
+          "description": "数据库",
+          "keywords": [
+            "数据库",
+            "database"
+          ],
+          "fields": {
+            "name": {
+              "type": "String",
+              "desc": "数据库名"
+            },
+            "engine": {
+              "type": "String",
+              "desc": "引擎"
+            }
+          }
+        },
+        "system.processlist": {
+          "description": "进程列表",
+          "keywords": [
+            "进程",
+            "process",
+            "查询"
+          ],
+          "fields": {
+            "query_id": {
+              "type": "String",
+              "desc": "查询ID"
+            },
+            "query": {
+              "type": "String",
+              "desc": "查询语句"
+            },
+            "elapsed": {
+              "type": "Float64",
+              "desc": "已运行时间"
+            },
+            "read_rows": {
+              "type": "UInt64",
+              "desc": "读取行数"
+            }
+          }
+        }
+      }
+    },
+    "db2": {
+      "description": "IBM DB2 数据库",
+      "views": {
+        "SYSCAT.TABLESPACES": {
+          "description": "表空间",
+          "keywords": [
+            "表空间",
+            "tablespace"
+          ],
+          "fields": {
+            "TABLESPACE_NAME": {
+              "type": "VARCHAR",
+              "desc": "表空间名"
+            },
+            "TBSPACE": {
+              "type": "VARCHAR",
+              "desc": "简写"
+            }
+          }
+        },
+        "SYSCAT.USERS": {
+          "description": "用户",
+          "keywords": [
+            "用户",
+            "user"
+          ],
+          "fields": {
+            "USER": {
+              "type": "VARCHAR",
+              "desc": "用户名"
+            }
+          }
+        },
+        "SYSCAT.TABLES": {
+          "description": "表信息",
+          "keywords": [
+            "表",
+            "table"
+          ],
+          "fields": {
+            "TABSCHEMA": {
+              "type": "VARCHAR",
+              "desc": "Schema"
+            },
+            "TABNAME": {
+              "type": "VARCHAR",
+              "desc": "表名"
+            }
+          }
+        }
+      }
+    }
+  }
+}

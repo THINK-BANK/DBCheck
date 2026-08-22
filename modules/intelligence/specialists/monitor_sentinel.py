@@ -139,6 +139,17 @@ class MonitorSentinel(Specialist):
         instance_name = meta.get("instance_name", "")
         ts = snap.get("ts", "") if isinstance(snap, dict) else ""
 
+        # ── 根据用户输入的诊断目标过滤检查项 ──
+        goal = (ctx.goal or "").lower()
+        focus_kinds = None
+        if goal:
+            if any(kw in goal for kw in ["性能", "慢", "cpu", "响应", "延迟", "卡", "performance", "slow"]):
+                focus_kinds = ["cpu", "io", "conn"]
+            elif any(kw in goal for kw in ["锁", "lock", "阻塞", "block"]):
+                focus_kinds = ["lock"]
+            elif any(kw in goal for kw in ["空间", "容量", "磁盘", "storage", "disk", "表空间"]):
+                focus_kinds = ["io"]
+
         if not snap:
             detail = "该数据源尚未产生实时监控快照，无法做异常比对。"
             if instance_name:
@@ -159,6 +170,9 @@ class MonitorSentinel(Specialist):
         prefix = f"{instance_name} " if instance_name else ""
 
         for chk in CHECKS:
+            # 根据诊断目标过滤检查项
+            if focus_kinds and chk.get("kind") not in focus_kinds:
+                continue
             val = snap.get(chk["key"])
             if not isinstance(val, (int, float)):
                 continue

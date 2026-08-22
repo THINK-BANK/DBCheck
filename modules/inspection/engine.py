@@ -411,6 +411,7 @@ def render_system_resource_chapter(doc, context, lang, chapter_prefix=''):
     def _fmt_kv_table(rows):
         """生成 2 列表（项目 / 值），带表头与底色。"""
         tbl = doc.add_table(rows=1 + len(rows), cols=2, style='Table Grid')
+        tbl.autofit = True  # 根据窗口自动调整表格宽度
         headers = [_t('report.system_resource_col_item', default='项目'),
                    _t('report.system_resource_col_value', default='值')]
         for j, htext in enumerate(headers):
@@ -530,6 +531,7 @@ def render_system_resource_chapter(doc, context, lang, chapter_prefix=''):
                        _t('report.system_resource_col_ios', default='IO 次数'),
                        _t('report.system_resource_col_ms', default='耗时(ms)')]
             tbl = doc.add_table(rows=1 + len(top_io), cols=4, style='Table Grid')
+            tbl.autofit = True  # 根据窗口自动调整表格宽度
             for j, htext in enumerate(headers):
                 cell = tbl.rows[0].cells[j]; cell.text = htext
                 _set_cell_bg(cell, '336699')
@@ -558,6 +560,7 @@ def render_system_resource_chapter(doc, context, lang, chapter_prefix=''):
                        _t('report.system_resource_col_samples', default='采样数'),
                        _t('report.system_resource_col_ms', default='耗时(ms)')]
             tbl = doc.add_table(rows=1 + len(top_cpu), cols=4, style='Table Grid')
+            tbl.autofit = True  # 根据窗口自动调整表格宽度
             for j, htext in enumerate(headers):
                 cell = tbl.rows[0].cells[j]; cell.text = htext
                 _set_cell_bg(cell, '336699')
@@ -580,6 +583,7 @@ def render_system_resource_chapter(doc, context, lang, chapter_prefix=''):
 
     if disk_list:
         tbl = doc.add_table(rows=1 + len(disk_list), cols=5, style='Table Grid')
+        tbl.autofit = True  # 根据窗口自动调整表格宽度
         _render_disk_header(tbl)
         for i, d in enumerate(disk_list, 1):
             row = tbl.rows[i].cells
@@ -596,6 +600,7 @@ def render_system_resource_chapter(doc, context, lang, chapter_prefix=''):
     else:
         # 兜底占位行（对齐 inspection_engine.collect_data 的 disk 兜底逻辑）
         tbl = doc.add_table(rows=2, cols=5, style='Table Grid')
+        tbl.autofit = True  # 根据窗口自动调整表格宽度
         _render_disk_header(tbl)
         placeholder = tbl.rows[1].cells
         placeholder[0].text = _t('report.system_resource_col_no_disk', default='无磁盘信息')
@@ -1542,6 +1547,7 @@ class BaseInspectionEngine:
         
         # 封面信息表格
         info_table = doc.add_table(rows=5, cols=2, style='Table Grid')
+        info_table.autofit = True  # 根据窗口自动调整表格宽度
         info_labels = ['服务器地址', '实例启动时间', '巡检结果', '巡检人员', '报告生成时间']
         for i, label in enumerate(info_labels):
             row = info_table.rows[i]
@@ -2299,6 +2305,7 @@ class BaseInspectionEngine:
             force_horizontal_table_keys = {
                 'index_status', 'buffer_pool', 'lock_wait',
                 'innodb_tablespaces', 'innodb_datafiles', 'db_privileges',
+                'hgdb_stat_database',
             }
             
             def _set_cell_bg(cell, hex_color):
@@ -2542,8 +2549,8 @@ class BaseInspectionEngine:
                         q_data = self.context.get(q_key, [])
                         _q_trunc = False
                         _q_total = len(q_data) if isinstance(q_data, list) else 0
-                        if isinstance(q_data, list) and len(q_data) > 3000:
-                            q_data = q_data[:3000]
+                        if isinstance(q_data, list) and len(q_data) > 200:
+                            q_data = q_data[:200]
                             _q_trunc = True
                         query_idx += 1
                         sub_num = f'{ch_num}.{query_idx}'
@@ -2583,11 +2590,12 @@ class BaseInspectionEngine:
                                     font_size = 8 if is_wide else 9
                                     q_rows = [[self._clean_xml_str(row_data.get(h, ''), max_len=500)
                                                for h in headers] for row_data in q_data]
+                                    # 统一使用自动调整宽度，不再计算固定列宽，确保表格根据窗口自动调整
                                     col_widths = None
-                                    if any(str(h).lower() == 'setting' for h in headers):
-                                        col_widths = _calc_pg_settings_widths(headers)
-                                    elif is_wide:
-                                        col_widths = _calc_compact_widths(headers, q_data[:5])
+                                    # if any(str(h).lower() == 'setting' for h in headers):
+                                    #     col_widths = _calc_pg_settings_widths(headers)  # 禁用固定列宽，使用自动调整
+                                    # elif is_wide:
+                                    #     col_widths = _calc_compact_widths(headers, q_data[:5])  # 禁用固定列宽，使用自动调整
                                     _docx_build_grid_table(doc, headers, q_rows,
                                                            header_bg='336699', header_white=True,
                                                            font_size_pt=font_size, col_widths=col_widths)
@@ -2610,9 +2618,9 @@ class BaseInspectionEngine:
                             doc.add_paragraph()
                         if _q_trunc:
                             _note = doc.add_paragraph(
-                                f"结果集较大，仅显示前 3000 行，共 {_q_total} 行"
+                                f"结果集较大，仅显示前 200 行，共 {_q_total} 行"
                                 if is_zh else
-                                f"Large result set: showing first 3000 of {_q_total} rows")
+                                f"Large result set: showing first 200 of {_q_total} rows")
                             for _r in _note.runs:
                                 _r.font.size = Pt(9); _r.font.name = '微软雅黑'
                                 _r._element.rPr.rFonts.set(qn('w:eastAsia'), '微软雅黑')
@@ -2632,7 +2640,8 @@ class BaseInspectionEngine:
                         font_size = 8 if is_wide else 9
                         m_rows = [[self._clean_xml_str(row_data.get(h, ''), max_len=500)
                                    for h in headers] for row_data in val]
-                        col_widths = _calc_compact_widths(headers, val[:5]) if is_wide else None
+                        # 统一使用自动调整宽度，不再计算固定列宽，确保表格根据窗口自动调整
+                        col_widths = None  # _calc_compact_widths 禁用，使用自动调整
                         _docx_build_grid_table(doc, headers, m_rows,
                                                header_bg='336699', header_white=True,
                                                font_size_pt=font_size, col_widths=col_widths)
@@ -2720,6 +2729,33 @@ def _docx_build_grid_table(doc, headers, rows, *, header=True,
     ncols = len(headers)
     tbl = doc.add_table(rows=0, cols=ncols, style=style)
 
+    # 强制设置表格宽度为 100% 页面宽度（统一所有表格宽度，不再因列数不同导致宽窄不一）
+    tbl.autofit = False  # 禁用自动调整，使用固定宽度
+    from docx.oxml.ns import qn
+    from docx.oxml import OxmlElement
+    from docx.shared import Cm
+    tblProps = OxmlElement('w:tblPr')
+    tblW = OxmlElement('w:tblW')
+    tblW.set(qn('w:type'), 'pct')  # 百分比类型
+    tblW.set(qn('w:w'), '10000')  # 100% 页面宽度
+    tblProps.append(tblW)
+    # 禁用自动布局，强制使用固定宽度
+    tblLayout = OxmlElement('w:tblLayout')
+    tblLayout.set(qn('w:type'), 'fixed')
+    tblProps.append(tblLayout)
+    tblAlign = OxmlElement('w:jc')
+    tblAlign.set(qn('w:val'), 'center')
+    tblProps.append(tblAlign)
+    tbl._tbl.insert(0, tblProps)
+    # 设置所有列宽为均分
+    total_cols = ncols
+    if total_cols > 0:
+        avg_width_cm = 16.0 / total_cols  # A4 页面约 16cm 有效宽度
+        tblGrid = tbl._tbl.find(qn('w:tblGrid'))
+        if tblGrid is not None:
+            for col in tblGrid.findall(qn('w:gridCol')):
+                col.set(qn('w:w'), str(int(Cm(avg_width_cm).twips)))
+
     if header:
         tcs = []
         for h in headers:
@@ -2743,6 +2779,14 @@ def _docx_build_grid_table(doc, headers, rows, *, header=True,
 
     if col_widths:
         _docx_set_table_widths(tbl, col_widths, Cm)
+    # 重新确保表格宽度为100%，防止col_widths覆盖表格整体宽度设置
+    tbl.autofit = False
+    tblProps = tbl._tbl.find(qn('w:tblPr'))
+    if tblProps is not None:
+        tblW = tblProps.find(qn('w:tblW'))
+        if tblW is not None:
+            tblW.set(qn('w:type'), 'pct')
+            tblW.set(qn('w:w'), '10000')
     return tbl
 
 

@@ -1228,7 +1228,7 @@ class HistoryManager:
 # 1. 支持本地 Ollama（backend='ollama'）、在线模型（online_enabled 时 backend 取 online_backend）或关闭（'disabled'）
 # 2. 必须在 dbc_config.json 的 ai 字段中设置 "online_enabled": true 才能调用远程模型
 # 3. 远程模型支持 OpenAI 协议兼容的 API（OpenAI/DeepSeek/自定义端点）
-# 4. Ollama 模式下 API 地址必须为本地地址（localhost/127.0.0.1）
+# 4. Ollama 支持本地和远程地址（已移除本地限制）
 #
 # 配置优先级：代码传参 > dbc_config.json 的 ai 字段 > 环境变量
 #
@@ -1250,7 +1250,7 @@ class AIAdvisor:
     AI 诊断适配器。
 
     支持模式：
-    - ollama   : 本地 Ollama（默认 http://localhost:11434，地址必须是本地）
+    - ollama   : Ollama（默认 http://localhost:11434，支持本地和远程地址）
     - openai   : OpenAI 协议兼容的远程模型（需在 dbc_config.json 的 ai 字段中启用 online_enabled）
     - disabled : 关闭 AI 诊断
 
@@ -1358,13 +1358,10 @@ class AIAdvisor:
             raw_backend = 'disabled'
         self.backend = raw_backend
 
-        # ── URL 校验：在线模型不限制地址，Ollama 必须是本地 ──
+        # ── URL 校验：在线模型不限制地址，Ollama 支持本地和远程地址 ──
         resolved_url = api_url or os.environ.get('DBCHECK_AI_URL', 'http://localhost:11434')
-        if self.backend == 'ollama':
-            if not _is_localhost_url(resolved_url):
-                print(f"⚠️  安全限制：API 地址 {resolved_url} 不是本地地址，AI 诊断已禁用")
-                self.backend = 'disabled'
-        elif self.backend == 'openai':
+        # 注：已移除 Ollama 必须为本地地址的限制，支持配置远程 Ollama 服务
+        if self.backend == 'openai':
             # 在线模型：优先使用代码传参，其次 dbc_config.json 的 ai 字段中的 online_api_url
             if not api_url:
                 resolved_url = _online_api_url or 'https://api.openai.com/v1'

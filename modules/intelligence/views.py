@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 
-from flask import Blueprint, Response, jsonify, request, stream_with_context
+from flask import Blueprint, Response, jsonify, request, session, stream_with_context
 
 from modules.config.version import EDITION
 from .hub import get_hub
@@ -202,3 +202,163 @@ def update_ticket(ticket_id: int):
         return jsonify({"ok": False, "msg": str(e)}), 400
     except Exception as e:
         return jsonify({"ok": False, "msg": str(e)}), 500
+
+
+# ── 系统字典表（schema_knowledge）维护 ───────────────────────────────────
+def _schema_dict_writer_ok() -> bool:
+    """仅 admin / operator 可写系统字典表。"""
+    roles = session.get("user_roles", []) or []
+    if session.get("is_admin", False):
+        return True
+    return any(r in ("admin", "operator") for r in roles)
+
+
+def _require_writer():
+    if not _schema_dict_writer_ok():
+        return jsonify({"ok": False, "msg": "权限不足：仅 admin / operator 可维护系统字典表"}), 403
+    return None
+
+
+@intelligence_bp.route("/api/intelligence/schema-dict", methods=["GET"])
+def schema_dict_get():
+    """读取系统字典表。可选项：db_type / view 过滤。"""
+    from .schema_knowledge import get_knowledge
+
+    db_type = request.args.get("db_type", "").strip()
+    view = request.args.get("view", "").strip()
+    kb = get_knowledge()
+    databases = kb.get("databases", {})
+
+    if db_type:
+        databases = {db_type: databases.get(db_type, {})}
+    if view:
+        filtered = {}
+        for dt, dt_info in databases.items():
+            views = dt_info.get("views", {})
+            if view in views:
+                filtered[dt] = {"description": dt_info.get("description", ""), "views": {view: views[view]}}
+        databases = filtered
+
+    return jsonify({"ok": True, "databases": databases, "version": kb.get("version", "")})
+
+
+@intelligence_bp.route("/api/intelligence/schema-dict", methods=["POST"])
+def schema_dict_post():
+    """新增：库 / 视图 / 字段。body 至少含 db_type。"""
+    deny = _require_writer()
+    if deny:
+        return deny
+    data = request.get_json(silent=True) or {}
+    db_type = (data.get("db_type") or "").strip()
+    view = (data.get("view") or "").strip()
+    field = (data.get("field") or "").strip()
+    if not db_type:
+        return jsonify({"ok": False, "msg": "db_type 必填"}), 400
+
+    from .schema_knowledge import get_knowledge, save_knowledge
+
+    kb = get_knowledge()
+    databases = kb.setdefault("databases", {})
+    dt_info = databases.setdefault(db_type, {"description": data.get("description", "") or db_type, "views": {}})
+    views = dt_info.setdefault("views", {})
+
+    if not view:
+        # 仅新增库类型
+        return jsonify({"ok": True, "msg": "已确保库类型存在", "databases": databases})
+
+    view_info = views.setdefault(view, {
+        "description": data.get("view_description", "") or view,
+        "keywords": data.get("keywords", []) or [],
+        "fields": {},
+    })
+    if not field:
+        return jsonify({"ok": True, "msg": "已确保视图存在", "databases": databases})
+
+    if field in view_info.get("fields", {}):
+        return jsonify({"ok": False, "msg": f"字段 {field} 已存在"}), 409
+    view_info.setdefault("fields", {})[field] = {
+        "type": (data.get("field_type") or "VARCHAR").strip(),
+        "desc": (data.get("field_desc") or "").strip(),
+    }
+    if not save_knowledge(kb):
+        return jsonify({"ok": False, "msg": "保存失败"}), 500
+    return jsonify({"ok": True, "msg": "已新增字段", "databases": databases})
+
+
+@intelligence_bp.route("/api/intelligence/schema-dict", methods=["PUT"])
+def schema_dict_put():
+    """更新：视图描述/keywords，或字段 type/desc。"""
+    deny = _require_writer()
+    if deny:
+        return deny
+    data = request.get_json(silent=True) or {}
+    db_type = (data.get("db_type") or "").strip()
+    view = (data.get("view") or "").strip()
+    field = (data.get("field") or "").strip()
+    if not db_type or not view:
+        return jsonify({"ok": False, "msg": "db_type 与 view 必填"}), 400
+
+    from .schema_knowledge import get_knowledge, save_knowledge
+
+    kb = get_knowledge()
+    views = kb.get("databases", {}).get(db_type, {}).get("views", {})
+    if view not in views:
+        return jsonify({"ok": False, "msg": "视图不存在"}), 404
+    view_info = views[view]
+
+    if field:
+        if field not in view_info.get("fields", {}):
+            return jsonify({"ok": False, "msg": "字段不存在"}), 404
+        if data.get("field_type") is not None:
+            view_info["fields"][field]["type"] = str(data["field_type"]).strip()
+        if data.get("field_desc") is not None:
+            view_info["fields"][field]["desc"] = str(data["field_desc"]).strip()
+    else:
+        if data.get("view_description") is not None:
+            view_info["description"] = str(data["view_description"]).strip()
+        if data.get("keywords") is not None:
+            view_info["keywords"] = data["keywords"]
+
+    if not save_knowledge(kb):
+        return jsonify({"ok": False, "msg": "保存失败"}), 500
+    return jsonify({"ok": True, "msg": "已更新", "databases": kb.get("databases", {})})
+
+
+@intelligence_bp.route("/api/intelligence/schema-dict", methods=["DELETE"])
+def schema_dict_delete():
+    """删除：按 field > view > db_type 优先级逐层删除。"""
+    deny = _require_writer()
+    if deny:
+        return deny
+    db_type = request.args.get("db_type", "").strip()
+    view = request.args.get("view", "").strip()
+    field = request.args.get("field", "").strip()
+    if not db_type:
+        return jsonify({"ok": False, "msg": "db_type 必填"}), 400
+
+    from .schema_knowledge import get_knowledge, save_knowledge
+
+    kb = get_knowledge()
+    databases = kb.get("databases", {})
+    if db_type not in databases:
+        return jsonify({"ok": False, "msg": "库类型不存在"}), 404
+    dt_info = databases[db_type]
+    views = dt_info.get("views", {})
+
+    if field and view:
+        if view not in views or field not in views[view].get("fields", {}):
+            return jsonify({"ok": False, "msg": "字段不存在"}), 404
+        del views[view]["fields"][field]
+        msg = f"已删除字段 {field}"
+    elif view:
+        if view not in views:
+            return jsonify({"ok": False, "msg": "视图不存在"}), 404
+        del views[view]
+        msg = f"已删除视图 {view}"
+    else:
+        del databases[db_type]
+        msg = f"已删除库类型 {db_type}"
+
+    if not save_knowledge(kb):
+        return jsonify({"ok": False, "msg": "保存失败"}), 500
+    return jsonify({"ok": True, "msg": msg, "databases": kb.get("databases", {})})

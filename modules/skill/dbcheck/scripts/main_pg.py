@@ -932,9 +932,7 @@ class WordTemplateGenerator:
         table = self.doc.add_table(rows=8, cols=2)
         table.style = 'Table Grid'
         table.alignment = WD_TABLE_ALIGNMENT.CENTER
-        table.autofit = False
-        table.columns[0].width = Cm(4.5)
-        table.columns[1].width = Cm(11)
+        table.autofit = True  # 根据窗口自动调整表格宽度
 
         # 表头样式
         header_color = RGBColor(15, 75, 135)  # 深蓝色
@@ -2955,8 +2953,7 @@ class saveDoc(object):
             doc.add_paragraph()
             table = doc.add_table(rows=8, cols=2)
             table.style = 'Table Grid'
-            table.columns[0].width = Cm(4)
-            table.columns[1].width = Cm(10)
+            table.autofit = True  # 根据窗口自动调整表格宽度
             data_map = [
                 (self._t("report.fallback_db_name"), self.context.get('co_name', [{}])[0].get('CO_NAME', 'N/A')),
                 (self._t("report.fallback_server_addr"), f"{self.context.get('ip', [{}])[0].get('IP', 'N/A')}:{self.context.get('port', [{}])[0].get('PORT', 'N/A')}"),
@@ -3048,8 +3045,7 @@ class saveDoc(object):
             disk_list = self.context.get('system_info', {}).get('disk_list', [])
             table = doc.add_table(rows=1+len(disk_list), cols=2)
             table.style = 'Table Grid'
-            table.columns[0].width = Cm(8)
-            table.columns[1].width = Cm(4)
+            table.autofit = True  # 根据窗口自动调整表格宽度
             hdr = table.rows[0].cells
             hdr[0].text = self._t('report.fallback_mountpoint')
             hdr[1].text = self._t('report.fallback_usage_pct')
@@ -3437,8 +3433,7 @@ class saveDoc(object):
         """
         table = doc.add_table(rows=1+len(items), cols=2)
         table.style = 'Table Grid'
-        table.columns[0].width = Cm(col1_width)
-        table.columns[1].width = Cm(col2_width)
+        table.autofit = True  # 根据窗口自动调整表格宽度
         hdr = table.rows[0].cells
         hdr[0].text, hdr[1].text = '配置项', '当前值'
         for i, (label, value) in enumerate(items, 1):
@@ -3471,8 +3466,7 @@ class saveDoc(object):
             return 'N/A'
         table = doc.add_table(rows=1+len(items), cols=2)
         table.style = 'Table Grid'
-        table.columns[0].width = Cm(col1_width)
-        table.columns[1].width = Cm(col2_width)
+        table.autofit = True  # 根据窗口自动调整表格宽度
         hdr = table.rows[0].cells
         hdr[0].text, hdr[1].text = '配置项', '当前值'
         for i, (label, setting_name) in enumerate(items, 1):

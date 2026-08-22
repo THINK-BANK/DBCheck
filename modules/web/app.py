@@ -4286,6 +4286,54 @@ def api_test_db():
     return jsonify(_conn_test_with_timeout(db_type, data, 'regular'))
 
 
+# ---------------------------------------------------------------------------
+# 本地 Ollama 访问的健壮性辅助（与 modules/inspection/analyzer.py 保持一致）
+# 规避：系统 HTTP 代理拦截本机 LAN IP → 404；Windows 本机 LAN IP 自连 loopback 被拒。
+# ---------------------------------------------------------------------------
+_OLLAMA_LOCAL_HOSTS = None
+
+
+def _ollama_is_local_host(host):
+    global _OLLAMA_LOCAL_HOSTS
+    h = (host or '').lower().strip()
+    if h in ('localhost', '127.0.0.1', '::1', '[::1]', '0.0.0.0') or h.startswith('127.'):
+        return True
+    if _OLLAMA_LOCAL_HOSTS is None:
+        s = {'localhost', '127.0.0.1', '::1', '[::1]', '0.0.0.0'}
+        try:
+            for info in socket.getaddrinfo(socket.gethostname(), None):
+                s.add(info[4][0])
+        except Exception:
+            pass
+        try:
+            _sk = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            _sk.connect(('8.8.8.8', 80))
+            s.add(_sk.getsockname()[0])
+            _sk.close()
+        except Exception:
+            pass
+        _OLLAMA_LOCAL_HOSTS = s
+    return h in _OLLAMA_LOCAL_HOSTS
+
+
+def _ollama_normalize_url(api_url):
+    """本机 Ollama 地址归一化为 127.0.0.1（远程地址保持原样）"""
+    if not api_url:
+        return api_url
+    m = re.match(r'^(https?://)([^/:]+)(.*)$', api_url.strip())
+    if not m:
+        return api_url
+    scheme, host, rest = m.group(1), m.group(2), m.group(3)
+    if _ollama_is_local_host(host):
+        return scheme + '127.0.0.1' + rest
+    return api_url
+
+
+def _ollama_no_proxy_opener():
+    import urllib.request
+    return urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+
 @app.route('/api/test_ollama', methods=['POST'])
 def api_test_ollama():
     """测试 Ollama 连接"""
@@ -4294,11 +4342,15 @@ def api_test_ollama():
     api_url = (data.get('api_url') or 'http://localhost:11434').rstrip('/')
     model   = data.get('model') or 'qwen2.5:7b'
 
+    # 本机地址归一化为 127.0.0.1，并绕过系统代理直连
+    api_url = _ollama_normalize_url(api_url)
+    opener = _ollama_no_proxy_opener()
+
     # 先测 /api/tags（列出模型）
     tags_url = api_url + '/api/tags'
     try:
         req = urllib.request.Request(tags_url, headers={'Content-Type': 'application/json'})
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with opener.open(req, timeout=10) as resp:
             body = resp.read().decode('utf-8')
             try:
                 result = _json.loads(body)
@@ -8802,6 +8854,9 @@ def _call_llm_ollama(cfg: dict, prompt: str, system: str, timeout: int, stream_c
     api_url = cfg.get('api_url', 'http://localhost:11434').rstrip('/')
     model = cfg.get('model', 'qwen3:8b')
 
+    # 本机地址归一化为 127.0.0.1，并绕过系统代理直连（见 _ollama_normalize_url）
+    api_url = _ollama_normalize_url(api_url)
+
     url = api_url + '/api/generate'
     payload = {
         'model': model,
@@ -8815,6 +8870,7 @@ def _call_llm_ollama(cfg: dict, prompt: str, system: str, timeout: int, stream_c
         import urllib.request
         import http.client
 
+        opener = _ollama_no_proxy_opener()
         if stream_callback:
             parsed_url = urllib.parse.urlparse(url)
             conn = http.client.HTTPConnection(parsed_url.hostname, parsed_url.port or 80, timeout=timeout)
@@ -8856,7 +8912,7 @@ def _call_llm_ollama(cfg: dict, prompt: str, system: str, timeout: int, stream_c
             payload['stream'] = False
             req = urllib.request.Request(url, data=json.dumps(payload).encode('utf-8'),
                                         headers={'Content-Type': 'application/json'})
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
+            with opener.open(req, timeout=timeout) as resp:
                 result = json.loads(resp.read().decode('utf-8'))
                 return result.get('response', '').strip()
     except Exception as e:

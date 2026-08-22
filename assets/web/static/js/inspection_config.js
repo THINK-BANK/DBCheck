@@ -9,8 +9,10 @@ let currentInspectionChapterId = null;
 let inspectionQueryUnsaved = false;  // 查询内联编辑是否有未保存内容
 let currentInspectionIsPreset = false;  // 当前编辑的模板是否为预置模板
 
-// 写操作（保存/删除/创建）仅管理员可用：index.html 通过 Jinja 注入 window._IS_ADMIN
-const IS_ADMIN = window._IS_ADMIN === true;
+// 写操作（保存/删除/创建）需要登录：index.html 通过 Jinja 注入 window._IS_ADMIN
+// 已放宽限制：所有登录用户都可使用 SQL 查询的查看、新增、保存、删除功能
+const IS_ADMIN = window._IS_ADMIN !== undefined;
+const IS_LOGGED_IN = window._IS_ADMIN !== undefined;  // 所有登录用户都可以操作
 
 
 // ==================== 页面初始化 ====================
@@ -110,7 +112,7 @@ function renderInspectionTemplateList(templates) {
             </div>
             <div class="card-actions">
                 <button class="card-action-btn card-action-btn--export" onclick="event.stopPropagation(); exportInspectionTemplate(${t.id})">导出</button>
-                ${!isPreset && IS_ADMIN ? `<button class="card-action-btn card-action-btn--delete" onclick="event.stopPropagation(); deleteInspectionTemplate(${t.id}, '${escapeHtml(t.template_name)}')">删除</button>` : ''}
+                ${IS_LOGGED_IN && !t.is_preset ? `<button class="card-action-btn card-action-btn--delete" onclick="event.stopPropagation(); deleteInspectionTemplate(${t.id}, '${escapeHtml(t.template_name)}')">删除</button>` : ''}
             </div>
         </div>`;
     });
@@ -162,22 +164,24 @@ function fillInspectionTemplateEditForm(template) {
     const exportBtn = document.querySelector('button[onclick="exportInspectionTemplate()"]');
     currentInspectionIsPreset = template.is_preset == 1;
     console.log('[DEBUG] template id=', template.id, 'is_preset=', template.is_preset, 'currentInspectionIsPreset=', currentInspectionIsPreset);
-    if (dbTypeEl) { dbTypeEl.value = template.db_type || ''; dbTypeEl.disabled = currentInspectionIsPreset; }
+    // 预置模板也可以编辑，移除禁用限制
+    if (dbTypeEl) { dbTypeEl.value = template.db_type || ''; dbTypeEl.disabled = false; }
     if (nameEl) {
         nameEl.value = template.template_name || '';
-        nameEl.readOnly = currentInspectionIsPreset;
-        nameEl.disabled = currentInspectionIsPreset;
+        nameEl.readOnly = false;
+        nameEl.disabled = false;
     }
     if (versionEl) {
         versionEl.value = template.version || 'v1';
-        versionEl.readOnly = currentInspectionIsPreset;
-        versionEl.disabled = currentInspectionIsPreset;
+        versionEl.readOnly = false;
+        versionEl.disabled = false;
     }
-    if (descEl) { descEl.value = template.description || ''; descEl.readOnly = currentInspectionIsPreset; }
-    if (defaultEl) { defaultEl.checked = template.is_default == 1; defaultEl.disabled = currentInspectionIsPreset; }
-    if (addChapterBtn) addChapterBtn.style.display = currentInspectionIsPreset ? 'none' : '';
-    if (saveTemplateBtn) saveTemplateBtn.style.display = currentInspectionIsPreset ? 'none' : '';
-    if (exportBtn) exportBtn.style.display = currentInspectionIsPreset ? '' : 'none';
+    if (descEl) { descEl.value = template.description || ''; descEl.readOnly = false; }
+    if (defaultEl) { defaultEl.checked = template.is_default == 1; defaultEl.disabled = false; }
+    // 按钮始终显示（预置模板也可以操作）
+    if (addChapterBtn) addChapterBtn.style.display = '';
+    if (saveTemplateBtn) saveTemplateBtn.style.display = '';
+    if (exportBtn) exportBtn.style.display = 'none';
 }
 
 function clearInspectionTemplateEditForm() {
@@ -204,11 +208,8 @@ function clearInspectionTemplateEditForm() {
 }
 
 async function saveInspectionTemplate() {
-    if (!IS_ADMIN) { toast('只有管理员才能执行此操作', 'error'); return; }
-    if (currentInspectionIsPreset) {
-        toast('预置模板不可修改', 'error');
-        return;
-    }
+    if (!IS_LOGGED_IN) { toast('只有登录用户才能执行此操作', 'error'); return; }
+    // 预置模板也可以保存
     const dbTypeEl = document.getElementById('inspection-edit-db-type');
     const nameEl = document.getElementById('inspection-edit-name');
     const versionEl = document.getElementById('inspection-edit-version');
@@ -252,7 +253,7 @@ async function saveInspectionTemplate() {
 }
 
 async function deleteInspectionTemplate(templateId, templateName) {
-    if (!IS_ADMIN) { toast('只有管理员才能执行此操作', 'error'); return; }
+    if (!IS_LOGGED_IN) { toast('只有登录用户才能执行此操作', 'error'); return; }
     const confirmed = await showConfirmDialog('确认删除', `确定要删除模板"${templateName}"吗？此操作不可撤销。`);
     if (!confirmed) return;
     try {
@@ -309,10 +310,9 @@ function renderInspectionChapters(chapters) {
     }
     let html = '<ul class="chapter-sortable">';
     chapters.forEach((ch, idx) => {
-        const clickAction = isPreset
-            ? `onclick="viewInspectionChapterReadOnly(${ch.id})"`
-            : `onclick="editInspectionChapter(${ch.id})"`;
-        const deleteBtn = (isPreset || !IS_ADMIN) ? '' : `
+        // 预置模板也可以编辑
+        const clickAction = `onclick="editInspectionChapter(${ch.id})"`;
+        const deleteBtn = !IS_LOGGED_IN ? '' : `
             <div class="chapter-item-actions">
                 <button class="btn-delete-x" title="删除" onclick="event.stopPropagation(); deleteInspectionChapter(${ch.id}, '${escapeHtml(ch.chapter_title_zh)}')">✕</button>
             </div>`;
@@ -332,7 +332,8 @@ function renderInspectionChapters(chapters) {
     html += '</ul>';
     container.innerHTML = html;
 
-    if (!isPreset) {
+    // 预置模板也启用拖拽排序
+    if (IS_LOGGED_IN) {
         setTimeout(function() {
             const listEl = container.querySelector('.chapter-sortable');
             if (listEl && window.Sortable) {
@@ -341,7 +342,7 @@ function renderInspectionChapters(chapters) {
                         animation: 150,
                         ghostClass: 'chapter-sortable-ghost',
                         onEnd: function() {
-                            if (!IS_ADMIN) return;  // 拖拽排序属写操作，仅管理员
+                            if (!IS_LOGGED_IN) return;  // 拖拽排序属写操作
                             const items = listEl.querySelectorAll('[data-chapter-id]');
                             const ids = Array.from(items).map(el => parseInt(el.getAttribute('data-chapter-id')));
                             fetch('/api/inspection/chapters/reorder', {
@@ -360,7 +361,7 @@ function renderInspectionChapters(chapters) {
 }
 
 function addInspectionChapter() {
-    if (!IS_ADMIN) { toast('只有管理员才能执行此操作', 'error'); return; }
+    if (!IS_LOGGED_IN) { toast('只有管理员才能执行此操作', 'error'); return; }
     if (!currentInspectionTemplateId) {
         toast('请先保存模板', 'error');
         return;
@@ -433,7 +434,7 @@ function showInspectionChapterEditForm(chapter) {
                 <div class="form-group"><label>章节标题（英文）</label><input type="text" id="inspection-chapter-title-en" class="form-input" value="${escapeHtml(chapter.chapter_title_en || '')}" /></div>
                 <div class="form-group"><label>章节描述</label><textarea id="inspection-chapter-desc" class="form-textarea">${escapeHtml(chapter.description || '')}</textarea></div>
                 <div class="form-group"><label><input type="checkbox" id="inspection-chapter-enabled" ${chapter.enabled != 0 ? 'checked' : ''} /> 启用</label></div>
-                ${IS_ADMIN ? '<div class="form-actions"><button class="btn btn-primary btn-sm" onclick="saveInspectionChapter()">保存章节</button></div>' : ''}
+                ${IS_LOGGED_IN ? '<div class="form-actions"><button class="btn btn-primary btn-sm" onclick="saveInspectionChapter()">保存章节</button></div>' : ''}
             </div>
             <div id="inspection-query-list"></div>`;
         loadInspectionQueries(chapter.id);
@@ -446,18 +447,15 @@ function showInspectionChapterEditForm(chapter) {
                 <div class="form-group"><label>章节标题（英文）</label><input type="text" id="inspection-chapter-title-en" class="form-input" value="" /></div>
                 <div class="form-group"><label>章节描述</label><textarea id="inspection-chapter-desc" class="form-textarea"></textarea></div>
                 <div class="form-group"><label><input type="checkbox" id="inspection-chapter-enabled" checked /> 启用</label></div>
-                ${IS_ADMIN ? '<div class="form-actions"><button class="btn btn-primary btn-sm" onclick="saveInspectionChapter()">保存章节</button></div>' : ''}
+                ${IS_LOGGED_IN ? '<div class="form-actions"><button class="btn btn-primary btn-sm" onclick="saveInspectionChapter()">保存章节</button></div>' : ''}
             </div>
             <div id="inspection-query-list"></div>`;
     }
 }
 
 async function saveInspectionChapter() {
-    if (!IS_ADMIN) { toast('只有管理员才能执行此操作', 'error'); return; }
-    if (currentInspectionIsPreset) {
-        toast('预置模板不可修改', 'error');
-        return;
-    }
+    if (!IS_LOGGED_IN) { toast('只有管理员才能执行此操作', 'error'); return; }
+    // 预置模板也可以保存章节
     const numberEl = document.getElementById('inspection-chapter-number');
     const titleZhEl = document.getElementById('inspection-chapter-title-zh');
     const titleEnEl = document.getElementById('inspection-chapter-title-en');
@@ -506,11 +504,8 @@ async function saveInspectionChapter() {
 }
 
 async function deleteInspectionChapter(chapterId, chapterTitle) {
-    if (!IS_ADMIN) { toast('只有管理员才能执行此操作', 'error'); return; }
-    if (currentInspectionIsPreset) {
-        toast('预置模板不可修改', 'error');
-        return;
-    }
+    if (!IS_LOGGED_IN) { toast('只有管理员才能执行此操作', 'error'); return; }
+    // 预置模板也可以删除章节
     const confirmed = await showConfirmDialog('确认删除', `确定要删除章节"${chapterTitle}"吗？相关的 SQL 查询也会被删除。`);
     if (!confirmed) return;
     try {
@@ -559,26 +554,26 @@ async function loadInspectionQueries(chapterId) {
 function renderInspectionQueries(queries) {
     const container = document.getElementById('inspection-query-list');
     if (!container) return;
+    // 预置模板也可以编辑
     const isPreset = currentInspectionIsPreset === true;
     if (!queries || queries.length === 0) {
         let html = '<div class="empty-state" style="margin-top:12px;">暂无 SQL 查询。</div>';
-        if (!isPreset && IS_ADMIN) {
+        if (IS_LOGGED_IN) {
             html += '<button class="btn btn-xs btn-primary" style="margin-top:8px;" onclick="addInspectionQuery()">添加查询</button>';
         }
         container.innerHTML = html;
         return;
     }
     let html = '<h4>SQL 查询列表</h4>';
-    if (!isPreset && IS_ADMIN) {
+    if (IS_LOGGED_IN) {
         html += '<button class="btn btn-xs btn-primary" onclick="addInspectionQuery()">添加查询</button>';
     }
     html += '<ul class="query-list">';
     queries.forEach(q => {
         const sqlPreview = escapeHtmlForTemplate(q.query_sql.substring(0, 100)) + (q.query_sql.length > 100 ? '...' : '');
         let actionsHtml = '';
-        if (isPreset) {
-            actionsHtml = `<button class="btn btn-xs btn-ghost" onclick="viewInspectionQuery(${q.id})">查看</button>`;
-        } else if (IS_ADMIN) {
+        // 预置模板也可以编辑
+        if (IS_LOGGED_IN) {
             actionsHtml = `
                 <button class="btn btn-xs btn-ghost" onclick="editInspectionQueryInline(${q.id})">编辑</button>
                 <button class="btn btn-xs btn-danger" onclick="deleteInspectionQuery(${q.id}, '${escapeHtml(q.query_key)}')">删除</button>`;
@@ -599,11 +594,8 @@ function renderInspectionQueries(queries) {
 }
 
 function addInspectionQuery() {
-    if (!IS_ADMIN) { toast('只有管理员才能执行此操作', 'error'); return; }
-    if (currentInspectionIsPreset) {
-        toast('预置模板不可修改', 'error');
-        return;
-    }
+    if (!IS_LOGGED_IN) { toast('只有管理员才能执行此操作', 'error'); return; }
+    // 预置模板也可以添加查询
     if (!currentInspectionChapterId) {
         toast('请先选择一个章节', 'error');
         return;
@@ -621,10 +613,7 @@ function addInspectionQuery() {
 }
 
 async function editInspectionQueryInline(queryId) {
-    if (currentInspectionIsPreset) {
-        toast('预置模板不可修改', 'error');
-        return;
-    }
+    // 预置模板也可以编辑查询
     if (inspectionQueryUnsaved) {
         const confirmed = await showConfirmDialog('未保存', '当前有未保存的修改，确定要放弃吗？');
         if (!confirmed) return;
@@ -664,7 +653,7 @@ function renderQueryInlineEditForm(query, container, isNew) {
     html += `<div class="form-group"><label>描述（英文）</label><input type="text" class="form-input inline-q-desc-en" value="${escapeHtml(descEn)}" oninput="inspectionQueryUnsaved=true" /></div>`;
     html += `<div class="form-group"><label><input type="checkbox" class="inline-q-enabled" ${enabled ? 'checked' : ''} onchange="inspectionQueryUnsaved=true" /> 启用</label></div>`;
     html += '<div class="form-actions">';
-    html += IS_ADMIN ? `  <button class="btn btn-primary btn-sm" onclick="saveInspectionQueryInline(${q.id || 'null'}, ${isNew})">保存</button>` : '';
+    html += IS_LOGGED_IN ? `  <button class="btn btn-primary btn-sm" onclick="saveInspectionQueryInline(${q.id || 'null'}, ${isNew})">保存</button>` : '';
     html += `  <button class="btn btn-sm" onclick="cancelInspectionQueryInline(${q.id || 'null'})">取消</button>`;
     html += '</div></div>';
     container.innerHTML = html;
@@ -702,7 +691,7 @@ function showInlineQueryForm(query) {
         + `<div class="form-group"><label>描述（英文）</label><input type="text" class="form-input inline-q-desc-en" value="${escapeHtml(descEn)}" oninput="inspectionQueryUnsaved=true" /></div>`
         + `<div class="form-group"><label><input type="checkbox" class="inline-q-enabled" ${enabled ? 'checked' : ''} onchange="inspectionQueryUnsaved=true" /> 启用</label></div>`
         + '<div class="form-actions">'
-        + (IS_ADMIN ? `  <button class="btn btn-primary btn-sm" onclick="saveInspectionQueryInline('${isNew ? 'null' : q.id}', ${isNew})">保存</button>` : '')
+        + (IS_LOGGED_IN ? `  <button class="btn btn-primary btn-sm" onclick="saveInspectionQueryInline('${isNew ? 'null' : q.id}', ${isNew})">保存</button>` : '')
         + `  <button class="btn btn-sm" onclick="cancelInspectionQueryInline('${isNew ? 'null' : q.id}')">取消</button>`
         + '</div></div>';
     const formDiv = container.querySelector('.inline-edit-form');
@@ -727,11 +716,8 @@ function showInlineQueryForm(query) {
 }
 
 async function saveInspectionQueryInline(queryId, isNew) {
-    if (!IS_ADMIN) { toast('只有管理员才能执行此操作', 'error'); return; }
-    if (currentInspectionIsPreset) {
-        toast('预置模板不可修改', 'error');
-        return;
-    }
+    if (!IS_LOGGED_IN) { toast('只有管理员才能执行此操作', 'error'); return; }
+    // 预置模板也可以保存查询
     const keyEl    = document.querySelector('.inline-q-key');
     const enabledEl = document.querySelector('.inline-q-enabled');
     const descZhEl = document.querySelector('.inline-q-desc-zh');
@@ -830,11 +816,8 @@ function renderQueryInlineViewForm(query, container) {
 }
 
 async function deleteInspectionQuery(queryId, queryKey) {
-    if (!IS_ADMIN) { toast('只有管理员才能执行此操作', 'error'); return; }
-    if (currentInspectionIsPreset) {
-        toast('预置模板不可修改', 'error');
-        return;
-    }
+    if (!IS_LOGGED_IN) { toast('只有管理员才能执行此操作', 'error'); return; }
+    // 预置模板也可以删除查询
     const confirmed = await showConfirmDialog('确认删除', `确定要删除查询"${queryKey}"吗？`);
     if (!confirmed) return;
     try {
@@ -877,7 +860,7 @@ async function exportInspectionTemplate(templateId) {
 }
 
 function importInspectionTemplate() {
-    if (!IS_ADMIN) { toast('只有管理员才能执行此操作', 'error'); return; }
+    if (!IS_LOGGED_IN) { toast('只有登录用户才能执行此操作', 'error'); return; }
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.json';

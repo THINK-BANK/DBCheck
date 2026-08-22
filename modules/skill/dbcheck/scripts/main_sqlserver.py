@@ -840,9 +840,7 @@ class WordTemplateGeneratorSQLServer:
         info_table = doc.add_table(rows=4, cols=2)
         info_table.style = 'Table Grid'
         info_table.alignment = WD_TABLE_ALIGNMENT.CENTER
-        info_table.autofit = False
-        info_table.columns[0].width = Cm(3)
-        info_table.columns[1].width = Cm(10)
+        info_table.autofit = True  # 根据窗口自动调整表格宽度
         info = [
             [_t('sqlserver.label'), self.data.get('label', 'N/A')],
             [_t('sqlserver.inspector'), self.data.get('inspector', 'N/A')],

@@ -1952,6 +1952,7 @@ def _docx_table(doc, headers, rows, header_bg='336699'):
     tbl = doc.add_table(rows=1, cols=len(headers))
     tbl.style = 'Table Grid'
     tbl.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    tbl.autofit = True  # 根据窗口自动调整表格宽度
     # 表头
     hdr_cells = tbl.rows[0].cells
     for i, h in enumerate(headers):

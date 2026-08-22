@@ -47,6 +47,24 @@ class RootCauseExpert(Specialist):
     def analyze(self, ctx: SharedContext) -> List[Finding]:
         raw = ctx.by_category("anomaly") + ctx.by_category("risk")
         out: List[Finding] = []
+
+        # ── 根据用户输入的诊断目标过滤和排序 ──
+        goal = (ctx.goal or "").lower()
+        if goal:
+            # 根据诊断目标调整异常/风险的权重
+            priority_tags = []
+            if any(kw in goal for kw in ["性能", "慢", "cpu", "响应", "延迟", "卡", "performance", "slow"]):
+                priority_tags = ["sql", "compute", "io"]
+            elif any(kw in goal for kw in ["锁", "lock", "阻塞", "block"]):
+                priority_tags = ["lock"]
+            elif any(kw in goal for kw in ["空间", "容量", "磁盘", "storage", "disk", "表空间"]):
+                priority_tags = ["io"]
+            if priority_tags:
+                # 优先排序
+                raw = sorted(raw, key=lambda f: (
+                    0 if any(t in (f.tags or []) for t in priority_tags) else 1,
+                    0 if any(t in (f.tags or []) for t in ["critical", "warning"]) else 1
+                ))
         if not raw:
             out.append(
                 Finding(

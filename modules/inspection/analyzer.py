@@ -1260,7 +1260,7 @@ class HistoryManager:
 # 1. 支持本地 Ollama（backend='ollama'）、在线模型（online_enabled 时 backend 取 online_backend）或关闭（'disabled'）
 # 2. 必须在 dbc_config.json 的 ai 字段中设置 "online_enabled": true 才能调用远程模型
 # 3. 远程模型支持 OpenAI 协议兼容的 API（OpenAI/DeepSeek/自定义端点）
-# 4. Ollama 模式下 API 地址必须为本地地址（localhost/127.0.0.1）
+# 4. Ollama 支持本地和远程地址（已移除本地限制）
 #
 # 配置优先级：代码传参 > dbc_config.json 的 ai 字段 > 环境变量
 #
@@ -1277,12 +1277,82 @@ def _is_localhost_url(url: str) -> bool:
     return host in ('localhost', '127.0.0.1', '::1', '0.0.0.0') or host.startswith('127.')
 
 
+# ---------------------------------------------------------------------------
+# 本地 Ollama 访问的健壮性辅助
+# ---------------------------------------------------------------------------
+# Windows + 系统 HTTP 代理（HTTP_PROXY/HTTPS_PROXY）环境下，Python urllib 默认会
+# 把「非 NO_PROXY 的地址」甩给代理。本机 LAN IP（如 192.168.x.x）不在 NO_PROXY 中，
+# 于是访问本机 Ollama 的请求被代理拦截 → 代理连不上本机 IP → 返回 404 / 超时。
+# 此外 Windows 本机通过自身 LAN IP 做 loopback 自连常被防火墙/网络栈拒绝（10061）。
+# 解决办法：本机地址一律归一化为 127.0.0.1，并用绕过代理的 opener 直连。
+# ---------------------------------------------------------------------------
+
+def _get_local_hosts():
+    """返回本机所有可能的 host 名 / IP（用于判断 Ollama 地址是否指向本机）"""
+    hosts = {'localhost', '127.0.0.1', '::1', '[::1]', '0.0.0.0'}
+    try:
+        import socket as _s
+        # 主机名解析到的所有 IP
+        try:
+            for info in _s.getaddrinfo(_s.gethostname(), None):
+                hosts.add(info[4][0])
+        except Exception:
+            pass
+        # 主出口 IP（最常见的本机 LAN IP）
+        try:
+            _sock = _s.socket(_s.AF_INET, _s.SOCK_DGRAM)
+            _sock.connect(('8.8.8.8', 80))
+            hosts.add(_sock.getsockname()[0])
+            _sock.close()
+        except Exception:
+            pass
+    except Exception:
+        pass
+    return hosts
+
+
+_LOCAL_HOSTS = None
+
+
+def _is_local_host(host):
+    global _LOCAL_HOSTS
+    h = (host or '').lower().strip()
+    if h in ('localhost', '127.0.0.1', '::1', '[::1]', '0.0.0.0') or h.startswith('127.'):
+        return True
+    if _LOCAL_HOSTS is None:
+        _LOCAL_HOSTS = _get_local_hosts()
+    return h in _LOCAL_HOSTS
+
+
+def _normalize_ollama_url(api_url):
+    """将本机 Ollama 地址归一化为 127.0.0.1。
+
+    仅当 host 确为本机时才改写；远程 Ollama 地址（如另一台 GPU 机器的 IP）保持原样。
+    """
+    import re as _re
+    if not api_url:
+        return api_url
+    m = _re.match(r'^(https?://)([^/:]+)(.*)$', api_url.strip())
+    if not m:
+        return api_url
+    scheme, host, rest = m.group(1), m.group(2), m.group(3)
+    if _is_local_host(host):
+        return scheme + '127.0.0.1' + rest
+    return api_url
+
+
+def _no_proxy_opener():
+    """返回一个绕过系统代理的 urllib Opener（用于访问本机服务）"""
+    import urllib.request
+    return urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+
 class AIAdvisor:
     """
     AI 诊断适配器。
 
     支持模式：
-    - ollama   : 本地 Ollama（默认 http://localhost:11434，地址必须是本地）
+    - ollama   : Ollama（默认 http://localhost:11434，支持本地和远程地址）
     - openai   : OpenAI 协议兼容的远程模型（需在 dbc_config.json 的 ai 字段中启用 online_enabled）
     - disabled : 关闭 AI 诊断
 
@@ -1398,13 +1468,10 @@ class AIAdvisor:
             raw_backend = 'disabled'
         self.backend = raw_backend
 
-        # ── URL 校验：在线模型不限制地址，Ollama 必须是本地 ──
+        # ── URL 校验：在线模型不限制地址，Ollama 支持本地和远程地址 ──
         resolved_url = api_url or os.environ.get('DBCHECK_AI_URL', 'http://localhost:11434')
-        if self.backend == 'ollama':
-            if not _is_localhost_url(resolved_url):
-                print(f"⚠️  安全限制：API 地址 {resolved_url} 不是本地地址，AI 诊断已禁用")
-                self.backend = 'disabled'
-        elif self.backend == 'openai':
+        # 注：已移除 Ollama 必须为本地地址的限制，支持配置远程 Ollama 服务
+        if self.backend == 'openai':
             # 在线模型：优先使用代码传参，其次 dbc_config.json 的 ai 字段中的 online_api_url
             if not api_url:
                 resolved_url = _online_api_url or 'https://api.openai.com/v1'
@@ -1758,32 +1825,70 @@ class AIAdvisor:
             return ''
 
     def _call_ollama(self, prompt: str, timeout: int) -> str:
-        """调用本地 Ollama API"""
+        """调用本地 Ollama API
+
+        关键点：本机 Ollama 地址（localhost / 127.0.0.1 / 本机 LAN IP）一律归一化为
+        127.0.0.1，并用绕过系统代理的 opener 直连，避免：
+          1) 系统 HTTP 代理拦截非 NO_PROXY 的 LAN IP → 404 / 超时；
+          2) Windows 本机经 LAN IP 自连 loopback 被拒（10061）。
+        """
         import urllib.request
         import json as _json
-        url = self.api_url.rstrip('/') + '/api/generate'
+
+        # 本机地址归一化为 127.0.0.1，并绕过代理直连
+        base = _normalize_ollama_url((self.api_url or '').rstrip('/'))
+        opener = _no_proxy_opener()
+
+        # 尝试新版 /api/chat/completions 端点（qwen3 需要）
+        url = base + '/api/chat/completions'
         payload = _json.dumps({
             'model': self.model,
-            'prompt': prompt,
+            'messages': [{'role': 'user', 'content': prompt}],
             'stream': False,
             'think': False,
             'options': {
                 'temperature': 0.3,
-                # 扩大上下文窗口与最大生成 token，避免慢查询/综合分析类长输出被截断
                 'num_ctx': 8192,
                 'num_predict': 4096,
             }
         }).encode('utf-8')
-        req = urllib.request.Request(url, data=payload, method='POST')
-        req.add_header('Content-Type', 'application/json')
-        # 使用较长超时（300s），避免首次加载模型时冷启动超时；qwen3:30b 等大模型加载时间可达数分钟
-        with urllib.request.urlopen(req, timeout=max(timeout, 300)) as resp:
-            data = _json.loads(resp.read().decode('utf-8'))
-            raw = data.get('response', '').strip()
-            # 过滤 qwen3 的 thinking 残留（如果 think:false 未生效）
-            import re
-            raw = re.sub(r'<\|reserved_for_thinking\|>[\s\S]*?<\|end_of_thought\|>', '', raw)
-            return raw
+
+        def _do_request(req_url, req_payload):
+            req = urllib.request.Request(req_url, data=req_payload, method='POST')
+            req.add_header('Content-Type', 'application/json')
+            with opener.open(req, timeout=max(timeout, 300)) as resp:
+                return _json.loads(resp.read().decode('utf-8'))
+
+        try:
+            data = _do_request(url, payload)
+            # 新版 API 格式
+            msg = data.get('message', {})
+            return msg.get('content', '').strip()
+        except Exception as e:
+            # Fallback: 尝试旧版 /api/generate 端点
+            old_url = base + '/api/generate'
+            old_payload = _json.dumps({
+                'model': self.model,
+                'prompt': prompt,
+                'stream': False,
+                'think': False,
+                'options': {
+                    'temperature': 0.3,
+                    'num_ctx': 8192,
+                    'num_predict': 4096,
+                }
+            }).encode('utf-8')
+            try:
+                data = _do_request(old_url, old_payload)
+                raw = data.get('response', '').strip()
+                import re
+                raw = re.sub(r'<\|reserved_for_thinking\|>[\s\S]*?<\|end_of_thought\|>', '', raw)
+                return raw
+            except Exception as e2:
+                # 抛出包含已尝试地址的可读错误，便于定位
+                raise RuntimeError(
+                    f'Ollama 调用失败（已尝试 {url} 与 {old_url}，均失败）：{e2}'
+                ) from e2
 
     def _call_openai(self, prompt: str, timeout: int) -> str:
         """调用 OpenAI 协议兼容的远程 API（/v1/chat/completions）"""
@@ -2719,9 +2824,11 @@ def run_ai_diagnosis(db_type, label, context, issues=None, lang='zh', timeout=60
                 _online_on = _ai.get('online_enabled', False)
                 _backend = (_ai.get('online_backend', 'openai') or 'openai') if _online_on \
                     else (_ai.get('backend', 'ollama') or 'ollama')
+                _api_url = _ai.get('api_url', '')  # Ollama URL
+                _model = _ai.get('model', '')  # Ollama model
         except Exception:
             pass
-        advisor = AIAdvisor(backend=_backend)
+        advisor = AIAdvisor(backend=_backend, api_url=_api_url, model=_model)
         if not advisor.enabled:
             print(f"[AI] 诊断被禁用（backend={advisor.backend}）；请确认 dbc_config.json 的 ai.online_enabled=true 且 backend={_backend}")
             return ''

@@ -22,6 +22,7 @@ from modules.config.version import EDITION
 
 from .context import Finding, SharedContext
 from .planner import plan_sequence
+from .ai_helper import build_advisor
 from .registry import registry
 from .specialists import register_all
 
@@ -193,7 +194,7 @@ class DiagnosticHub:
         self.registry = registry
 
     def capabilities(self) -> list:
-        return [
+        caps = [
             {
                 "id": s.id,
                 "name": s.name,
@@ -202,6 +203,9 @@ class DiagnosticHub:
             }
             for s in self.registry.all()
         ]
+        # 协调员固定排在最前，作为编排入口可见
+        caps.sort(key=lambda c: (0 if c["id"] == "coordinator" else 1, c["id"]))
+        return caps
 
     def _prepare(self, goal: str, instance_id: str, inputs: dict = None):
         """构造共享上下文并规划协同顺序（供 dispatch / dispatch_stream 复用）。"""
@@ -235,8 +239,9 @@ class DiagnosticHub:
             inputs=ctx_inputs,
         )
         ctx.started_at = _now()
-        seq = plan_sequence(ctx, self.registry)
-        return ctx, seq
+        advisor = build_advisor()
+        plan = plan_sequence(ctx, self.registry, advisor)
+        return ctx, plan
 
     def _run_specialist(self, ctx: SharedContext, sid: str) -> None:
         spec = self.registry.get(sid)
@@ -263,7 +268,7 @@ class DiagnosticHub:
                     out.append(repr(n))
         return out
 
-    def _finalize(self, ctx: SharedContext, seq: list) -> dict:
+    def _finalize(self, ctx: SharedContext, plan) -> dict:
         ctx.finished_at = _now()
 
         # 方案验证（Cost Optimizer 思路）：对处置方案做代价/收益/可行性评估
@@ -278,45 +283,55 @@ class DiagnosticHub:
             plan_validation = {}
 
         meta = ctx.inputs.get("target_meta") or {}
+        spec_names = {c["id"]: c["name"] for c in self.capabilities()}
         return {
             "edition": EDITION,
             "goal": ctx.goal,
             "target": ctx.target,
             "target_meta": meta,
-            "sequence": seq,
+            "sequence": plan.sequence,
+            "coordinator": {
+                "reason": plan.reason,
+                "ai_driven": plan.ai_driven,
+                "sequence": plan.sequence,
+                "order": plan.order,
+            },
             "findings": [f.to_dict() for f in ctx.findings],
             "plan": ctx.plan,
             "plan_validation": plan_validation,
             "notes": self._str_notes(ctx),
-            "specialists": {c["id"]: c["name"] for c in self.capabilities()},
+            "specialists": spec_names,
             "started_at": ctx.started_at,
             "finished_at": ctx.finished_at,
         }
 
     def dispatch(self, goal: str, instance_id: str, inputs: dict = None) -> dict:
-        ctx, seq = self._prepare(goal, instance_id, inputs)
-        for sid in seq:
+        ctx, plan = self._prepare(goal, instance_id, inputs)
+        for sid in plan.sequence:
             self._run_specialist(ctx, sid)
-        return self._finalize(ctx, seq)
+        return self._finalize(ctx, plan)
 
     def dispatch_stream(self, goal: str, instance_id: str, inputs: dict = None):
-        """生成器版本：逐个专员执行，产出进度事件，最后产出完整结果。
+        """生成器版本：先产出协调员决策，再逐个专员执行并推送进度，最后完整结果。
 
         每次 yield 一个事件 dict：
-          {"type":"sequence", "sequence":[...], "specialists":{id:name}, "total":n}
+          {"type":"coordinator", "reason":..., "ai_driven":..., "sequence":[...], "order":{...}, "specialists":{id:name}, "total":n}
           {"type":"progress", "current":sid, "name":..., "index":i, "total":n, "phase":"start|done"}
           {"type":"result", "result":{...}}
         """
-        ctx, seq = self._prepare(goal, instance_id, inputs)
+        ctx, plan = self._prepare(goal, instance_id, inputs)
         spec_names = {c["id"]: c["name"] for c in self.capabilities()}
-        total = len(seq)
+        total = len(plan.sequence)
         yield {
-            "type": "sequence",
-            "sequence": seq,
+            "type": "coordinator",
+            "reason": plan.reason,
+            "ai_driven": plan.ai_driven,
+            "sequence": plan.sequence,
+            "order": plan.order,
             "specialists": spec_names,
             "total": total,
         }
-        for i, sid in enumerate(seq, 1):
+        for i, sid in enumerate(plan.sequence, 1):
             yield {
                 "type": "progress", "phase": "start",
                 "current": sid, "name": spec_names.get(sid, sid),
@@ -328,7 +343,7 @@ class DiagnosticHub:
                 "current": sid, "name": spec_names.get(sid, sid),
                 "index": i, "total": total,
             }
-        yield {"type": "result", "result": self._finalize(ctx, seq)}
+        yield {"type": "result", "result": self._finalize(ctx, plan)}
 
 
 _hub = None

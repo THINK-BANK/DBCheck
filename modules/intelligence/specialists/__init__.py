@@ -12,6 +12,8 @@ from .inspection_expert import InspectionExpert
 from .rootcause_expert import RootCauseExpert
 from .sql_governance import SqlGovernance
 from .lock_analyst import LockAnalyst
+from .nl_query_expert import NlQueryExpert
+from .coordinator import Coordinator
 
 _registered = False
 
@@ -21,11 +23,13 @@ def register_all() -> None:
     if _registered:
         return
     for s in (
+        Coordinator(),
         MonitorSentinel(),
         InspectionExpert(),
         RootCauseExpert(),
         SqlGovernance(),
         LockAnalyst(),
+        NlQueryExpert(),
     ):
         registry.register(s)
     _registered = True

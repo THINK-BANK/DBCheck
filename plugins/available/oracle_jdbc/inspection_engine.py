@@ -1173,6 +1173,7 @@ class BaseInspectionEngine:
         
         # 封面信息表格
         info_table = doc.add_table(rows=5, cols=2, style='Table Grid')
+        info_table.autofit = True  # 根据窗口自动调整表格宽度
         info_labels = ['服务器地址', '实例启动时间', '巡检结果', '巡检人员', '报告生成时间']
         for i, label in enumerate(info_labels):
             row = info_table.rows[i]
@@ -1742,6 +1743,7 @@ class BaseInspectionEngine:
             if baseline_results:
                 _add_heading(f"{_ch_prefix(ch_bl)} {'基线配置检查结果' if self._lang == 'zh' else 'Baseline Configuration Check Results'}")
                 tbl = doc.add_table(rows=1+len(baseline_results), cols=7, style='Table Grid')
+                tbl.autofit = True  # 根据窗口自动调整表格宽度
                 bl_headers = ['参数名称', '当前值', '期望值', '运算符', '状态', '风险等级', '描述'] if self._lang == 'zh' else ['Parameter', 'Current Value', 'Expected Value', 'Operator', 'Status', 'Risk Level', 'Description']
                 for j, h in enumerate(bl_headers):
                     cell = tbl.rows[0].cells[j]
@@ -1794,6 +1796,7 @@ class BaseInspectionEngine:
             if issues:
                 _add_heading(self._t(f'report.{self.db_type}_ch16_1', default='智能分析问题明细'), 2)
                 tbl = doc.add_table(rows=1+len(issues), cols=6, style='Table Grid')
+                tbl.autofit = True  # 根据窗口自动调整表格宽度
                 hdrs = [
                     self._t(f'report.{self.db_type}_col_seq', default='序号'),
                     self._t(f'report.{self.db_type}_col_item', default='检查项'),
@@ -1969,6 +1972,7 @@ class BaseInspectionEngine:
             
             labels = cover_labels['zh'] if is_zh else cover_labels['en']
             tbl = doc.add_table(rows=len(labels), cols=2, style='Table Grid')
+            tbl.autofit = True  # 根据窗口自动调整表格宽度
             tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
             for i, (label, value) in enumerate(zip(labels, cover_data)):
                 tbl.rows[i].cells[0].text = label
@@ -2027,6 +2031,7 @@ class BaseInspectionEngine:
                                         cr.font.bold = True
                                         cr.font.color.rgb = RGBColor(0, 51, 102)
                                         card = doc.add_table(rows=len(headers), cols=2, style='Table Grid')
+                                        card.autofit = True  # 根据窗口自动调整表格宽度
                                         for kj, h in enumerate(headers):
                                             card.rows[kj].cells[0].text = str(h)
                                             card.rows[kj].cells[1].text = str(row_data.get(h, ''))[:500] if row_data.get(h) else ''
@@ -2042,6 +2047,7 @@ class BaseInspectionEngine:
                                         doc.add_paragraph()
                                 else:
                                     qt = doc.add_table(rows=1+len(q_data), cols=len(headers), style='Table Grid')
+                                    qt.autofit = True  # 根据窗口自动调整表格宽度
                                     for j, h in enumerate(headers):
                                         cell = qt.rows[0].cells[j]
                                         cell.text = self._clean_xml_str(h, max_len=100)
@@ -2087,6 +2093,7 @@ class BaseInspectionEngine:
                         _fmt_para(key, bold=True, size=11)
                         headers = list(val[0].keys())
                         qt = doc.add_table(rows=1+len(val), cols=len(headers), style='Table Grid')
+                        qt.autofit = True  # 根据窗口自动调整表格宽度
                         for j, h in enumerate(headers):
                             cell = qt.rows[0].cells[j]
                             cell.text = self._clean_xml_str(h, max_len=100)
