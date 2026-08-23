@@ -7929,10 +7929,29 @@ curl -H "X-API-Key: YOUR_API_KEY" http://localhost:5003/api/v1/inspect/{task_id}
             <div style="margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
               <button class="btn btn-primary" style="padding:7px 16px;font-size:13px" onclick="importDocKbFacts()">导入</button>
             </div>
-            <div style="margin-top:12px;padding:10px 12px;background:var(--surface2);border:1px dashed var(--border);border-radius:8px;">
-              <div style="font-size:12px;color:var(--text-muted);line-height:1.6">
-                🤖 <b>AI 抽取官方文档页</b>为事实草稿属于 <b>Phase 2 能力</b>，当前版本尚未实现；请手动粘贴事实 JSON 后点击「导入」。
+            <div style="margin-top:12px;padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;">
+              <div style="font-size:13px;font-weight:600;margin-bottom:8px">🤖 AI 抽取官方文档页为事实草稿</div>
+              <div style="font-size:12px;color:var(--text-muted);line-height:1.6;margin-bottom:10px">
+                粘贴数据库<strong>官方文档页 URL</strong>（如 dev.mysql.com / docs.oracle.com / postgresql.org/docs），
+                系统将抓取正文并由本地 AI（Ollama）或在线模型抽取结构化事实。<b>仅生成草稿，绝不自动入库</b>；请逐条校验后点击下方「导入选中的草稿」才写库。
               </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+                <div style="flex:2;min-width:260px">
+                  <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px">官方文档 URL</label>
+                  <input id="dk-ex-url" type="text" style="width:100%;padding:7px 9px;background:var(--surface);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px" placeholder="https://dev.mysql.com/doc/refman/8.0/en/innodb-buffer-pool.html" />
+                </div>
+                <div style="min-width:110px">
+                  <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px">库类型</label>
+                  <select id="dk-ex-db" style="width:100%;padding:7px 9px;background:var(--surface);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px"></select>
+                </div>
+                <div style="min-width:90px">
+                  <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px">版本</label>
+                  <input id="dk-ex-ver" type="text" style="width:100%;padding:7px 9px;background:var(--surface);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px" placeholder="8.0" />
+                </div>
+                <button id="dk-ex-btn" class="btn btn-primary" style="padding:7px 16px;font-size:13px" onclick="extractDocKbFromUrl()">抓取样例</button>
+              </div>
+              <div id="dk-ex-status" style="margin-top:8px;font-size:12px;color:var(--text-muted)"></div>
+              <div id="dk-ex-draft" style="margin-top:10px"></div>
             </div>
             <div id="dk-import-result" style="margin-top:10px;font-size:13px;white-space:pre-wrap"></div>
           </div>
@@ -12175,6 +12194,86 @@ async function saveDocKbSource() {
 function openDocKbImport() {
   const el = document.getElementById('dk-import-body');
   if (el) el.style.display = (el.style.display === 'none' || !el.style.display) ? 'block' : 'none';
+  // 填充 AI 抽取的库类型下拉（复用全局 dbTypes；缺省给常用官方库）
+  const sel = document.getElementById('dk-ex-db');
+  if (sel && !sel.options.length) {
+    const presets = (window.dbTypes && window.dbTypes.length)
+      ? window.dbTypes.map(t => ({value: t.value, label: t.label}))
+      : [{value:'mysql',label:'MySQL'},{value:'oracle',label:'Oracle'},{value:'pg',label:'PostgreSQL'},{value:'dm',label:'DM'},{value:'sqlserver',label:'SQL Server'},{value:'tidb',label:'TiDB'}];
+    sel.innerHTML = presets.map(o => `<option value="${o.value}">${o.label}</option>`).join('');
+  }
+}
+
+async function extractDocKbFromUrl() {
+  const url = (document.getElementById('dk-ex-url').value || '').trim();
+  const dbType = (document.getElementById('dk-ex-db').value || '').trim();
+  const version = (document.getElementById('dk-ex-ver').value || '').trim() || 'all';
+  const statusEl = document.getElementById('dk-ex-status');
+  const draftEl = document.getElementById('dk-ex-draft');
+  if (!url) { statusEl.style.color = 'var(--danger)'; statusEl.textContent = '请填写官方文档 URL。'; return; }
+  if (!dbType) { statusEl.style.color = 'var(--danger)'; statusEl.textContent = '请选择库类型。'; return; }
+  statusEl.style.color = 'var(--text-muted)'; statusEl.textContent = '⏳ 正在抓取页面并由 AI 抽取事实（可能需数十秒）...';
+  draftEl.innerHTML = '';
+  try {
+    const res = await fetch('/api/doc-kb/import', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({url, db_type: dbType, version})});
+    const data = await res.json();
+    if (!data.ok) {
+      statusEl.style.color = 'var(--danger)'; statusEl.textContent = '❌ ' + (data.error || '抽取失败');
+      return;
+    }
+    const draft = data.draft || [];
+    if (!draft.length) {
+      statusEl.style.color = 'var(--text-muted)'; statusEl.textContent = '✅ 抽取完成，但 AI 未从该页识别出可入库的事实（可换更具体的参数/规则页重试）。';
+      return;
+    }
+    statusEl.style.color = 'var(--success)';
+    statusEl.textContent = `✅ 抽取到 ${draft.length} 条草稿，请勾选要入库的项，再点「导入选中的草稿」。来源：${data.title || url}`;
+    draftEl.innerHTML = draft.map((f, i) => {
+      const sev = f.severity ? ` <span style="color:var(--danger)">[${f.severity}]</span>` : '';
+      return `<div style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:8px;background:var(--surface)">
+        <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;cursor:pointer">
+          <input type="checkbox" class="dk-draft-chk" data-idx="${i}" checked style="margin-top:3px" />
+          <div style="flex:1">
+            <div><b>[${f.category}]</b> ${f.key}${sev} <span style="color:var(--text-muted)">(${f.db_type||dbType} ${f.version||version})</span></div>
+            <div style="margin-top:3px;color:var(--text)">${f.value}</div>
+            ${f.excerpt ? `<div style="margin-top:3px;font-size:11px;color:var(--text-muted);white-space:pre-wrap">“${f.excerpt}” <a href="${f.official_url}" target="_blank" rel="noopener" style="color:var(--accent)">↗ 溯源</a></div>` : ''}
+          </div>
+        </label>
+      </div>`;
+    }).join('') + `<button class="btn btn-primary" style="margin-top:6px;padding:7px 16px;font-size:13px" onclick="importDocKbDraft()">导入选中的草稿（${draft.length}）</button>`;
+    // 暂存草稿供导入使用
+    window.__dkDraft = draft;
+  } catch (e) {
+    statusEl.style.color = 'var(--danger)'; statusEl.textContent = '❌ 请求异常：' + e.message;
+  }
+}
+
+async function importDocKbDraft() {
+  const draft = window.__dkDraft || [];
+  const chks = Array.from(document.querySelectorAll('.dk-draft-chk:checked'));
+  if (!draft.length) { toastError('没有可导入的草稿。'); return; }
+  const facts = chks.map(c => {
+    const f = draft[parseInt(c.getAttribute('data-idx'), 10)];
+    return {db_type: f.db_type, version: f.version || 'all', category: f.category, key: f.key, value: f.value, excerpt: f.excerpt, official_url: f.official_url, severity: f.severity || ''};
+  });
+  if (!facts.length) { toastError('请先勾选要导入的草稿。'); return; }
+  const statusEl = document.getElementById('dk-ex-status');
+  statusEl.style.color = 'var(--text-muted)'; statusEl.textContent = '⏳ 导入选中草稿中...';
+  try {
+    const res = await fetch('/api/doc-kb/import', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({facts})});
+    const data = await res.json();
+    if (data.ok) {
+      statusEl.style.color = 'var(--success)';
+      statusEl.textContent = `✅ 草稿已入库：新增 ${data.created || 0} 条` + (data.errors && data.errors.length ? `，${data.errors.length} 条失败` : '');
+      document.getElementById('dk-ex-draft').innerHTML = '';
+      window.__dkDraft = [];
+      loadDocKbFacts();
+    } else {
+      statusEl.style.color = 'var(--danger)'; statusEl.textContent = '❌ ' + (data.error || '导入失败');
+    }
+  } catch (e) {
+    statusEl.style.color = 'var(--danger)'; statusEl.textContent = '❌ 导入异常：' + e.message;
+  }
 }
 
 async function importDocKbFacts() {
@@ -22697,24 +22796,46 @@ function mkdirRemote() {
 
   // ─── 插件市场加载 ──────────────────────
 
+  // 本地优先加载 + 在线异步补充
+  // 1) 先请求 /registry/local（不触发在线拉取，毫秒级），立即渲染本地/内置卡片、隐藏 loading
+  // 2) 再异步请求 /registry（含线上），拿到后用线上数据补充/覆盖（按 id 去重），不阻塞首屏
   async function loadMarketPlugins(force) {
     const grid = document.getElementById('market-plugins-grid');
     const loading = document.getElementById('market-plugins-loading');
     if (grid) grid.innerHTML = '';
-    if (loading) loading.style.display = '';
+    if (loading) { loading.style.display = ''; loading.textContent = (i18n('plugin_market.loading') || '加载中...'); }
 
+    // 本地优先：先渲染本地/内置插件，秒开
     try {
-      const url = '/api/v1/market/registry' + (force ? '?force=1' : '');
-      const r = await fetch(url);
-      const d = await r.json();
-      if (!d.ok) { if(loading) loading.textContent = (i18n('plugin_market.load_fail') || '加载失败') + ': ' + (d.error||'未知'); return; }
-      if (loading) loading.style.display = 'none';
-      renderMarketPlugins(d.plugins || []);
-      loadInstalledPlugins();
-      loadMarketCategories();
+      const lr = await fetch('/api/v1/market/registry/local');
+      const ld = await lr.json();
+      if (ld.ok && loading) loading.style.display = 'none';
+      if (ld.ok) {
+        renderMarketPlugins(ld.plugins || []);
+      } else if (loading) {
+        loading.textContent = (i18n('plugin_market.load_fail') || '加载失败') + ': ' + (ld.error || '未知');
+      }
     } catch(e) {
       if (loading) loading.textContent = (i18n('plugin_market.load_fail') || '加载失败') + ': ' + e.message;
     }
+
+    // 已安装列表与分类不依赖在线数据，提前并行触发
+    loadInstalledPlugins();
+    loadMarketCategories();
+
+    // 在线异步补充：不阻塞本地渲染
+    (async () => {
+      try {
+        const url = '/api/v1/market/registry' + (force ? '?force=1' : '');
+        const r = await fetch(url);
+        const d = await r.json();
+        if (!d.ok) return; // 在线失败不影响已渲染的本地卡片
+        const online = d.plugins || [];
+        // 合并：以在线完整列表为准，但保留本地已渲染的“本地独有”卡片（理论上已在 registry 中，
+        // 这里直接用完整列表覆盖即可，因为本地端点已包含在 registry 里）
+        renderMarketPlugins(online);
+      } catch(e) { /* 在线超时/失败静默，本地卡片已显示 */ }
+    })();
   }
 
   function renderMarketPlugins(plugins) {
@@ -23305,7 +23426,7 @@ const STATIC_DB_PH_MAP = {'pg':'postgres','ivorysql':'ivorysql','kingbase':'king
       </p>
       <div class="about-meta">
         <span class="about-meta-item">作者：Jack Ge (fiyo)</span>
-        <span class="about-meta-item">协议：MIT License</span>
+        <span class="about-meta-item">协议：Apache License 2.0</span>
         <span class="about-meta-item">官网：<a href="https://dbcheck.top" target="_blank">dbcheck.top</a></span>
       </div>
 

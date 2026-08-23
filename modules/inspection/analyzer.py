@@ -1815,16 +1815,20 @@ class AIAdvisor:
             # 由 Web 错误卡（正则 ^⚠|timeout|失败|异常）与 Word 第8章展示，不再静默吞错。
             return f"⚠ AI 诊断调用失败：{e}"
 
-    def _call_llm(self, prompt: str, timeout: int = 60) -> str:
-        """通用 LLM 调用入口，根据 backend 自动路由到对应后端方法"""
+    def _call_llm(self, prompt: str, timeout: int = 60, response_format=None) -> str:
+        """通用 LLM 调用入口，根据 backend 自动路由到对应后端方法。
+
+        response_format: 可选，Ollama 的 `format` 约束（JSON Schema / "json"），
+        用于强制模型只输出合法 JSON，解决小模型不遵守 JSON 输出指令的问题。
+        """
         if self.backend == 'ollama':
-            return self._call_ollama(prompt, timeout)
+            return self._call_ollama(prompt, timeout, response_format=response_format)
         elif self.backend == 'openai':
-            return self._call_openai(prompt, timeout)
+            return self._call_openai(prompt, timeout, response_format=response_format)
         else:
             return ''
 
-    def _call_ollama(self, prompt: str, timeout: int) -> str:
+    def _call_ollama(self, prompt: str, timeout: int, response_format=None) -> str:
         """调用本地 Ollama API
 
         关键点：本机 Ollama 地址（localhost / 127.0.0.1 / 本机 LAN IP）一律归一化为
@@ -1841,7 +1845,7 @@ class AIAdvisor:
 
         # 尝试新版 /api/chat/completions 端点（qwen3 需要）
         url = base + '/api/chat/completions'
-        payload = _json.dumps({
+        payload = {
             'model': self.model,
             'messages': [{'role': 'user', 'content': prompt}],
             'stream': False,
@@ -1851,7 +1855,11 @@ class AIAdvisor:
                 'num_ctx': 8192,
                 'num_predict': 4096,
             }
-        }).encode('utf-8')
+        }
+        # 强制 JSON 输出（structured outputs）：解决小模型不遵守 JSON 指令的问题
+        if response_format:
+            payload['format'] = response_format
+        payload = _json.dumps(payload).encode('utf-8')
 
         def _do_request(req_url, req_payload):
             req = urllib.request.Request(req_url, data=req_payload, method='POST')
@@ -1867,7 +1875,7 @@ class AIAdvisor:
         except Exception as e:
             # Fallback: 尝试旧版 /api/generate 端点
             old_url = base + '/api/generate'
-            old_payload = _json.dumps({
+            old_payload = {
                 'model': self.model,
                 'prompt': prompt,
                 'stream': False,
@@ -1877,7 +1885,10 @@ class AIAdvisor:
                     'num_ctx': 8192,
                     'num_predict': 4096,
                 }
-            }).encode('utf-8')
+            }
+            if response_format:
+                old_payload['format'] = response_format
+            old_payload = _json.dumps(old_payload).encode('utf-8')
             try:
                 data = _do_request(old_url, old_payload)
                 raw = data.get('response', '').strip()

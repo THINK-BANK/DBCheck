@@ -180,19 +180,21 @@ def bulk_import(facts: list, created_by: str = None):
     return {"ok": True, "created": created, "errors": errors}
 
 
-# ─────────────────────────── 策展辅助（Phase 2 占位）───────────────────────────
-def extract_from_url(url: str, db_type: str, version: str = "all") -> dict:
-    """把官方文档页抽成结构化事实草稿（Phase 2 能力，当前版本降级）。
+# ─────────────────────────── 策展辅助（Phase 2 抓取+抽取）───────────────────────────
+def extract_from_url(url: str, db_type: str, version: str = "all",
+                     backend: str = None, api_key: str = None,
+                     api_url: str = None, model: str = None,
+                     proxy: str = None, advisor=None) -> dict:
+    """把官方文档页抽成结构化事实草稿（Phase 2 能力，已接入抓取+LLM 抽取）。
 
-    设计意图：复用 analyzer 的 AI backend 配置（Ollama/OpenAI）把页面内容
-    抽成待人工校验的事实列表。Phase 0/1 不实现 LLM 调用，明确返回「未实现」，
-    前端 import 面板可据此把按钮置灰或提示。
+    复用 modules.doc_kb.crawler 的 fetch_page + AIAdvisor 抽取 + 版权审查。
+    仅返回 draft 列表，绝不自动直写数据库（入库须经前端人工校验，零风险）。
     """
-    return {
-        "ok": False,
-        "error": "AI 抽取为 Phase 2 能力，当前版本尚未实现；请手动粘贴事实后保存。",
-        "draft": [],
-        "url": url,
-        "db_type": _clean_db_type(db_type),
-        "version": version,
-    }
+    from . import crawler
+    res = crawler.extract_facts(
+        url=url, db_type=db_type, version=version,
+        backend=backend, api_key=api_key, api_url=api_url,
+        model=model, proxy=proxy, advisor=advisor,
+    )
+    res["url"] = url
+    return res

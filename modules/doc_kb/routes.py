@@ -165,10 +165,18 @@ def import_facts():
         res = service.bulk_import(facts, created_by=username)
         return jsonify(res)
 
-    # 模式 2：AI 抽取官方页（Phase 2 能力，当前版本降级返回提示）
+    # 模式 2：AI 抽取官方页（Phase 2 抓取+抽取，返回 draft 列表，不入库）
     url = (data.get("url") or "").strip()
     db_type = data.get("db_type", "")
     version = (data.get("version") or "all").strip()
     if not url:
         return jsonify({"ok": False, "error": "需提供 facts 列表或 url"}), 400
-    return jsonify(service.extract_from_url(url, db_type, version))
+    # 透传可选 AI 参数（未传则由 AIAdvisor 读 dbc_config 默认解析）
+    return jsonify(service.extract_from_url(
+        url, db_type, version,
+        backend=data.get("backend"),
+        api_key=data.get("api_key"),
+        api_url=data.get("api_url"),
+        model=data.get("model"),
+        proxy=data.get("proxy"),
+    ))

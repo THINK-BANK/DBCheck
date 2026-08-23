@@ -19,6 +19,7 @@ DBCheck REST API v1
 from modules.core.paths import PROJECT_ROOT
 import os
 import json
+import re
 import uuid
 import time
 import hashlib
@@ -702,6 +703,30 @@ def admin_get_token():
 
 # ── 插件类型可靠补全工具 ──────────────────────────────────────
 
+def _normalize_plugin_name(name: str) -> str:
+    """插件名称归一化：去连字符/下划线/空格，转小写，用于模糊去重"""
+    return re.sub(r'[-_\s]+', '', name).lower()
+
+
+def _normalize_plugin_title(title: str) -> str:
+    """插件标题归一化（与 name 相同逻辑）"""
+    return _normalize_plugin_name(title)
+
+
+def _is_chinese_subset(shorter: str, longer: str) -> bool:
+    """
+    检查中文字符串是否为另一个的子集（用于模糊去重）。
+    如 "字符集审计" 是 "字符集与排序规则审计" 的子集 → True
+    """
+    if not shorter or not longer:
+        return False
+    short_cn = ''.join(c for c in shorter if '\u4e00' <= c <= '\u9fff')
+    long_cn = ''.join(c for c in longer if '\u4e00' <= c <= '\u9fff')
+    if not short_cn or not long_cn:
+        return False
+    return short_cn in long_cn
+
+
 def _ensure_plugin_type(p: dict, base_dir: str) -> str:
     """
     确保插件记录拥有可靠的 type 字段（'inspection' | 'rule'）。
@@ -900,31 +925,6 @@ def api_market_registry():
 
     去重：本地扫描时通过 id 精确匹配 + 名称归一化模糊匹配，防止同一插件重复出现
     """
-    import re
-
-    def _normalize_plugin_name(name: str) -> str:
-        """插件名称归一化：去连字符/下划线/空格，转小写，用于模糊去重"""
-        return re.sub(r'[-_\s]+', '', name).lower()
-
-    def _normalize_plugin_title(title: str) -> str:
-        """插件标题归一化（与 name 相同逻辑）"""
-        return _normalize_plugin_name(title)
-
-    def _is_chinese_subset(shorter: str, longer: str) -> bool:
-        """
-        检查中文字符串是否为另一个的子集（用于模糊去重）。
-        如 "字符集审计" 是 "字符集与排序规则审计" 的子集 → True
-        """
-        if not shorter or not longer:
-            return False
-        # 提取中文字符
-        short_cn = ''.join(c for c in shorter if '\u4e00' <= c <= '\u9fff')
-        long_cn = ''.join(c for c in longer if '\u4e00' <= c <= '\u9fff')
-        if not short_cn or not long_cn:
-            return False
-        # 短的中文字符串必须全部出现在长的中文字符串中
-        return short_cn in long_cn
-
     try:
         import os
         from modules.pluginkit.market import get_market
@@ -1068,6 +1068,117 @@ def api_market_registry():
         all_plugins = market_plugins + local_only_plugins
 
         return jsonify({'ok': True, 'plugins': all_plugins, 'total': len(all_plugins)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@api_v1.route('/market/registry/local', methods=['GET'])
+def api_market_registry_local():
+    """
+    本地插件快速接口（本地优先加载，不触发在线 registry 拉取）。
+
+    仅扫描本地 plugins/ 目录（enabled + available），并合并 registry.json 中
+    download 非 http(s) 的内置注册插件（标为 registered），**不调用 fetch_registry**，
+    因此不受在线镜像网络延迟影响，毫秒级返回，用于首屏秒开。
+    """
+    try:
+        import os
+        from modules.pluginkit.market import get_market
+        m = get_market()
+        cat = request.args.get('category', None)
+        kw = request.args.get('keyword', None)
+
+        installed_ids = m.get_installed_ids()
+        base_dir = str(PROJECT_ROOT)
+        plugins_base = os.path.join(base_dir, 'plugins')
+
+        # 1. 内置注册插件：直接读内置 registry.json 文件（**不做任何网络请求**），
+        #    彻底绕开 list_plugins() 内部无条件调用的 fetch_registry()（会同步等在线镜像超时）。
+        #    线上插件（download=http(s)）在此跳过，留给异步的完整 /registry 接口补充。
+        builtin = m._load_builtin_registry() or {'plugins': []}
+        market_plugins = builtin.get('plugins', []) or []
+        registered = []
+        for p in market_plugins:
+            dl = m._resolve_download_url(p)
+            if dl and (dl.startswith('http://') or dl.startswith('https://')):
+                continue  # 真正线上的，留给完整 registry 接口异步补充
+            p = dict(p)
+            p['source'] = 'registered'
+            p['author'] = _normalize_author(p.get('author', ''))
+            p['installed'] = p.get('id', '') in installed_ids
+            p['type'] = _ensure_plugin_type(p, base_dir)
+            registered.append(p)
+
+        # 2. 扫描本地目录，找出 registry 中无记录的插件（标 local）
+        market_ids = set(p.get('id', '') for p in market_plugins)
+        market_names_norm = set()
+        for p in market_plugins:
+            pn = p.get('name', '')
+            if pn:
+                market_names_norm.add(_normalize_plugin_name(pn))
+
+        local_only_plugins = []
+        seen_local_ids = set()
+        for subdir in ('enabled', 'available'):
+            scan_dir = os.path.join(plugins_base, subdir)
+            if not os.path.isdir(scan_dir):
+                continue
+            for item in os.listdir(scan_dir):
+                item_path = os.path.join(scan_dir, item)
+                if not os.path.isdir(item_path) or item.startswith('__'):
+                    continue
+                if item in market_ids:
+                    continue
+                plugin_json_path = os.path.join(item_path, 'plugin.json')
+                if not os.path.isfile(plugin_json_path):
+                    continue
+                try:
+                    with open(plugin_json_path, 'r', encoding='utf-8') as f:
+                        manifest = json.load(f)
+                    local_name = manifest.get('name', item)
+                    local_title = manifest.get('title', '')
+                    if _normalize_plugin_name(local_name) in market_names_norm:
+                        continue
+                    if local_title and _normalize_plugin_title(local_title) in market_names_norm:
+                        continue
+                    is_dup = False
+                    for norm_market in market_names_norm:
+                        if _is_chinese_subset(local_name, norm_market) or \
+                           _is_chinese_subset(local_title, norm_market) or \
+                           _is_chinese_subset(norm_market, local_name) or \
+                           _is_chinese_subset(norm_market, local_title):
+                            is_dup = True
+                            break
+                    if is_dup:
+                        continue
+                    if item in seen_local_ids:
+                        continue
+                    seen_local_ids.add(item)
+                    local_only_plugins.append({
+                        'id': item,
+                        'name': manifest.get('name', item),
+                        'version': manifest.get('version', 'unknown'),
+                        'description': manifest.get('description', ''),
+                        'author': _normalize_author(manifest.get('author')),
+                        'category': manifest.get('category', 'db'),
+                        'type': manifest.get('type', 'unknown'),
+                        'db_types': manifest.get('db_types', []),
+                        'keywords': manifest.get('keywords', []),
+                        'rating': manifest.get('rating', 0),
+                        'downloads': 0,
+                        'source': 'local',
+                        'installed': os.path.isdir(os.path.join(plugins_base, 'enabled', item)),
+                        'author_type': 'community',
+                    })
+                except Exception as e:
+                    logger.warning(f"读取本地插件 {item} 的 plugin.json 失败: {e}")
+
+        for p in local_only_plugins:
+            p['type'] = _ensure_plugin_type(p, base_dir)
+
+        # 本地优先：registered（内置注册）+ local（目录扫描）
+        local_plugins = registered + local_only_plugins
+        return jsonify({'ok': True, 'plugins': local_plugins, 'total': len(local_plugins), 'scope': 'local'})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 
