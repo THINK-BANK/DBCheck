@@ -6601,6 +6601,40 @@ function formatBytes(bytes) {
           </div>
         </div>
 
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-title"><span>🔧</span> <span>写操作工单</span>
+            <span class="badge" style="margin-left:8px;font-size:11px">治理闭环 · 经 WriteGate 审批</span>
+          </div>
+          <div class="form-grid">
+            <div class="field">
+              <label>写操作类型 <span class="req">*</span></label>
+              <select id="wt-skill" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px" onchange="wtSkillChanged(this)">
+                <option value="">-- 选择写操作类型 --</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>目标实例 <span class="req">*</span></label>
+              <select id="wt-instance-select" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px" data-db="" onchange="wtInstanceChanged(this)">
+                <option value="">-- 选择实例 --</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>环境</label>
+              <select id="wt-env" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">
+                <option value="prod">生产 prod</option>
+                <option value="test">测试 test</option>
+                <option value="dev">开发 dev</option>
+              </select>
+            </div>
+          </div>
+          <div id="wt-fields" style="margin-top:10px"></div>
+          <div id="wt-risk" style="margin-top:8px"></div>
+          <div style="margin-top:10px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+            <button id="wt-submit-btn" class="btn btn-danger" style="padding:9px 24px" onclick="submitWriteTicket()">提交工单（待审批）</button>
+            <span style="font-size:12px;color:var(--text-muted)">高危写操作，提交后进入 SQL 审计待审批，审批通过后方可执行</span>
+          </div>
+        </div>
+
         <div class="card">
           <div class="card-title"><span>📋</span> 审核任务列表
             <button class="btn btn-ghost" style="margin-left:auto;padding:6px 12px;font-size:12px" onclick="loadSqlAudit()">↻ 刷新</button>
@@ -11557,6 +11591,7 @@ function renderReports() {
 
 // ── SQL 审核（MVP2：多库方言 + 执行计划）─────────────────
 let saTasks = [];
+let wtSkills = [];
 function saInstanceChanged(sel) {
   // 用户选择数据源后，自动把「数据库类型」下拉框设为该实例的 db_type 并禁用手动修改。
   // 实例 db_type 已是标准化值（来自 dbtype_registry，与 /api/db_types 下拉项一致），
@@ -11583,6 +11618,109 @@ function saInstanceChanged(sel) {
     dtSel.disabled = true; // 已指定实例，数据库类型由实例决定，禁止手动改
   }
 }
+// ── 阶段2：写操作工单（治理闭环，复用 SQL 审计审批 UI）─────────────────
+async function loadWriteSkills() {
+  // 写类 Skill 规格（来自共用注册表）与目标实例下拉，写操作工单表单据此动态生成。
+  try {
+    const ri = await fetch('/api/sql-audit/write-skills');
+    const di = await ri.json();
+    wtSkills = di.skills || [];
+    const sel = document.getElementById('wt-skill');
+    if (sel) {
+      sel.innerHTML = '<option value="">-- 选择写操作类型 --</option>' + wtSkills.map(s =>
+        `<option value="${escHtml(s.name)}">${escHtml(s.title)}</option>`).join('');
+    }
+  } catch (e) { /* 加载失败不影响其它卡 */ }
+  try {
+    const ri = await fetch('/api/sql-audit/instances');
+    const di = await ri.json();
+    const sel = document.getElementById('wt-instance-select');
+    if (sel && di.instances) {
+      sel.innerHTML = '<option value="">-- 选择实例 --</option>' + di.instances.map(i =>
+        `<option value="${escHtml(i.id)}" data-db="${escHtml(i.db_type || '')}">${escHtml(i.name || i.id)} (${escHtml(i.db_type || '')})</option>`).join('');
+    }
+  } catch (e) { /* 实例列表失败不影响提交 */ }
+}
+
+function wtInstanceChanged(sel) {
+  // 记录选中实例的库类型，提交时一并传给后端（避免前端漏传绕过隔离）。
+  const o = sel.selectedOptions[0];
+  sel.setAttribute('data-db', o ? (o.dataset.db || '') : '');
+}
+
+function wtSkillChanged(sel) {
+  // 按所选写类 Skill 的 inputSchema 动态渲染参数表单，并展示风险元数据。
+  const name = sel.value;
+  const skill = wtSkills.find(s => s.name === name);
+  const box = document.getElementById('wt-fields');
+  const riskBox = document.getElementById('wt-risk');
+  if (!skill) { if (box) box.innerHTML = ''; if (riskBox) riskBox.innerHTML = ''; return; }
+  const props = skill.inputSchema.properties || {};
+  const req = skill.inputSchema.required || [];
+  const skip = new Set(['instance_id', 'db_type', 'env']);
+  let html = '';
+  for (const key of Object.keys(props)) {
+    if (skip.has(key)) continue;
+    const p = props[key];
+    const isReq = req.includes(key);
+    const label = escHtml(p.description || key) + (isReq ? ' <span class="req">*</span>' : '');
+    if (key === 'sql_text' || key === 'reason') {
+      const rows = key === 'sql_text' ? 6 : 3;
+      html += `<div class="field full" style="margin-top:10px"><label>${label}</label><textarea id="wt-${escHtml(key)}" rows="${rows}" style="width:100%;padding:9px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:monospace;resize:vertical" placeholder="${escHtml(p.description || '')}"></textarea></div>`;
+    } else if (p.type === 'boolean') {
+      html += `<label style="font-size:12px;color:var(--text-muted);display:inline-flex;align-items:center;gap:6px;cursor:pointer;margin-top:10px"><input type="checkbox" id="wt-${escHtml(key)}" style="width:15px;height:15px" /> ${escHtml(p.description || key)}</label>`;
+    } else {
+      html += `<div class="field" style="margin-top:10px"><label>${label}</label><input type="text" id="wt-${escHtml(key)}" style="width:100%;padding:9px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px" placeholder="${escHtml(p.description || '')}" /></div>`;
+    }
+  }
+  if (box) box.innerHTML = html;
+  const r = skill.risk || {};
+  if (riskBox) riskBox.innerHTML = `<div style="font-size:12px;padding:8px 12px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);color:var(--text-muted)">
+    【风险】等级 <b style="color:#f97316">${escHtml(r.risk_level || '')}</b> · 模式 ${escHtml(r.access_mode || '')} · 需审批 ${escHtml(r.requires_approval ? '是' : '否')} · 破坏性 ${escHtml(r.destructive ? '是' : '否')} · 可逆 ${escHtml(r.reversible ? '是' : '否')}<br>${escHtml(r.side_effects || '')}</div>`;
+}
+
+async function submitWriteTicket() {
+  const sel = document.getElementById('wt-skill');
+  const skill = sel ? sel.value : '';
+  if (!skill) { toastError('请选择写操作类型'); return; }
+  const instSel = document.getElementById('wt-instance-select');
+  const instanceId = instSel ? instSel.value : '';
+  if (!instanceId) { toastError('请选择目标实例'); return; }
+  const dbType = instSel ? (instSel.getAttribute('data-db') || '') : '';
+  if (!dbType) { toastError('实例未携带库类型，请刷新页面后重试'); return; }
+  const env = document.getElementById('wt-env') ? document.getElementById('wt-env').value : 'prod';
+  const reason = (document.getElementById('wt-reason') || {}).value || '';
+  const args = { skill_name: skill, instance_id: instanceId, db_type: dbType, env: env, reason: reason };
+  const sp = (wtSkills.find(s => s.name === skill) || {}).inputSchema || {};
+  const props = sp.properties || {};
+  const skip = new Set(['instance_id', 'db_type', 'env']);
+  for (const key of Object.keys(props)) {
+    if (skip.has(key)) continue;
+    const el = document.getElementById('wt-' + key);
+    if (!el) continue;
+    if (el.type === 'checkbox') args[key] = el.checked;
+    else args[key] = el.value.trim();
+  }
+  const btn = document.getElementById('wt-submit-btn');
+  btn.disabled = true; btn.textContent = '提交中...';
+  try {
+    const res = await fetch('/api/sql-audit/write-ticket', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(args)
+    });
+    const data = await res.json();
+    if (!data.ok) { toastError('提交工单失败: ' + (data.error || '')); return; }
+    toastSuccess('工单已提交，进入待审批');
+    saTasks = [data.task, ...saTasks];
+    renderSqlAuditTasks();
+    showSqlAuditDetail(data.task.id);
+  } catch (e) {
+    toastError('提交失败: ' + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '提交工单（待审批）';
+  }
+}
+
 async function loadSqlAudit() {
   // 实例下拉
   try {
@@ -11618,8 +11756,10 @@ async function loadSqlAudit() {
     const list = document.getElementById('sa-task-list');
     if (list) list.innerHTML = `<div class="status-banner err">加载失败: ${escHtml(e.message)}</div>`;
   }
-  // MVP3.5：进入 SQL 审核页时一并加载规则列表
-  loadSqlAuditRules().catch(e => console.error('loadSqlAuditRules failed', e));
+    // MVP3.5：进入 SQL 审核页时一并加载规则列表
+    loadSqlAuditRules().catch(e => console.error('loadSqlAuditRules failed', e));
+    // 阶段2：写操作工单——加载写类 Skill 规格与目标实例下拉
+    loadWriteSkills().catch(e => console.error('loadWriteSkills failed', e));
 }
 
 // P0：状态筛选 + 概览卡
@@ -12707,36 +12847,37 @@ async function showSqlAuditDetail(taskId) {
       const noInstance = !t.instance_id;
       const execEnabled = !!t.exec_enabled;
       const alreadyExecuted = (t.status === 'executed');
-      const realDisabled = noInstance || (isHigh && !t.approved_by) || !execEnabled || alreadyExecuted ? 'disabled style="opacity:.5;cursor:not-allowed"' : '';
+      const approved = !!t.approved_by;
+      const pendingApproval = (t.status === 'pending_approval');
+      const realDisabled = noInstance || alreadyExecuted || (isHigh && !approved) || (!execEnabled && !approved) || pendingApproval ? 'disabled style="opacity:.5;cursor:not-allowed"' : '';
       let realTip = '真实执行将修改目标库';
       if (alreadyExecuted) realTip = '该任务已执行，如需再次执行请重新提交';
-      else if (!execEnabled) realTip = '未开启真实执行（提交时未勾选允许执行）';
       else if (noInstance) realTip = '未指定目标实例，无法真实执行';
-      else if (isHigh && !t.approved_by) realTip = '需先审批通过';
+      else if (pendingApproval) realTip = '待审批通过后方可真实执行';
+      else if (isHigh && !approved) realTip = '需先审批通过';
+      else if (!execEnabled && !approved) realTip = '未开启真实执行且未审批';
       actionHtml += `<div style="display:flex;gap:10px;flex-wrap:wrap;margin:12px 0">
         <button class="btn btn-ghost" style="padding:7px 16px" onclick="dryRunSqlAudit(${t.id})">🔍 预演(dry-run)</button>
         <button class="btn btn-primary" ${realDisabled} style="padding:7px 16px" title="${realTip}" onclick="realExecSqlAudit(${t.id})">⚡ 真实执行</button>
       </div>`;
-      if (!execEnabled) {
-        actionHtml += '<div class="status-banner err" style="margin:8px 0">⚠ 该任务未开启真实执行（提交时未勾选允许执行），仅可预演/分析。如需真实执行请重新提交任务并勾选"允许真实执行"。</div>';
-      }
+      // 写操作工单（exec_enabled=0）审批通过后即可执行，不再提示"未开启真实执行"
       if (noInstance) {
         actionHtml += `<div class="status-banner err" style="margin:8px 0;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
           <span>⚠ 该任务未指定目标实例，真实执行与执行计划分析需要连接实例。</span>
           <button class="btn btn-primary" style="padding:5px 14px;font-size:12px" onclick="bindSqlAuditInstance(${t.id})">指定实例</button>
         </div>`;
       }
-      if (isHigh && !t.approved_by) {
+      if (pendingApproval || (isHigh && !approved)) {
         if (canApprove) {
           actionHtml += `<div style="display:flex;gap:10px;align-items:center;margin:8px 0;padding:8px 12px;background:var(--surface2);border-radius:8px;border:1px solid var(--border)">
-            <b style="font-size:13px;color:#f97316">⚠ 高风险任务需审批</b>
+            <b style="font-size:13px;color:#f97316">⚠ 该任务待审批（写操作需受控授权）</b>
             <button class="btn btn-primary" style="padding:5px 14px;font-size:12px" onclick="approveSqlAudit(${t.id},'approve')">✅ 通过</button>
             <button class="btn btn-danger" style="padding:5px 14px;font-size:12px" onclick="approveSqlAudit(${t.id},'reject')">⛔ 驳回</button>
           </div>`;
         } else {
           actionHtml += '<div style="font-size:12px;color:var(--text-muted);margin:8px 0">该高风险任务待 admin / operator 审批通过后方可执行。</div>';
         }
-      } else if (isHigh && t.approved_by) {
+      } else if (approved) {
         actionHtml += `<div style="font-size:12px;color:#22c55e;margin:8px 0">✅ 已审批通过（${escHtml(t.approved_by||'')}），可执行。</div>`;
       }
     }
@@ -12890,12 +13031,16 @@ async function dryRunSqlAudit(taskId) {
 }
 
 async function realExecSqlAudit(taskId) {
-  const task = saTasks.find(x => x.id === taskId);
-  if (!task || !task.instance_id) { toastError('该任务未指定目标实例，请先点击「指定实例」'); return; }
-  if (!task.exec_enabled) { toastError('该任务未开启真实执行（提交时未勾选允许执行），请重新提交任务'); return; }
-  if (task.status === 'executed') { toastError('该任务已执行，如需再次执行请重新提交'); return; }
-  const isHigh = (task.risk_level === 'high' || task.risk_level === 'block');
-  if (isHigh && !task.approved_by) { toastError('高风险任务须先审批通过'); return; }
+    const task = saTasks.find(x => x.id === taskId);
+    if (!task || !task.instance_id) { toastError('该任务未指定目标实例，请先点击「指定实例」'); return; }
+    if (task.status === 'executed') { toastError('该任务已执行，如需再次执行请重新提交'); return; }
+    if (task.status === 'pending_approval') { toastError('任务待审批通过后方可执行'); return; }
+    if (task.status === 'rejected') { toastError('任务已被驳回'); return; }
+    // 已审批通过（approved_by 非空）即视为授权，写操作工单（exec_enabled=0）亦可执行；
+    // 未审批且未开启真实执行的自服务任务禁止。
+    if (!task.exec_enabled && !task.approved_by) { toastError('该任务未开启真实执行且未经审批，请重新提交或先审批'); return; }
+    const isHigh = (task.risk_level === 'high' || task.risk_level === 'block');
+    if (isHigh && !task.approved_by) { toastError('高风险任务须先审批通过'); return; }
   const ok = await showConfirmDialog('确认真实执行', '真实执行将修改目标数据库！系统会执行前快照并对 UPDATE/DELETE 生成回滚 SQL。\n仍要执行吗？');
   if (!ok) return;
   const maxRows = await showPromptDialog('影响行数上限', '超过该上限将自动回滚（默认 100000）：', '100000');

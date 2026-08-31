@@ -923,8 +923,11 @@ def api_shell_instances():
     """返回所有 ssh_enabled=1 的实例列表"""
     try:
         from modules.pro import get_instance_manager
+        from modules.access import principal_from_session, filter_visible
         im = get_instance_manager()
-        instances = im.get_all_instances(mask_password=True)
+        user = principal_from_session()
+        instances = filter_visible(
+            user, im.get_all_instances(mask_password=True), 'instance')
         result = []
         for inst in instances:
             if inst.get('ssh_enabled'):
@@ -3682,8 +3685,11 @@ def api_history_instances():
     """
     try:
         from modules.inspection.analyzer import HistoryManager
+        from modules.access import principal_from_session, filter_visible
         hm = HistoryManager(BASE_DIR)
-        raw_instances = hm.list_instances()
+        user = principal_from_session()
+        raw_instances = filter_visible(
+            user, hm.list_instances(), 'history_instance', id_key='key')
         instances = [{
             'key': inst.get('key', ''),
             'db_type': inst.get('db_type', ''),
@@ -3709,8 +3715,17 @@ def api_trend():
         return jsonify({'ok': False, 'error': _t('webui.err_missing_host_port')})
     try:
         from modules.inspection.analyzer import HistoryManager
+        from modules.inspection.db_history import _db_key
+        from modules.access import principal_from_session, assert_visible
         script_dir = BASE_DIR
         hm = HistoryManager(script_dir)
+        # 趋势数据按 host/port 直接取，必须先按历史实例的主键过可见性判定，
+        # 否则任何登录用户都能靠猜 host:port 拉到他人的历史指标。
+        user = principal_from_session()
+        inst_key = _db_key(db_type, host, port)
+        ok, err = assert_visible(user, 'history_instance', inst_key)
+        if not ok:
+            return jsonify({'ok': False, **err}), 403
         trend = hm.get_trend(db_type, host, int(port))
         comparison = hm.get_comparison(db_type, host, int(port))
         return jsonify({'ok': True, 'trend': trend, 'comparison': comparison})
@@ -6499,11 +6514,25 @@ def api_pro_delete_group(group_name):
 
 @app.route('/api/pro/statistics', methods=['GET'])
 def api_pro_statistics():
-    """获取全局统计"""
+    """获取全局统计（按当前身份重算，避免通过聚合数字反推他人资产）"""
     try:
         from modules.pro import get_instance_manager
+        from modules.access import principal_from_session, filter_visible
         im = get_instance_manager()
         stats = im.get_statistics()
+        user = principal_from_session()
+        if user is not None and not user.is_anonymous and not user.is_admin:
+            visible = filter_visible(
+                user, im.get_all_instances(mask_password=True), 'instance')
+            by_type, by_group = {}, {}
+            for inst in visible:
+                by_type[inst.get('db_type', '')] = by_type.get(inst.get('db_type', ''), 0) + 1
+                grp = inst.get('group', 'default')
+                by_group[grp] = by_group.get(grp, 0) + 1
+            stats['total_instances'] = len(visible)
+            stats['enabled_instances'] = len([i for i in visible if i.get('enabled')])
+            stats['by_type'] = by_type
+            stats['by_group'] = by_group
         stats['global_health_score'] = im.get_global_health_score()
         return jsonify({'ok': True, 'statistics': stats})
     except ImportError as e:
@@ -6634,12 +6663,29 @@ def api_pro_dashboard():
 
 @app.route('/api/pro/history', methods=['GET'])
 def api_pro_inspection_history():
-    """获取巡检历史"""
+    """获取巡检历史（派生数据跟随数据源归属）"""
     try:
         from modules.pro import get_instance_manager
+        from modules.access import principal_from_session, filter_visible, assert_visible
         instance_id = request.args.get('instance_id')
         limit = int(request.args.get('limit', 100))
         im = get_instance_manager()
+        user = principal_from_session()
+        if instance_id:
+            ok, err = assert_visible(user, 'instance', instance_id)
+            if not ok:
+                return jsonify({'ok': False, **err}), 403
+        else:
+            # 未指定数据源时，只保留当前身份可见数据源的历史
+            visible_ids = {
+                i.get('id') for i in filter_visible(
+                    user, im.get_all_instances(mask_password=True), 'instance')
+            }
+            history = [
+                h for h in im.get_inspection_history(None, limit)
+                if h.get('instance_id') in visible_ids
+            ]
+            return jsonify({'ok': True, 'history': history})
         history = im.get_inspection_history(instance_id, limit)
         return jsonify({'ok': True, 'history': history})
     except ImportError as e:
@@ -6683,7 +6729,15 @@ def api_pro_import_instances():
             return jsonify({'ok': False, 'error': '请提供 CSV 内容'})
 
         im = get_instance_manager()
+        before = {i.get('id') for i in im.get_all_instances()}
         result = im.batch_add_from_csv(csv_content)
+        try:
+            from modules.access import principal_from_session, set_owner
+            user = principal_from_session()
+            for iid in {i.get('id') for i in im.get_all_instances()} - before:
+                set_owner('instance', iid, user)
+        except Exception as _own_err:
+            print('[access] 导入数据源归属登记失败: ' + str(_own_err))
         return jsonify(result)
     except ImportError as e:
         import traceback
@@ -6701,11 +6755,14 @@ def api_pro_import_instances():
 
 @app.route('/api/pro/datasources', methods=['GET'])
 def api_pro_datasources():
-    """获取数据源列表"""
+    """获取数据源列表（按当前身份过滤：租户硬隔离 + scope 软隔离）"""
     try:
         from modules.pro import get_instance_manager
+        from modules.access import principal_from_session, filter_visible
         im = get_instance_manager()
-        instances = im.get_all_instances(mask_password=True)
+        user = principal_from_session()
+        instances = filter_visible(
+            user, im.get_all_instances(mask_password=True), 'instance')
         return jsonify({'ok': True, 'datasources': instances})
     except ImportError as e:
         import traceback
@@ -6719,10 +6776,15 @@ def api_pro_datasources():
 
 @app.route('/api/pro/datasources/<instance_id>', methods=['GET'])
 def api_pro_datasource(instance_id):
-    """获取单个数据源"""
+    """获取单个数据源（无权访问时返回 403 RESOURCE_NOT_VISIBLE）"""
     try:
         from modules.pro import get_instance_manager
+        from modules.access import principal_from_session, assert_visible
         im = get_instance_manager()
+        user = principal_from_session()
+        ok, err = assert_visible(user, 'instance', instance_id)
+        if not ok:
+            return jsonify({'ok': False, **err}), 403
         inst = im.get_instance(instance_id, mask_password=False)
         if not inst:
             return jsonify({'ok': False, 'error': '数据源不存在'})
@@ -6739,11 +6801,19 @@ def api_pro_datasource(instance_id):
 
 @app.route('/api/pro/datasources/<instance_id>/decrypt', methods=['GET'])
 def api_pro_datasource_decrypt(instance_id):
-    """获取单个数据源（解密密码，供表单回填）"""
+    """获取单个数据源（解密密码，供表单回填）
+
+    明文密码是最高敏感数据，必须先过 PDP 可见性判定再解密。
+    """
     try:
         from modules.pro import get_instance_manager
         from modules.pro.instance_manager import _looks_like_encrypted_pwd
+        from modules.access import principal_from_session, assert_visible
         im = get_instance_manager()
+        user = principal_from_session()
+        ok, err = assert_visible(user, 'instance', instance_id)
+        if not ok:
+            return jsonify({'ok': False, **err}), 403
         inst = im.get_instance_decrypted(instance_id)
         if not inst:
             return jsonify({'ok': False, 'error': '数据源不存在'})
@@ -6821,6 +6891,14 @@ def api_pro_datasource_add():
         )
         im = get_instance_manager()
         result = im.add_instance(inst)
+        # 登记归属：新建数据源默认 private（含密码/地址/SSH，最高敏感）
+        if result.get('ok'):
+            try:
+                from modules.access import principal_from_session, set_owner
+                set_owner('instance', result.get('instance_id') or inst.id,
+                          principal_from_session())
+            except Exception as _own_err:
+                print('[access] 数据源归属登记失败: ' + str(_own_err))
         return jsonify(result)
     except ImportError as e:
         import traceback
@@ -6834,11 +6912,16 @@ def api_pro_datasource_add():
 
 @app.route('/api/pro/datasources/<instance_id>', methods=['PUT'])
 def api_pro_datasource_update(instance_id):
-    """更新数据源"""
+    """更新数据源（写操作：必须是拥有者或租户管理员）"""
     try:
         from modules.pro import get_instance_manager
+        from modules.access import principal_from_session, assert_visible
         data = request.get_json()
         im = get_instance_manager()
+        user = principal_from_session()
+        ok, err = assert_visible(user, 'instance', instance_id)
+        if not ok:
+            return jsonify({'ok': False, **err}), 403
         result = im.update_instance(instance_id, data)
         return jsonify(result)
     except ImportError as e:
@@ -6891,11 +6974,22 @@ def api_pro_datasource_delete(instance_id):
     """删除数据源，同时清理 history.db 趋势数据"""
     try:
         from modules.pro import get_instance_manager
+        from modules.access import principal_from_session, assert_visible, remove_owner
         im = get_instance_manager()
+        user = principal_from_session()
+        ok, err = assert_visible(user, 'instance', instance_id)
+        if not ok:
+            return jsonify({'ok': False, **err}), 403
         # 先获取实例信息（删除前）
         inst = im.get_instance(instance_id, mask_password=False)
         # 执行删除（instance_manager 内部已清 inspection_history + instance_trend）
         result = im.delete_instance(instance_id)
+        # 同步清理归属登记表，避免主键垃圾堆积
+        if result.get('ok'):
+            try:
+                remove_owner('instance', instance_id)
+            except Exception:
+                pass
         # 同步清理 history.db（旧趋势系统）
         if result.get('ok') and inst:
             try:
@@ -6925,10 +7019,15 @@ def api_pro_datasource_delete(instance_id):
 
 @app.route('/api/pro/datasources/<instance_id>/test', methods=['POST'])
 def api_pro_datasource_test(instance_id):
-    """测试数据源连接"""
+    """测试数据源连接（会用到真实明文密码，必须先过可见性判定）"""
     try:
         from modules.pro import get_instance_manager
+        from modules.access import principal_from_session, assert_visible
         im = get_instance_manager()
+        user = principal_from_session()
+        ok, err = assert_visible(user, 'instance', instance_id)
+        if not ok:
+            return jsonify({'ok': False, **err}), 403
         result = im.test_connection(instance_id)
         return jsonify(result)
     except ImportError as e:
@@ -6967,12 +7066,38 @@ def api_pro_datasources_test_conn():
 
 @app.route('/api/pro/datasources/export', methods=['GET'])
 def api_pro_datasources_export():
-    """导出数据源 CSV"""
+    """导出数据源 CSV（仅导出当前身份可见的数据源）"""
     try:
         from modules.pro import get_instance_manager
+        from modules.access import principal_from_session, filter_visible
         im = get_instance_manager()
-        csv_content = im.export_csv()
-        return jsonify({'ok': True, 'csv': csv_content})
+        user = principal_from_session()
+        visible = filter_visible(
+            user, im.get_all_instances(mask_password=True), 'instance')
+        # export_csv() 是全量导出，这里按可见集合重新生成，避免越权带走他人资产
+        import csv
+        import io
+        output = io.StringIO()
+        writer = csv.DictWriter(output, fieldnames=[
+            'name', 'db_type', 'host', 'port', 'user', 'password',
+            'service_name', 'sysdba', 'group', 'tags', 'description'
+        ])
+        writer.writeheader()
+        for inst in visible:
+            writer.writerow({
+                'name': inst.get('name', ''),
+                'db_type': inst.get('db_type', ''),
+                'host': inst.get('host', ''),
+                'port': inst.get('port', ''),
+                'user': inst.get('user', ''),
+                'password': '',  # 永不导出密码
+                'service_name': inst.get('service_name', ''),
+                'sysdba': inst.get('sysdba', 0),
+                'group': inst.get('group', 'default'),
+                'tags': ','.join(inst.get('tags') or []),
+                'description': inst.get('description', ''),
+            })
+        return jsonify({'ok': True, 'csv': output.getvalue()})
     except ImportError as e:
         import traceback
         traceback.print_exc()
@@ -6985,13 +7110,21 @@ def api_pro_datasources_export():
 
 @app.route('/api/pro/datasources/import', methods=['POST'])
 def api_pro_datasources_import():
-    """导入数据源 CSV"""
+    """导入数据源 CSV（新建的数据源登记到当前身份名下）"""
     try:
         from modules.pro import get_instance_manager
         data = request.get_json()
         csv_content = data.get('csv_content', '')
         im = get_instance_manager()
+        before = {i.get('id') for i in im.get_all_instances()}
         result = im.batch_add_from_csv(csv_content)
+        try:
+            from modules.access import principal_from_session, set_owner
+            user = principal_from_session()
+            for iid in {i.get('id') for i in im.get_all_instances()} - before:
+                set_owner('instance', iid, user)
+        except Exception as _own_err:
+            print('[access] 导入数据源归属登记失败: ' + str(_own_err))
         return jsonify(result)
     except ImportError as e:
         import traceback
@@ -7062,9 +7195,14 @@ def _connect_oracle_thick_fallback(user, password, dsn, sysdba=False):
 
 @app.route('/api/pro/datasources/<ds_id>/databases', methods=['GET'])
 def api_ds_databases(ds_id):
-    """返回某数据源的数据库列表"""
+    """返回某数据源的数据库列表（会用真实密码连库，必须先过可见性判定）"""
     from modules.pro import get_instance_manager
+    from modules.access import principal_from_session, assert_visible
     mgr = get_instance_manager()
+    user = principal_from_session()
+    ok, err = assert_visible(user, 'instance', ds_id)
+    if not ok:
+        return jsonify({'ok': False, **err}), 403
     inst = mgr.get_instance_decrypted(ds_id)
     if not inst:
         return jsonify({'error': f'数据源不存在: {ds_id}'}), 404
@@ -7292,7 +7430,12 @@ def api_ds_objects(ds_id):
         return jsonify({'error': '缺少 database 参数'}), 400
 
     from modules.pro import get_instance_manager
+    from modules.access import principal_from_session, assert_visible
     mgr = get_instance_manager()
+    user = principal_from_session()
+    ok, err = assert_visible(user, 'instance', ds_id)
+    if not ok:
+        return jsonify({'ok': False, **err}), 403
     inst = mgr.get_instance_decrypted(ds_id)
     if not inst:
         return jsonify({'error': f'数据源不存在: {ds_id}'}), 404

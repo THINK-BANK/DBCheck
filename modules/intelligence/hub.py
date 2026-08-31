@@ -21,14 +21,19 @@ from i18n import t
 from modules.config.version import EDITION
 
 from .context import Finding, SharedContext
-from .planner import plan_sequence
+from .planner import plan_sequence, replan
 from .ai_helper import build_advisor
 from .registry import registry
 from .specialists import register_all
+from .reviewer import Reviewer
 
 from modules.core import paths
 
 paths.ensure_migrated()
+
+# 迭代重规划的最大轮次（规划文档 4.4 A：自适应编排闭环）。
+# 每轮跑完 pending 专家后做一次重规划；无新增专项能力或达上限即收敛。
+DEFAULT_MAX_ITER = 3
 
 # 旧版巡检记录生成 instance_id 时使用的前缀（兼容历史数据）
 _LEGACY_PREFIX = {
@@ -301,27 +306,86 @@ class DiagnosticHub:
             "plan_validation": plan_validation,
             "notes": self._str_notes(ctx),
             "specialists": spec_names,
+            # 迭代重规划闭环产物（规划文档 4.3/4.4 A）
+            "iteration": ctx.iteration,
+            "revision_log": ctx.revision_log,
             "started_at": ctx.started_at,
             "finished_at": ctx.finished_at,
         }
 
-    def dispatch(self, goal: str, instance_id: str, inputs: dict = None) -> dict:
+    def _resolve_max_iter(self, ctx: SharedContext, max_iter: Optional[int]) -> int:
+        if max_iter is not None and max_iter > 0:
+            return max_iter
+        try:
+            v = int(ctx.inputs.get("max_iter", DEFAULT_MAX_ITER))
+            return v if v > 0 else DEFAULT_MAX_ITER
+        except (TypeError, ValueError):
+            return DEFAULT_MAX_ITER
+
+    def _run_iterative(self, ctx: SharedContext, plan, max_iter: int):
+        """迭代重规划闭环（规划文档 4.4 A：自适应编排）。
+
+        每轮：
+          1. 执行当前序列中尚未运行过的专家（pending）；
+          2. 依据这些专家真实产出的发现标签做重规划（replan）；
+          3. 若追加了新专项能力则进入下一轮，否则收敛退出。
+        已运行的专家不会被重复执行；序列单调递增，无抖动。
+        """
+        run_set: set = set()
+        for it in range(1, max_iter + 1):
+            ctx.iteration = it
+            pending = [sid for sid in plan.sequence if sid not in run_set]
+            if not pending:
+                break
+            for sid in pending:
+                self._run_specialist(ctx, sid)
+                run_set.add(sid)
+            # 本轮结束后，根据真实发现重规划
+            try:
+                new_plan = replan(ctx, plan, self.registry)
+            except Exception as e:  # 重规划异常不应阻断诊断
+                ctx.notes.append(f"重规划异常（已忽略，保持当前序列）：{e}")
+                new_plan = None
+            if new_plan is None or new_plan.sequence == plan.sequence:
+                break
+            plan = new_plan
+        return plan
+
+    def dispatch(self, goal: str, instance_id: str, inputs: dict = None,
+                 max_iter: int = None) -> dict:
         ctx, plan = self._prepare(goal, instance_id, inputs)
-        for sid in plan.sequence:
-            self._run_specialist(ctx, sid)
+        max_iter = self._resolve_max_iter(ctx, max_iter)
+        plan = self._run_iterative(ctx, plan, max_iter)
+        self._review(ctx)
         return self._finalize(ctx, plan)
 
-    def dispatch_stream(self, goal: str, instance_id: str, inputs: dict = None):
+    def _review(self, ctx: SharedContext) -> None:
+        """协同诊断闭环末端的把关：把 Reviewer 结论写入 ctx.review（规划文档 4.4 B）。"""
+        try:
+            ctx.review = Reviewer().review(ctx).to_dict()
+        except Exception as e:  # 把关失败绝不该阻断诊断
+            ctx.review = {
+                "approved": False,
+                "confidence": "low",
+                "summary": f"把关失败（已忽略）: {e}",
+                "issues": [str(e)],
+                "risk_flags": [],
+                "gate_decisions": [],
+            }
+
+    def dispatch_stream(self, goal: str, instance_id: str, inputs: dict = None,
+                        max_iter: int = None):
         """生成器版本：先产出协调员决策，再逐个专员执行并推送进度，最后完整结果。
 
         每次 yield 一个事件 dict：
-          {"type":"coordinator", "reason":..., "ai_driven":..., "sequence":[...], "order":{...}, "specialists":{id:name}, "total":n}
-          {"type":"progress", "current":sid, "name":..., "index":i, "total":n, "phase":"start|done"}
+          {"type":"coordinator", ... "total":n, "iteration":1}
+          {"type":"progress", "current":sid, "name":..., "index":i, "total":n, "phase":"start|done", "iteration":it}
+          {"type":"replan", "iteration":it, "sequence":[...], "reason":...}   # 发生重规划时
           {"type":"result", "result":{...}}
         """
         ctx, plan = self._prepare(goal, instance_id, inputs)
+        max_iter = self._resolve_max_iter(ctx, max_iter)
         spec_names = {c["id"]: c["name"] for c in self.capabilities()}
-        total = len(plan.sequence)
         yield {
             "type": "coordinator",
             "reason": plan.reason,
@@ -329,20 +393,49 @@ class DiagnosticHub:
             "sequence": plan.sequence,
             "order": plan.order,
             "specialists": spec_names,
-            "total": total,
+            "total": len(plan.sequence),
+            "iteration": 1,
         }
-        for i, sid in enumerate(plan.sequence, 1):
+        run_set: set = set()
+        for it in range(1, max_iter + 1):
+            ctx.iteration = it
+            pending = [sid for sid in plan.sequence if sid not in run_set]
+            if not pending:
+                break
+            for i, sid in enumerate(pending, 1):
+                yield {
+                    "type": "progress", "phase": "start",
+                    "current": sid, "name": spec_names.get(sid, sid),
+                    "index": i, "total": len(pending), "iteration": it,
+                }
+                self._run_specialist(ctx, sid)
+                run_set.add(sid)
+                yield {
+                    "type": "progress", "phase": "done",
+                    "current": sid, "name": spec_names.get(sid, sid),
+                    "index": i, "total": len(pending), "iteration": it,
+                }
+            # 本轮结束后重规划
+            try:
+                new_plan = replan(ctx, plan, self.registry)
+            except Exception:
+                new_plan = None
+            if new_plan is None or new_plan.sequence == plan.sequence:
+                break
+            plan = new_plan
             yield {
-                "type": "progress", "phase": "start",
-                "current": sid, "name": spec_names.get(sid, sid),
-                "index": i, "total": total,
+                "type": "replan",
+                "iteration": it + 1,
+                "sequence": plan.sequence,
+                "reason": plan.reason,
             }
-            self._run_specialist(ctx, sid)
-            yield {
-                "type": "progress", "phase": "done",
-                "current": sid, "name": spec_names.get(sid, sid),
-                "index": i, "total": total,
-            }
+        # 闭环末端把关：产出 Reviewer 结论并推送（规划文档 4.4 B）
+        self._review(ctx)
+        yield {
+            "type": "review",
+            "iteration": it,
+            "result": ctx.review,
+        }
         yield {"type": "result", "result": self._finalize(ctx, plan)}
 
 

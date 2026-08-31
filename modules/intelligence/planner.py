@@ -62,30 +62,57 @@ def _plan_rule_based(ctx: SharedContext, reg: SpecialistRegistry) -> Plan:
             ai_driven=False,
         )
 
-    seq = ["monitor_sentinel", "inspection_expert", "rootcause_expert"]
-
-    tags: set = set()
-    for f in ctx.findings:
-        tags.update(f.tags)
-
-    # 若已发现 SQL/锁相关标签，则提前执行对应专员
-    if tags & {"sql", "slow_sql"}:
-        if reg.get("sql_governance") is not None and "sql_governance" not in seq:
-            seq.insert(3, "sql_governance")
-    if tags & {"lock", "block"}:
-        if reg.get("lock_analyst") is not None and "lock_analyst" not in seq:
-            seq.insert(3, "lock_analyst")
-
-    # 兜底：只要已注册就加入序列
-    for sid in ("sql_governance", "lock_analyst"):
-        if reg.get(sid) is not None and sid not in seq:
-            seq.append(sid)
-
-    # 仅保留已注册的能力
-    seq = [s for s in seq if reg.get(s) is not None]
+    # 基础链路：监控 → 巡检 → 根因。
+    # 注意：规划发生在任何专家执行之前，ctx.findings 此时为空，因此专项能力
+    # （sql_governance / lock_analyst）不再在此无脑追加，而是由迭代重规划
+    # replan() 依据专家运行后真实产出的发现标签动态追加（见规划文档 4.1/4.4 A）。
+    seq = [s for s in ("monitor_sentinel", "inspection_expert", "rootcause_expert")
+           if reg.get(s) is not None]
     return Plan(
         sequence=seq,
-        reason="按常规链路编排：监控 → 巡检 → 根因，并按已发现现象追加专项能力。",
+        reason="基础链路：监控 → 巡检 → 根因；专项能力（SQL 治理 / 锁分析）将依据实际发现由重规划动态追加。",
+        ai_driven=False,
+    )
+
+
+# ── 迭代重规划 ─────────────────────────────────────────────────────────────
+def replan(ctx: SharedContext, prev_plan: Plan, reg: SpecialistRegistry) -> Optional[Plan]:
+    """基于已运行专家的真实发现，动态追加需要参与的专项能力。
+
+    这是「一次性串行」升级为「迭代闭环」的核心（规划文档 4.3/4.4 A）：
+    每轮跑完 pending 专家后调用本函数，扫描 ctx.findings 的标签，把 triggers
+    命中的能力追加到执行序列；无新增则返回 None，由调用方判定收敛。
+
+    返回的新 Plan 仅 *追加* 能力（序列单调递增），不会重排已执行项，避免抖动。
+    """
+    tags: set = set()
+    for f in ctx.findings:
+        tags.update(f.tags or [])
+
+    if not tags:
+        return None
+
+    seq = list(prev_plan.sequence)
+    added: List[str] = []
+    for s in reg.all():
+        if s.id in seq or s.id == "coordinator":
+            continue
+        triggers = getattr(s, "triggers", None) or []
+        if triggers and (set(triggers) & tags):
+            seq.append(s.id)
+            added.append(s.id)
+
+    if not added:
+        return None
+
+    ctx.revision_log.append({
+        "iteration": ctx.iteration,
+        "triggered_by_tags": sorted(tags),
+        "added": added,
+    })
+    return Plan(
+        sequence=seq,
+        reason=f"第 {ctx.iteration} 轮重规划：依据发现标签 {sorted(tags)} 追加专项能力 {added}。",
         ai_driven=False,
     )
 
