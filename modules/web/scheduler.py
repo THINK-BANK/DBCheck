@@ -19,7 +19,7 @@ from apscheduler.jobstores.memory import MemoryJobStore
 
 SCRIPT_DIR = str(PROJECT_ROOT)
 from modules.core import paths
-
+from pathlib import Path
 paths.ensure_migrated()
 
 CONFIG_FILE = str(paths.SCHEDULER_JOBS)
@@ -28,6 +28,8 @@ LOG_FILE = str(paths.SCHEDULER_LOG)
 # ── 日志配置 ────────────────────────────────────────────────
 logger = logging.getLogger('scheduler')
 logger.setLevel(logging.INFO)
+log_path = Path(LOG_FILE)
+log_path.parent.mkdir(parents=True, exist_ok=True)
 _handler = logging.FileHandler(LOG_FILE, encoding='utf-8', mode='a')
 _handler.setFormatter(logging.Formatter(
     '%(asctime)s [%(levelname)s] %(message)s',
