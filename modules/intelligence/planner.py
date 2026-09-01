@@ -43,6 +43,12 @@ _NL_QUERY_MARKERS = (
     "数据库里有", "库里", "库中", "这个库",
 )
 
+# 国产库类型标识（与 specialists/native_db.py 保持一致）
+_NATIVE_TYPES = {
+    "dm", "dm8", "hgdb", "kingbase", "kingbasees",
+    "oceanbase", "tidb", "yashandb", "uxdb", "gbase",
+}
+
 
 def _looks_nl_query(goal: str) -> bool:
     """判断诊断目标是否为自然语言查询（需要自然语言探查专员回答）。"""
@@ -68,9 +74,21 @@ def _plan_rule_based(ctx: SharedContext, reg: SpecialistRegistry) -> Plan:
     # replan() 依据专家运行后真实产出的发现标签动态追加（见规划文档 4.1/4.4 A）。
     seq = [s for s in ("monitor_sentinel", "inspection_expert", "rootcause_expert")
            if reg.get(s) is not None]
+
+    # 目标为国产库时，初始调度就引入国产库专家（避免基础链路未产出 hgdb/dm8 等
+    # 标签导致重规划无法触发 native_db）。
+    meta = ctx.inputs.get("target_meta") or {}
+    inst = ctx.inputs.get("target_instance") or {}
+    db_type = (meta.get("db_type") or inst.get("db_type") or "").lower()
+    if db_type in _NATIVE_TYPES and reg.get("native_db") is not None:
+        seq.append("native_db")
+
+    reason_parts = ["基础链路：监控 → 巡检 → 根因；专项能力（SQL 治理 / 锁分析）将依据实际发现由重规划动态追加。"]
+    if db_type in _NATIVE_TYPES:
+        reason_parts.append(f"目标库型 {db_type} 为国产库，初始调度追加国产库专家。")
     return Plan(
         sequence=seq,
-        reason="基础链路：监控 → 巡检 → 根因；专项能力（SQL 治理 / 锁分析）将依据实际发现由重规划动态追加。",
+        reason=" ".join(reason_parts),
         ai_driven=False,
     )
 
@@ -129,12 +147,14 @@ def _build_coordinator_prompt(goal: str, db_type: str, specs: List[Dict[str, Any
         f"目标数据源类型：{db_type or '未知'}\n"
         f"用户诊断目标：{goal}\n\n"
         "可选协同能力：\n" + spec_lines + "\n\n"
-        "编排规则：\n"
-        "1. 若目标是自然语言提问（含「几个 / 多少 / 是否 / 哪些 / 统计 / 查询 / 这个库」等词或问号），"
-        "优先只选 nl_query_expert 直接作答；除非目标同时包含性能 / 健康类诉求。\n"
-        "2. 性能 / 连接 / 资源类问题：monitor_sentinel → inspection_expert → rootcause_expert。\n"
-        "3. 若出现 SQL 慢 / 锁等待现象，追加 sql_governance、lock_analyst。\n"
-        "4. coordinator 自身不计入执行序列。\n\n"
+    "编排规则：\n"
+    "1. 若目标是自然语言提问（含「几个 / 多少 / 是否 / 哪些 / 统计 / 查询 / 这个库」等词或问号），"
+    "优先只选 nl_query_expert 直接作答；除非目标同时包含性能 / 健康类诉求。\n"
+    "2. 性能 / 连接 / 资源类问题：monitor_sentinel → inspection_expert → rootcause_expert。\n"
+    "3. 若目标数据源类型是国产库（DM8 / HGDB / Kingbase / OceanBase / TiDB / YashanDB 等），"
+    "必须追加 native_db 专家。\n"
+    "4. 若出现 SQL 慢 / 锁等待现象，追加 sql_governance、lock_analyst。\n"
+    "5. coordinator 自身不计入执行序列。\n\n"
         "只输出一个 JSON 对象，格式严格如下（不要输出任何解释性文字或代码块围栏）：\n"
         '{"reason": "一句话说明为什么这样调度", "sequence": ["id1", "id2", ...]}'
     )

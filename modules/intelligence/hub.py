@@ -205,6 +205,7 @@ class DiagnosticHub:
                 "name": s.name,
                 "description": s.description,
                 "tags": s.tags,
+                "domain": getattr(s, "domain", "general") or "general",
             }
             for s in self.registry.all()
         ]
