@@ -362,3 +362,115 @@ def schema_dict_delete():
     if not save_knowledge(kb):
         return jsonify({"ok": False, "msg": "保存失败"}), 500
     return jsonify({"ok": True, "msg": msg, "databases": kb.get("databases", {})})
+
+
+# ── Workflow 编排（阶段 D：Workflow Builder UI 后端） ──────────────────────────
+@intelligence_bp.route("/api/intelligence/workflows", methods=["GET"])
+def list_workflows_ep():
+    try:
+        from .workflow_store import list_workflows as _list
+        return jsonify({"ok": True, "workflows": _list()})
+    except Exception as e:
+        return jsonify({"ok": False, "msg": str(e)}), 500
+
+
+@intelligence_bp.route("/api/intelligence/workflows", methods=["POST"])
+def save_workflow_ep():
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()
+    steps = data.get("steps") or []
+    edges = data.get("edges") or []
+    wf_id = data.get("id")
+    if wf_id is not None:
+        try:
+            wf_id = int(wf_id)
+        except (TypeError, ValueError):
+            wf_id = None
+    try:
+        from .workflow_store import save_workflow as _save
+        wf = _save(name=name, steps=steps, edges=edges, wf_id=wf_id)
+        return jsonify({"ok": True, "workflow": wf})
+    except ValueError as e:
+        return jsonify({"ok": False, "msg": str(e)}), 400
+    except Exception as e:
+        return jsonify({"ok": False, "msg": str(e)}), 500
+
+
+@intelligence_bp.route("/api/intelligence/workflows/<int:wf_id>", methods=["DELETE"])
+def delete_workflow_ep(wf_id: int):
+    try:
+        from .workflow_store import delete_workflow as _del
+        return jsonify({"ok": _del(wf_id)})
+    except Exception as e:
+        return jsonify({"ok": False, "msg": str(e)}), 500
+
+
+@intelligence_bp.route("/api/intelligence/workflows/<int:wf_id>/run", methods=["POST"])
+def run_workflow_ep(wf_id: int):
+    """执行已保存的工作流。复用阶段 C 的 Workflow 引擎（DAG + 条件分支）。
+
+    注意：前端 Builder 不暴露 ``when`` 表达式（避免 eval 风险），运行期
+    ``when`` 恒为 None，所有节点按拓扑序执行。
+    """
+    data = request.get_json(silent=True) or {}
+    instance_id = (data.get("instance_id") or "").strip()
+    goal = data.get("goal") or ""
+    if not instance_id:
+        return jsonify({"ok": False, "msg": "instance_id required"}), 400
+    try:
+        from .workflow_store import get_workflow
+        from .workflow import Workflow, Step
+
+        wf = get_workflow(wf_id)
+        if not wf:
+            return jsonify({"ok": False, "msg": "workflow not found"}), 404
+        steps = [
+            Step(
+                id=str(s.get("id")),
+                kind=s.get("kind", "specialist"),
+                ref=s.get("ref", "") or "",
+                args=s.get("args") or {},
+                label=s.get("label") or str(s.get("id")),
+            )
+            for s in wf["steps"]
+        ]
+        edges = [
+            (str(e[0]), str(e[1]))
+            for e in wf["edges"]
+            if isinstance(e, (list, tuple)) and len(e) == 2
+        ]
+        engine = Workflow(steps, edges)
+        result = engine.run(goal=goal, instance_id=instance_id, inputs={})
+        result.pop("ctx", None)  # ctx 含非序列化对象，仅回传编排产物
+        return jsonify({"ok": True, **result})
+    except ValueError as e:
+        return jsonify({"ok": False, "msg": str(e)}), 400
+    except Exception as e:
+        return jsonify({"ok": False, "msg": str(e)}), 500
+
+
+@intelligence_bp.route("/api/intelligence/workflow-nodes", methods=["GET"])
+def workflow_nodes_ep():
+    """返回 Builder 可用的节点 ref 清单：专家能力 + 写类技能。"""
+    try:
+        hub = get_hub()
+        specialists = hub.capabilities()
+        skills: List[Dict[str, Any]] = []
+        try:
+            from modules.mcp_server.registry import get_skill_specs
+
+            for spec in get_skill_specs():
+                risk = spec.get("risk") or {}
+                skills.append({
+                    "name": spec.get("name"),
+                    "kind": "skill",
+                    "ref": spec.get("handler_key") or spec.get("name"),
+                    "description": spec.get("description", ""),
+                    "risk_level": risk.get("risk_level"),
+                    "requires_approval": risk.get("requires_approval"),
+                })
+        except Exception:
+            skills = []
+        return jsonify({"ok": True, "specialists": specialists, "skills": skills})
+    except Exception as e:
+        return jsonify({"ok": False, "msg": str(e)}), 500

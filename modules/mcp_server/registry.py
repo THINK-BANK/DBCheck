@@ -311,6 +311,51 @@ _TOOL_SPECS: List[Dict[str, Any]] = [
             "tags": ["ai"],
         },
     },
+    {
+        "name": "dbcheck.nl2sql",
+        "title": "自然语言转 SQL（Chat2DB）",
+        "domain": "nl2sql",
+        "handler_key": "nl2sql",
+        "description": (
+            "调用 Chat2DB（作为上游 MCP Server）的 text2sql 能力，把自然语言问题"
+            "转换成可在目标数据源执行的 SQL。连接管理、表结构上下文由 Chat2DB 负责；"
+            "DBCheck 仅做协议桥接与可见性/审计留痕，不嵌入 Chat2DB 任何代码（遵守 "
+            "Apache-2.0 许可边界）。生成结果中的 SQL 若需执行，请走本通道既有写类 "
+            "Skill dbcheck.execute_sql（经 WriteGate 审批）。Chat2DB 未配置/不可用时"
+            "本工具返回清晰错误而非击穿通道。"
+        ),
+        "tags": ["nl2sql", "ai", "read"],
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "question": {
+                    "type": "string",
+                    "description": "自然语言问题，如「查过去 7 天未支付订单」",
+                },
+                "datasource_id": {
+                    "type": "string",
+                    "description": "Chat2DB 侧数据源 ID（来自 Chat2DB 已配置数据源）；"
+                                  "若省略则按 instance_id 经 CHAT2DB_DATASOURCE_MAP 映射",
+                },
+                "instance_id": {
+                    "type": "string",
+                    "description": "可选 DBCheck 实例 ID，用于可见性校验与映射到 Chat2DB 数据源",
+                },
+            },
+            "required": ["question"],
+        },
+        "risk": {
+            "risk_level": "medium",
+            "access_mode": "read",
+            "requires_approval": False,
+            "destructive": False,
+            "reversible": True,
+            "runs_on": "llm",
+            "side_effects": "调用 Chat2DB 上游 MCP text2sql（经其配置的模型，可能产生 token）；"
+                         "写入 um_audit_log 访问留痕",
+            "tags": ["nl2sql"],
+        },
+    },
 ]
 
 

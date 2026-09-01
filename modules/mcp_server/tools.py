@@ -203,6 +203,55 @@ def ai_diagnose_tool(instance_id: str, goal: str = "对目标数据源做一次�
         return {"ok": False, "error": f"ai_diagnose failed: {e}"}
 
 
+def _chat2db_datasource_for(instance_id: str) -> str | None:
+    """经 CHAT2DB_DATASOURCE_MAP（JSON：DBCheck instance_id -> Chat2DB datasource_id）映射。
+
+    未配置或解析失败返回 None（调用方据此要求显式 datasource_id）。
+    """
+    raw = os.environ.get("CHAT2DB_DATASOURCE_MAP")
+    if not raw:
+        return None
+    try:
+        mp = json.loads(raw)
+        return mp.get(instance_id)
+    except Exception:
+        return None
+
+
+def nl2sql_tool(question: str, datasource_id: str = None,
+                instance_id: str = None, principal=None) -> dict:
+    """自然语言转 SQL：桥接 Chat2DB 上游 MCP text2sql（协议层，零代码嵌入）。
+
+    可见性：若给了 instance_id 且已鉴权，先校验，避免越权触发上游生成。
+    Chat2DB 未配置/不可用 → 清晰错误（error_code=CHAT2DB_UNAVAILABLE），不击穿通道。
+    生成的 SQL 若需执行，交由 DBCheck 既有 dbcheck.execute_sql 写类 Skill（WriteGate）。
+    """
+    if not question or not str(question).strip():
+        return {"ok": False, "error_code": "BAD_REQUEST", "error": "question 不能为空"}
+    # 可见性前置（已鉴权才校验；未鉴权保持本地 stdio 全量兼容）
+    if instance_id and principal is not None:
+        deny = _assert_or_deny(principal, instance_id)
+        if deny is not None:
+            return deny
+    ds = datasource_id or (instance_id and _chat2db_datasource_for(instance_id))
+    if not ds:
+        return {
+            "ok": False,
+            "error_code": "CHAT2DB_NO_DATASOURCE",
+            "error": "未提供 datasource_id 且无法从 instance_id 映射 Chat2DB 数据源"
+                     "（请配置 CHAT2DB_DATASOURCE_MAP 或显式传 datasource_id）",
+        }
+    try:
+        from modules.mcp_server.chat2db_bridge import get_bridge
+        sql = get_bridge().text2sql(str(question).strip(), ds)
+    except Exception as e:
+        code = getattr(e, "error_code", None) or "CHAT2DB_UNAVAILABLE"
+        return {"ok": False, "error_code": code, "error": f"Chat2DB 调用失败: {e}"}
+    _audit(principal, "mcp.nl2sql", instance_id or ds,
+           "allow" if sql else "deny", detail=f"q={str(question)[:60]}")
+    return {"ok": True, "datasource_id": ds, "sql": sql}
+
+
 # handler_key -> 实现函数（供 server.dispatch_tool 接线；与 registry 共用注册表）
 HANDLERS = {
     "list_instances": list_instances_tool,
@@ -212,4 +261,5 @@ HANDLERS = {
     "index_health": index_health_tool,
     "baseline_check": baseline_check_tool,
     "ai_diagnose": ai_diagnose_tool,
+    "nl2sql": nl2sql_tool,
 }

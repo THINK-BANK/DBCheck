@@ -309,6 +309,9 @@ class DiagnosticHub:
             # 迭代重规划闭环产物（规划文档 4.3/4.4 A）
             "iteration": ctx.iteration,
             "revision_log": ctx.revision_log,
+            # Reviewer 把关结论（规划文档 4.4 B/D）：诊断闭环末端写入 ctx.review，
+            # 此处回传前端用于审计链可视化；缺失时取 None 不阻断诊断。
+            "review": getattr(ctx, "review", None),
             "started_at": ctx.started_at,
             "finished_at": ctx.finished_at,
         }
