@@ -2973,6 +2973,7 @@ async function executeFixSql(taskId, sql) {
         }
         .intel-cap.has-order .cap-order { display: block; }
         .intel-cap .cap-head { display: flex; align-items: flex-start; gap: 12px; }
+        .intel-cap .cap-avatar-col { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 0 0 auto; }
         .intel-cap .cap-avatar {
             width: 42px; height: 42px; border-radius: 11px;
             display: flex; align-items: center; justify-content: center;
@@ -2995,8 +2996,7 @@ async function executeFixSql(taskId, sql) {
             border: 1px solid var(--border); font-weight: 500;
         }
         .intel-cap .cap-state {
-            position: absolute; top: 11px; right: 34px;
-            flex: 0 0 auto; white-space: nowrap;
+            white-space: nowrap;
             font-size: 10.5px; padding: 1px 8px; border-radius: 20px;
             background: var(--surface); color: var(--text-muted);
             border: 1px solid var(--border); font-weight: 500;
@@ -3803,9 +3803,11 @@ async function loadIntelligenceCapabilities() {
       return `<div class="intel-cap${isCoord ? ' is-coordinator' : ''} ${dinfo.cls}" id="cap-${escHtml(cap.id)}" data-cap-id="${escHtml(cap.id)}">
         <span class="cap-scan"></span>
         <span class="cap-order" data-role="order"></span>
-        <span class="cap-state" data-role="state">待命</span>
         <div class="cap-head">
-          <div class="cap-avatar">${intelSpecSvg(cap.id)}</div>
+          <div class="cap-avatar-col">
+            <div class="cap-avatar">${intelSpecSvg(cap.id)}</div>
+            <span class="cap-state" data-role="state">待命</span>
+          </div>
           <div class="cap-meta">
             <div class="cap-name-row">
               <span class="cap-name" title="${escHtml(cap.name || '')}">${escHtml(cap.name || '')}</span>
