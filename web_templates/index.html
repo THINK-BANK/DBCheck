@@ -4702,6 +4702,9 @@ function wfOnKeyDown(e) {
   // 仅在 Workflow 编辑器视图可见时响应 Del
   var editor = document.getElementById('wf-view-editor');
   if (!editor || editor.style.display === 'none') return;
+  // 焦点在输入框/文本域/下拉框内时，不拦截（避免编辑文字时误删整节点/边）
+  var t = e.target;
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
   if (e.key === 'Delete' || e.key === 'Backspace') {
     e.preventDefault();
     wfDeleteSelected();
@@ -4753,22 +4756,47 @@ function wfOnMouseMove(e) {
   }
 }
 
+function wfHitNodeAt(x, y) {
+  // 坐标命中测试：返回鼠标点所在的最上层节点（数组末尾即 DOM 最上层）
+  // 节点实际渲染宽度 168px / 高度 64px（见 .wf-node / __wfNodeW,H）
+  var NW = 168, NH = 64;
+  for (var i = __wfSteps.length - 1; i >= 0; i--) {
+    var s = __wfSteps[i];
+    if (x >= s.x && x <= s.x + NW && y >= s.y && y <= s.y + NH) return s;
+  }
+  return null;
+}
+
 function wfOnMouseUp(e) {
   if (!__wfDrag) return;
   if (__wfDrag.type === 'link') {
-    var tgt = e.target.closest ? e.target.closest('.wf-node') : null;
-    if (tgt && tgt.dataset.id) {
-      var targetId = tgt.dataset.id;
-      var from, to;
-      if (__wfDrag.port === 'in') { from = targetId; to = __wfDrag.from; }
-      else { from = __wfDrag.from; to = targetId; }
-      var fromNode = __wfById(from), toNode = __wfById(to);
-      // 开始节点只作为源头（不能作为终点），结束节点只作为终点（不能作为源头）
-      if (toNode && toNode.kind === 'start') { toastError('开始节点不能作为连线终点'); }
-      else if (fromNode && fromNode.kind === 'end') { toastError('结束节点不能作为连线起点'); }
-      else if (from && to && from !== to && !__wfEdges.some(function(ed){ return ed[0] === from && ed[1] === to; })) {
-        __wfEdges.push([from, to]);
-        toastSuccess('已连线 ' + from + ' → ' + to);
+    var canvas = document.getElementById('wf-canvas');
+    var rect = canvas.getBoundingClientRect();
+    var x = e.clientX - rect.left + canvas.scrollLeft;
+    var y = e.clientY - rect.top + canvas.scrollTop;
+    // 优先用坐标做最上层节点命中（避免 e.target 命中存在层叠/端口/连线的误导）
+    var tgt = wfHitNodeAt(x, y);
+    if (!tgt) {
+      // 兜底：鼠标精确落在节点 DOM 上但恰好在矩形边缘外的极端情况
+      var el = e.target.closest ? e.target.closest('.wf-node') : null;
+      tgt = el ? __wfById(el.dataset.id) : null;
+    }
+    if (tgt) {
+      var targetId = tgt.id;
+      if (targetId === __wfDrag.from) {
+        toastError('不能连接到自身');
+      } else {
+        var from, to;
+        if (__wfDrag.port === 'in') { from = targetId; to = __wfDrag.from; }
+        else { from = __wfDrag.from; to = targetId; }
+        var fromNode = __wfById(from), toNode = __wfById(to);
+        // 开始节点只作为源头（不能作为终点），结束节点只作为终点（不能作为源头）
+        if (toNode && toNode.kind === 'start') { toastError('开始节点不能作为连线终点'); }
+        else if (fromNode && fromNode.kind === 'end') { toastError('结束节点不能作为连线起点'); }
+        else if (from && to && from !== to && !__wfEdges.some(function(ed){ return ed[0] === from && ed[1] === to; })) {
+          __wfEdges.push([from, to]);
+          toastSuccess('已连线 ' + from + ' → ' + to);
+        }
       }
     }
   }
