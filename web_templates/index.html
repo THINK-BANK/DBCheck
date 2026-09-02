@@ -4291,7 +4291,7 @@ let __wfSeq = 0;
 let __wfDrag = null;   // 拖拽态：{type:'move'|'link', ...}
 let __wfCurrentId = null;  // 当前编辑中的工作流 id（新建为 null，编辑时为整数）
 const __wfKindLabel = {specialist:'专家', hub:'诊断', skill:'技能', func:'函数', start:'开始', end:'结束', output:'输出'};
-const __wfNodeW = 160, __wfNodeH = 64;
+const __wfNodeW = 168, __wfNodeH = 64;
 
 function wfShowList() {
   var vl = document.getElementById('wf-view-list');
@@ -4757,12 +4757,19 @@ function wfOnMouseMove(e) {
 }
 
 function wfHitNodeAt(x, y) {
-  // 坐标命中测试：返回鼠标点所在的最上层节点（数组末尾即 DOM 最上层）
-  // 节点实际渲染宽度 168px / 高度 64px（见 .wf-node / __wfNodeW,H）
-  var NW = 168, NH = 64;
-  for (var i = __wfSteps.length - 1; i >= 0; i--) {
-    var s = __wfSteps[i];
-    if (x >= s.x && x <= s.x + NW && y >= s.y && y <= s.y + NH) return s;
+  // 坐标命中测试：返回鼠标点所在的最上层节点（DOM 顺序中靠后的在最上层）
+  // 用节点实际渲染尺寸（offsetWidth/offsetHeight），避免硬编码 64px 与 CSS auto 高度
+  // 不一致导致源节点命中框向下溢出、误把下方节点判为“自身”。
+  var canvas = document.getElementById('wf-canvas');
+  if (!canvas) return null;
+  var nodes = canvas.querySelectorAll('.wf-node');
+  for (var i = nodes.length - 1; i >= 0; i--) {
+    var el = nodes[i];
+    var ex = parseFloat(el.style.left) || 0;
+    var ey = parseFloat(el.style.top) || 0;
+    var ew = el.offsetWidth || 168;
+    var eh = el.offsetHeight || 64;
+    if (x >= ex && x <= ex + ew && y >= ey && y <= ey + eh) return __wfById(el.dataset.id);
   }
   return null;
 }
