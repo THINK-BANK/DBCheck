@@ -3194,6 +3194,7 @@ EN.update({
     "menu.intelligence": "Intelligence Diagnosis Center",
     "menu.workflow": "Workflow Orchestration",
     "menu.workflow_task": "Workflow Tasks",
+    "menu.dev": "In Dev",
     "wf_task.empty_title": "No Workflow Tasks Yet",
     "wf_task.empty_sub": "Once you bind a workflow to a data source as a task, you can run it manually or on a Cron schedule and view live status and history here.",
     "wf_task.page_sub": "Bind an orchestrated workflow to a data source and save it as a reusable task. Trigger manually or on a Cron schedule, and monitor live status and run history.",

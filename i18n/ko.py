@@ -414,6 +414,7 @@ KO.update({
     "menu.intelligence": "지능형 진단 센터",
     "menu.workflow": "워크플로우 오케스트레이션",
     "menu.workflow_task": "워크플로우 작업",
+    "menu.dev": "개발 중",
     "wf_task.empty_title": "워크플로우 작업이 없습니다",
     "wf_task.empty_sub": "워크플로를 데이터 소스에 작업으로 연결하면 수동 또는 Cron 으로 실행하고 여기서 상태와 기록을 확인할 수 있습니다.",
     "wf_task.page_sub": "오케스트레이션된 워크플로를 데이터 소스에 연결해 재사용 가능한 작업으로 저장하세요. 수동 또는 Cron 일정으로 실행하고 상태와 기록을 실시간으로 확인할 수 있습니다.",

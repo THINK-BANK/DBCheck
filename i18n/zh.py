@@ -3224,6 +3224,7 @@ ZI.update({
     "menu.intelligence": "智能诊断中心",
     "menu.workflow": "Workflow 编排",
     "menu.workflow_task": "工作流任务",
+    "menu.dev": "开发中",
     "wf_task.empty_title": "还没有工作流任务",
     "wf_task.empty_sub": "把工作流和数据源绑定成任务后，就能手动运行或设置 Cron 周期调度，并在这里查看实时状态与历史结果。",
     "wf_task.page_sub": "将已编排的工作流绑定数据源并保存为可复用任务，支持手动触发与 Cron 周期调度，实时查看运行状态与历史结果。",

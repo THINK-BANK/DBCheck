@@ -414,6 +414,7 @@ JA.update({
     "menu.intelligence": "インテリジェント診断センター",
     "menu.workflow": "ワークフロー編成",
     "menu.workflow_task": "ワークフロータスク",
+    "menu.dev": "開発中",
     "wf_task.empty_title": "ワークフロータスクはまだありません",
     "wf_task.empty_sub": "ワークフローをデータソースにタスクとして紐づければ、手動または Cron で実行し、ここで状態と履歴を確認できます。",
     "wf_task.page_sub": "編成済みワークフローをデータソースに紐づけて再利用可能なタスクとして保存します。手動または Cron スケジュールで実行し、状態と履歴をリアルタイムで確認できます。",

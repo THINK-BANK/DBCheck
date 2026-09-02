@@ -2976,6 +2976,7 @@ ZH_TW.update({
     "menu.intelligence": "智能診斷中心",
     "menu.workflow": "Workflow 編排",
     "menu.workflow_task": "工作流任務",
+    "menu.dev": "開發中",
     "wf_task.empty_title": "還沒有工作流任務",
     "wf_task.empty_sub": "把工作流和資料源綁定成任務後，就能手動執行或設定 Cron 週期排程，並在這裡查看即時狀態與歷史結果。",
     "wf_task.page_sub": "將已編排的工作流綁定資料源並儲存為可複用任務，支援手動觸發與 Cron 週期排程，即時查看運行狀態與歷史結果。",

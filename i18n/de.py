@@ -414,6 +414,7 @@ DE.update({
     "menu.intelligence": "Intelligentes Diagnosezentrum",
     "menu.workflow": "Workflow-Orchestrierung",
     "menu.workflow_task": "Workflow-Aufgaben",
+    "menu.dev": "In Entw.",
     "wf_task.empty_title": "Noch keine Workflow-Aufgaben",
     "wf_task.empty_sub": "Sobald Sie einen Workflow als Aufgabe an eine Datenquelle binden, können Sie ihn manuell oder per Cron ausführen und Status sowie Verlauf hier einsehen.",
     "wf_task.page_sub": "Binden Sie einen orchestrierten Workflow an eine Datenquelle und speichern Sie ihn als wiederverwendbare Aufgabe. Manuell oder per Cron auslösen und Status sowie Verlauf live verfolgen.",

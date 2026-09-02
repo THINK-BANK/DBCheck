@@ -414,6 +414,7 @@ ES.update({
     "menu.intelligence": "Centro de diagnóstico inteligente",
     "menu.workflow": "Orquestación de Flujos",
     "menu.workflow_task": "Tareas de Flujo",
+    "menu.dev": "En dev.",
     "wf_task.empty_title": "Aún no hay tareas de flujo",
     "wf_task.empty_sub": "Cuando vincule un workflow a un origen de datos como tarea, podrá ejecutarlo manualmente o por Cron y ver estado e historial aquí.",
     "wf_task.page_sub": "Vincule un workflow orquestado a un origen de datos y guárdelo como tarea reutilizable. Ejecútelo manualmente o por Cron y supervise estado e historial en vivo.",

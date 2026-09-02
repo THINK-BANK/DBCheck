@@ -414,6 +414,7 @@ FR.update({
     "menu.intelligence": "Centre de diagnostic intelligent",
     "menu.workflow": "Orchestration de Workflow",
     "menu.workflow_task": "Tâches de Workflow",
+    "menu.dev": "En dev.",
     "wf_task.empty_title": "Aucune tâche de workflow",
     "wf_task.empty_sub": "Une fois le workflow lié à une source de données en tant que tâche, vous pouvez l'exécuter manuellement ou via Cron et consulter l'état et l'historique ici.",
     "wf_task.page_sub": "Liez un workflow orchestré à une source de données et enregistrez-le comme tâche réutilisable. Déclenchez manuellement ou via Cron et suivez l'état et l'historique en direct.",
