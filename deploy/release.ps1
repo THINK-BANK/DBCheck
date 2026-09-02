@@ -1,5 +1,5 @@
 ﻿# DBCheck Release Script (simplified)
-# Usage: .\release.ps1 -Version "26.8.22.1"  (or date-based "26.7.8.1")
+# Usage: .\release.ps1 -Version "26.9.1.0"  (or date-based "26.7.8.1")
 # GitHub Actions will handle Docker build/push and GitHub Release automatically.
 
 param(
@@ -101,29 +101,15 @@ if (Test-Path $VersionPy) {
     Write-Host "  WARN: version.py not found, skipped" -ForegroundColor Yellow
 }
 
-# Update Dockerfile
-$Dockerfile = Join-Path $ProjectRoot "Dockerfile"
-if (Test-Path $Dockerfile) {
-    $lines = Get-Content $Dockerfile -Encoding UTF8
-    $newLines = @()
-    foreach ($line in $lines) {
-        if ($line -match 'RUN echo .* > /app/VERSION\.txt') {
-            $newLines += "RUN echo $Version > /app/VERSION.txt"
-        } else {
-            $newLines += $line
-        }
-    }
-    Set-Content $Dockerfile -Value $newLines -Encoding UTF8
-    Write-Host "  OK: Dockerfile updated to $Version" -ForegroundColor Green
-} else {
-    Write-Host "  WARN: Dockerfile not found, skipped" -ForegroundColor Yellow
-}
+# NOTE: Dockerfile 内 VERSION.txt 由构建参数 DBCHECK_VERSION 驱动
+# （RUN echo "${DBCHECK_VERSION#v}"）。CI 与 scripts/build-multiarch.sh 会从
+# modules/config/version.py 解析版本并以 --build-arg 传入，此处无需改写 Dockerfile。
 
 # Step 4: Commit, push, and create tag
 Write-Host "[4/4] Committing, pushing, and creating tag..." -ForegroundColor Yellow
 
 # Commit and push (only version files, avoid staging runtime data/ or untracked files)
-git add modules/config/version.py deploy/Dockerfile
+git add modules/config/version.py
 git diff --cached --quiet 2>$null
 if ($LASTEXITCODE -eq 0) {
     Write-Host "  WARN: Nothing to commit, skipping commit" -ForegroundColor Yellow

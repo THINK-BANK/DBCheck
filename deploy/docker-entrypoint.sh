@@ -55,7 +55,9 @@ fi
 
 # Initialize RBAC user management seed data
 echo "==> Initializing RBAC user management..."
-python -m user_management.seed 2>&1 || echo "WARNING: RBAC seed init failed"
+# NOTE: user_management 不是顶层包，而是 modules.user_management（命名空间包），
+#       必须用 modules.user_management.seed，否则模块找不到、RBAC 静默不播种。
+python -m modules.user_management.seed 2>&1 || echo "WARNING: RBAC seed init failed"
 
 # Auto-enable bundled plugins: plugins/available -> plugins/enabled
 # NOTE: uses the local loader API (discover_plugins / enable_plugin), NOT the

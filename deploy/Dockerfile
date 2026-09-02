@@ -1,5 +1,7 @@
-﻿# DBCheck v2.7.0 - Full Edition Dockerfile (with RBAC User Management)
-# Supports: MySQL, TiDB, PostgreSQL, IvorySQL, Oracle, SQL Server, DM8, YashanDB
+﻿# RaccoonX (DBCheck) - Full Edition Dockerfile (with RBAC User Management)
+# Supports: MySQL, TiDB, MariaDB, PostgreSQL, IvorySQL, Oracle, SQL Server,
+#          DM8, HGDB, Kingbase, UXDB, YashanDB, MongoDB, Redis, ClickHouse,
+#          DB2, TDSQL-C
 #
 # Build (single-arch, native host):
 #   docker build -t jackge12345/dbcheck:latest .
@@ -127,8 +129,10 @@ ENV PYTHONMEMORYLIMIT=2g
 
 # Create VERSION.txt (without v prefix, matches Docker tag format)
 # DBCHECK_VERSION 可在构建时覆盖: --build-arg DBCHECK_VERSION=v26.9.1.0
+# 注意：CI / build-multiarch.sh 传入的值带 v 前缀（如 v26.9.1.0），
+# 这里用 ${DBCHECK_VERSION#v} 去掉前缀，保证镜像内 VERSION.txt 与标签一致。
 ARG DBCHECK_VERSION=26.9.1.0
-RUN echo 26.9.1.0 > /app/VERSION.txt
+RUN echo "${DBCHECK_VERSION#v}" > /app/VERSION.txt
 
 # Ensure data and pro_data directories exist for volume mounts
 RUN mkdir -p /app/data /app/data/pro_data /app/data/reports
