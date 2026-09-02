@@ -25,17 +25,21 @@ data_dirs = [
 # JSON config files
 data_files = [
     'dbc_config.json',
-    'version.json',
+    ('modules/config/version.json', 'version.json'),  # 重定向到 exe 同目录（frozen 模式 /version.json 路由读 base/version.json）
     'builtin_registry.json',  # 插件市场回退数据（plugin_market.py）
     'dbcheck-quotes.json',  # web_ui.py 读取的协议/格言文案
 ]
 
 # Build datas list with absolute paths
 datas = [(os.path.join(PROJECT_DIR, d), d) for d in data_dirs]
-for f in data_files:
+for item in data_files:
+    if isinstance(item, tuple):
+        f, dst = item
+    else:
+        f, dst = item, item
     src = os.path.join(PROJECT_DIR, f)
     if os.path.exists(src):
-        datas.append((src, f))
+        datas.append((src, dst))
     else:
         print(f"[WARN] data file not found, skipped: {src}")
 
