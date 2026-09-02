@@ -463,6 +463,7 @@ def workflow_nodes_ep():
                 risk = spec.get("risk") or {}
                 skills.append({
                     "name": spec.get("name"),
+                    "title": spec.get("title") or spec.get("name"),
                     "kind": "skill",
                     "ref": spec.get("handler_key") or spec.get("name"),
                     "description": spec.get("description", ""),

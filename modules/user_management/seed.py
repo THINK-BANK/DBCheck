@@ -50,6 +50,7 @@ menus_data = [
     ('apikey',           'menu.apikey',          0, 56),
     ('shares',           'menu.shares',          0, 57),
     ('intelligence',      'menu.intelligence',     0, 58),
+    ('workflow',          'menu.workflow',         0, 585),
     ('schema-dict',       'menu.schema-dict',      0, 581),
     ('diag-history',      'menu.diag-history',     0, 59),
     ('sql-audit',         'menu.sql-audit',        0, 60),

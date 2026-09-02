@@ -51,6 +51,7 @@ class Workflow:
         self.steps = {s.id: s for s in steps}
         self.order = [s.id for s in steps]
         self.edges = edges or []  # List[(from_id, to_id)]
+        self.outputs: List[Dict[str, Any]] = []  # 输出节点执行产物（查看/报告/邮件）
 
     def _topo_order(self) -> List[str]:
         indeg = {sid: 0 for sid in self.steps}
@@ -108,6 +109,7 @@ class Workflow:
             "steps_skipped": skipped,
             "order": order,
             "log": log,
+            "outputs": self.outputs,
         }
 
     def _exec_step(self, step: Step, ctx: SharedContext, goal: str, instance_id: str) -> None:
@@ -146,5 +148,107 @@ class Workflow:
                 fn(ctx, step.args)
             elif callable(step.ref):
                 step.ref(ctx, step.args)
+        elif step.kind == "output":
+            entry = self._exec_output(step, ctx)
+            self.outputs.append(entry)
+        elif step.kind in ("start", "end"):
+            # 起止节点为编排标记，无需执行
+            pass
         else:
             raise ValueError(f"unknown step kind: {step.kind}")
+
+    def _exec_output(self, step: Step, ctx: SharedContext) -> Dict[str, Any]:
+        """输出节点：查看结果 / 生成报告 / 邮件通知。
+
+        仅做编排产物落地，不阻塞整体流程；任何子操作失败都降级为记录状态而非抛异常。
+        """
+        args = step.args or {}
+        action = str(args.get("action", "view")).lower()  # view | report | email
+        to_addr = str(args.get("to", "") or "").strip()
+        findings = ctx.findings or []
+        plan = ctx.plan or []
+
+        summary_lines = [
+            "工作流输出：%s" % (step.label or step.id),
+            "目标实例：%s" % ctx.target,
+            "发现数：%d" % len(findings),
+            "处置方案数：%d" % len(plan),
+        ]
+        report_path: Optional[str] = None
+        email_status: Optional[str] = None
+
+        if action in ("report", "email"):
+            try:
+                report_path = self._save_report(step, ctx, findings, plan)
+            except Exception as e:  # 报告生成失败不阻断编排
+                report_path = None
+                email_status = "report_failed: %s" % e
+
+        if action == "email":
+            try:
+                from modules.notify import EmailNotifier
+
+                notifier = EmailNotifier()
+                recips = [a.strip() for a in to_addr.split(",") if a.strip()] or (notifier.recipients or [])
+                if not recips:
+                    email_status = "no_recipients"
+                else:
+                    notifier.send_report(
+                        label=ctx.target,
+                        db_type="",
+                        report_file=report_path or "",
+                        recipients=recips,
+                        custom_msg="<p>%s</p>" % "<br>".join(summary_lines),
+                    )
+                    email_status = "sent:%s" % ",".join(recips)
+            except Exception as e:  # 邮件失败不阻断编排
+                email_status = "email_failed: %s" % e
+
+        summary = "；".join("[%s] %s" % (f.severity, f.title) for f in findings[:5]) or "无发现"
+        return {
+            "id": step.id,
+            "label": step.label or step.id,
+            "action": action,
+            "to": to_addr,
+            "findings_count": len(findings),
+            "plan_count": len(plan),
+            "summary": summary,
+            "report_path": report_path,
+            "email_status": email_status,
+        }
+
+    def _save_report(self, step: Step, ctx: SharedContext, findings, plan) -> str:
+        """把上下文发现与处置方案导出为 Markdown 报告，落到 DATA_DIR/reports。"""
+        import datetime
+        import os
+
+        from modules.core import paths
+
+        out_dir = paths.DATA_DIR / "reports"
+        os.makedirs(out_dir, exist_ok=True)
+        ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        fpath = out_dir / ("workflow_%s_%s.md" % (step.id, ts))
+        content = [
+            "# 工作流输出报告：%s" % (step.label or step.id),
+            "",
+            "生成时间：%s" % datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "目标实例：%s" % ctx.target,
+            "",
+            "## 发现（%d）" % len(findings),
+        ]
+        for f in findings:
+            content.append("- **[%s/%s] %s**" % (f.severity, f.category, f.title))
+            if getattr(f, "detail", ""):
+                content.append("  - %s" % f.detail)
+            if getattr(f, "suggestion", ""):
+                content.append("  - 建议：%s" % f.suggestion)
+        content.append("")
+        content.append("## 处置方案（%d）" % len(plan))
+        for p in plan:
+            if isinstance(p, dict):
+                content.append("- %s" % (p.get("title") or p.get("content") or p))
+            else:
+                content.append("- %s" % p)
+        with open(fpath, "w", encoding="utf-8") as fh:
+            fh.write("\n".join(content))
+        return str(fpath)
