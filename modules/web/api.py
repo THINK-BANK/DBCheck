@@ -1275,3 +1275,10 @@ def register_disaster_recovery(app) -> None:
         scheduler_hook.start_scheduler()
     except Exception as exc:  # pragma: no cover - 调度失败不应阻断启动
         print(f"  [WARN] 容灾备份调度器启动失败: {exc}")
+    # 工作流任务调度器（croniter 周期触发 + 重启恢复），失败不应阻断主程序
+    try:
+        from modules.intelligence.task_runner import get_runner
+
+        get_runner().bootstrap()
+    except Exception as exc:  # pragma: no cover
+        print(f"  [WARN] 工作流任务调度器启动失败: {exc}")

@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+import threading
 from collections import deque
 from typing import Any, Callable, Dict, List, Optional
 
@@ -52,6 +53,7 @@ class Workflow:
         self.order = [s.id for s in steps]
         self.edges = edges or []  # List[(from_id, to_id)]
         self.outputs: List[Dict[str, Any]] = []  # 输出节点执行产物（查看/报告/邮件）
+        self._cancel_event: Optional[threading.Event] = None  # 由 task_runner 注入，用于停止
 
     def _topo_order(self) -> List[str]:
         indeg = {sid: 0 for sid in self.steps}
@@ -83,14 +85,25 @@ class Workflow:
         instance_id: str,
         inputs: Optional[Dict[str, Any]] = None,
         ctx: Optional[SharedContext] = None,
+        cancel_event: Optional[threading.Event] = None,
     ) -> Dict[str, Any]:
+        """执行 DAG。``cancel_event`` 若被置位，则完成当前节点后中止后续节点
+        （不回滚已执行步骤），并在结果中标记 ``cancelled=True``。"""
+        self._cancel_event = cancel_event
         ctx = ctx or SharedContext(goal=goal, target=instance_id, inputs=dict(inputs or {}))
         order = self._topo_order()
         log: List[Dict[str, Any]] = []
         executed: List[str] = []
         skipped: List[str] = []
+        cancelled = False
 
-        for sid in order:
+        for idx, sid in enumerate(order):
+            if cancel_event is not None and cancel_event.is_set():
+                cancelled = True
+                for pending in order[idx:]:
+                    skipped.append(pending)
+                    log.append({"step": pending, "status": "skipped", "reason": "任务已停止"})
+                break
             step = self.steps[sid]
             if step.when is not None and not step.when(ctx):
                 skipped.append(sid)
@@ -110,6 +123,7 @@ class Workflow:
             "order": order,
             "log": log,
             "outputs": self.outputs,
+            "cancelled": cancelled,
         }
 
     def _exec_step(self, step: Step, ctx: SharedContext, goal: str, instance_id: str) -> None:

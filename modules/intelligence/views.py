@@ -475,3 +475,145 @@ def workflow_nodes_ep():
         return jsonify({"ok": True, "specialists": specialists, "skills": skills})
     except Exception as e:
         return jsonify({"ok": False, "msg": str(e)}), 500
+
+
+# ── Workflow 任务管理（独立导航「工作流任务」） ──────────────────────────
+def _denorm_task(task: Dict[str, Any]) -> Dict[str, Any]:
+    """给任务补充工作流名称等冗余字段，便于前端卡片直接渲染。"""
+    out = dict(task)
+    try:
+        from .workflow_store import get_workflow
+
+        wf = get_workflow(task["workflow_id"])
+        out["workflow_name"] = wf["name"] if wf else ("#%s" % task["workflow_id"])
+    except Exception:
+        out["workflow_name"] = "#%s" % task["workflow_id"]
+    return out
+
+
+@intelligence_bp.route("/api/intelligence/workflow-tasks", methods=["GET"])
+def list_workflow_tasks_ep():
+    try:
+        from .workflow_task_store import list_tasks as _list
+
+        tasks = [_denorm_task(t) for t in _list()]
+        return jsonify({"ok": True, "tasks": tasks})
+    except Exception as e:
+        return jsonify({"ok": False, "msg": str(e)}), 500
+
+
+@intelligence_bp.route("/api/intelligence/workflow-tasks", methods=["POST"])
+def create_workflow_task_ep():
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()
+    workflow_id = data.get("workflow_id")
+    instance_id = (data.get("instance_id") or "").strip()
+    goal = data.get("goal") or ""
+    cron = (data.get("cron") or "").strip()
+    if workflow_id is not None:
+        try:
+            workflow_id = int(workflow_id)
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "msg": "workflow_id 必须是数字"}), 400
+    try:
+        from .workflow_task_store import save_task as _save
+
+        task = _save(name=name, workflow_id=workflow_id, instance_id=instance_id,
+                     goal=goal, cron=cron)
+        return jsonify({"ok": True, "task": _denorm_task(task)})
+    except ValueError as e:
+        return jsonify({"ok": False, "msg": str(e)}), 400
+    except Exception as e:
+        return jsonify({"ok": False, "msg": str(e)}), 500
+
+
+@intelligence_bp.route("/api/intelligence/workflow-tasks/<int:task_id>", methods=["GET"])
+def get_workflow_task_ep(task_id: int):
+    try:
+        from .workflow_task_store import get_task as _get
+
+        task = _get(task_id)
+        if not task:
+            return jsonify({"ok": False, "msg": "task not found"}), 404
+        return jsonify({"ok": True, "task": _denorm_task(task)})
+    except Exception as e:
+        return jsonify({"ok": False, "msg": str(e)}), 500
+
+
+@intelligence_bp.route("/api/intelligence/workflow-tasks/<int:task_id>", methods=["PUT"])
+def update_workflow_task_ep(task_id: int):
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()
+    workflow_id = data.get("workflow_id")
+    instance_id = (data.get("instance_id") or "").strip()
+    goal = data.get("goal") or ""
+    cron = (data.get("cron") or "").strip()
+    if workflow_id is not None:
+        try:
+            workflow_id = int(workflow_id)
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "msg": "workflow_id 必须是数字"}), 400
+    try:
+        from .workflow_task_store import save_task as _save
+
+        task = _save(name=name, workflow_id=workflow_id, instance_id=instance_id,
+                     goal=goal, cron=cron, task_id=task_id)
+        return jsonify({"ok": True, "task": _denorm_task(task)})
+    except ValueError as e:
+        return jsonify({"ok": False, "msg": str(e)}), 400
+    except Exception as e:
+        return jsonify({"ok": False, "msg": str(e)}), 500
+
+
+@intelligence_bp.route("/api/intelligence/workflow-tasks/<int:task_id>", methods=["DELETE"])
+def delete_workflow_task_ep(task_id: int):
+    try:
+        from .task_runner import get_runner
+
+        get_runner().stop(task_id)  # 运行中先尝试停止
+    except Exception:
+        pass
+    try:
+        from .workflow_task_store import delete_task as _del
+
+        ok = _del(task_id)
+        return jsonify({"ok": ok})
+    except Exception as e:
+        return jsonify({"ok": False, "msg": str(e)}), 500
+
+
+@intelligence_bp.route("/api/intelligence/workflow-tasks/<int:task_id>/start", methods=["POST"])
+def start_workflow_task_ep(task_id: int):
+    try:
+        from .task_runner import get_runner
+
+        ok = get_runner().start(task_id)
+        if not ok:
+            return jsonify({"ok": False, "msg": "任务不存在或已在运行"}), 409
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "msg": str(e)}), 500
+
+
+@intelligence_bp.route("/api/intelligence/workflow-tasks/<int:task_id>/stop", methods=["POST"])
+def stop_workflow_task_ep(task_id: int):
+    try:
+        from .task_runner import get_runner
+
+        ok = get_runner().stop(task_id)
+        if not ok:
+            return jsonify({"ok": False, "msg": "任务未运行或已停止"}), 409
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "msg": str(e)}), 500
+
+
+@intelligence_bp.route("/api/intelligence/workflow-tasks/<int:task_id>/runs", methods=["GET"])
+def workflow_task_runs_ep(task_id: int):
+    try:
+        from .workflow_run_store import list_runs as _list
+
+        runs = _list(task_id)
+        return jsonify({"ok": True, "runs": runs})
+    except Exception as e:
+        return jsonify({"ok": False, "msg": str(e)}), 500

@@ -6418,6 +6418,255 @@ function formatBytes(bytes) {
       
 
 </script>
+<script>
+// ====== Workflow 任务管理（独立导航「工作流任务」） ======
+let __wfTaskPoll = null;
+let __wfTaskDatasources = [];
+let __wfTasksCache = [];
+let __wfCurrentFilter = '';
+
+async function loadWorkflowTaskPage() {
+  try {
+    const [tres, wres, dres] = await Promise.all([
+      fetch('/api/intelligence/workflow-tasks'),
+      fetch('/api/intelligence/workflows'),
+      fetch('/api/pro/datasources')
+    ]);
+    const tdata = await tres.json();
+    const wdata = await wres.json();
+    const ddata = await dres.json();
+    __wfTaskDatasources = (ddata.ok && ddata.datasources) ? ddata.datasources : [];
+    const wfMap = {};
+    ((wdata.workflows) || []).forEach(w => { wfMap[w.id] = w.name; });
+    window.__wfTaskWfMap = wfMap;
+    __wfTasksCache = (tdata.ok && tdata.tasks) ? tdata.tasks : [];
+    wfRenderTaskGrid();
+  } catch (e) { toastError('加载工作流任务失败：' + e.message); }
+  if (__wfTaskPoll) clearInterval(__wfTaskPoll);
+  __wfTaskPoll = setInterval(async function () {
+    try {
+      const r = await fetch('/api/intelligence/workflow-tasks');
+      const d = await r.json();
+      if (d.ok) { __wfTasksCache = d.tasks; wfRenderTaskGrid(); }
+    } catch (e) {}
+  }, 3000);
+}
+
+function wfDsName(id) {
+  const ds = __wfTaskDatasources.find(d => String(d.id) === String(id));
+  if (!ds) return id || '';
+  return ds.name || (ds.host + ':' + ds.port);
+}
+
+function wfEscape(s) {
+  return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+}
+
+function wfSetFilter(btn, filter) {
+  __wfCurrentFilter = filter;
+  document.querySelectorAll('.wf-filter-pill').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  wfRenderTaskGrid();
+}
+
+function wfRenderTaskGrid() {
+  const grid = document.getElementById('wf-task-grid');
+  const empty = document.getElementById('wf-task-empty');
+  if (!grid) return;
+  const stats = {total: __wfTasksCache.length, running: 0, stopped: 0, error: 0};
+  __wfTasksCache.forEach(t => { if (stats[t.status] != null) stats[t.status]++; });
+  ['total','running','stopped','error'].forEach(k => {
+    const el = document.getElementById('wf-stat-' + k);
+    if (el) el.textContent = stats[k];
+  });
+  let list = __wfTasksCache;
+  if (__wfCurrentFilter) list = list.filter(t => t.status === __wfCurrentFilter);
+  if (!list.length) {
+    grid.innerHTML = '';
+    if (empty) empty.style.display = 'flex';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+  const wfMap = window.__wfTaskWfMap || {};
+  const statusText = {running: '运行中', stopped: '已停止', error: '故障'};
+  const lastAt = t => {
+    if (!t.last_run_at) return '';
+    try { return new Date(t.last_run_at).toLocaleString('zh-CN', {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'}); }
+    catch(e){ return t.last_run_at; }
+  };
+  grid.innerHTML = list.map(t => {
+    const wfName = wfMap[t.workflow_id] || ('#' + t.workflow_id);
+    const dsName = wfDsName(t.instance_id);
+    const cronIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
+    return `<div class="wf-task-card ${t.status}" onclick="wfOpenRunDrawer(${t.id})">
+      <div class="wf-tc-strip ${t.status}"></div>
+      <div class="wf-tc-body">
+        <div class="wf-tc-top">
+          <div class="wf-tc-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><path d="M10 6.5h4a3 3 0 0 1 3 3v4.5"/></svg></div>
+          <button class="wf-task-menu-btn" onclick="event.stopPropagation();wfTaskMenu(${t.id}, this)" aria-label="操作">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="6" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="18" r="1.5"/></svg>
+          </button>
+        </div>
+        <div class="wf-tc-title">
+          <div class="wf-tc-name">${wfEscape(t.name)}</div>
+          <div class="wf-tc-wf"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>${wfEscape(wfName)}</div>
+        </div>
+        <div class="wf-tc-meta-row"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>${wfEscape(dsName)}</div>
+        ${t.cron ? `<div class="wf-tc-meta-row">${cronIcon}${wfEscape(t.cron)}</div>` : ''}
+      </div>
+      <div class="wf-tc-footer">
+        <div class="wf-tc-status ${t.status}"><span class="wf-tc-dot ${t.status}"></span>${statusText[t.status] || t.status}</div>
+        <div class="wf-tc-time">${t.status === 'running' ? '正在运行' : (lastAt(t) || '未运行')}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+const _wfMenuIcons = {
+  start: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>',
+  stop: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>',
+  edit: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>',
+  del: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>'
+};
+function wfTaskMenu(taskId, el) {
+  const menu = document.getElementById('wf-task-menu');
+  if (!menu) return;
+  const t = __wfTasksCache.find(x => x.id === taskId);
+  if (!t) return;
+  const running = t.status === 'running';
+  menu.innerHTML = running
+    ? `<button onclick="wfTaskStop(${taskId})">${_wfMenuIcons.stop}停止</button>`
+      + `<button onclick="wfTaskEdit(${taskId})">${_wfMenuIcons.edit}编辑</button>`
+      + `<hr><button class="danger" onclick="wfTaskDelete(${taskId})">${_wfMenuIcons.del}删除</button>`
+    : `<button onclick="wfTaskStart(${taskId})">${_wfMenuIcons.start}启动</button>`
+      + `<button onclick="wfTaskEdit(${taskId})">${_wfMenuIcons.edit}编辑</button>`
+      + `<hr><button class="danger" onclick="wfTaskDelete(${taskId})">${_wfMenuIcons.del}删除</button>`;
+  const rect = el.getBoundingClientRect();
+  menu.style.display = 'block';
+  menu.style.top = (rect.bottom + 6) + 'px';
+  menu.style.left = Math.min(rect.right - 150, window.innerWidth - 166) + 'px';
+  setTimeout(() => document.addEventListener('click', wfCloseTaskMenuOnce), 0);
+}
+function wfCloseTaskMenuOnce(e) {
+  const menu = document.getElementById('wf-task-menu');
+  if (menu && !menu.contains(e.target)) { menu.style.display = 'none'; document.removeEventListener('click', wfCloseTaskMenuOnce); }
+}
+
+async function wfTaskStart(taskId) {
+  const menu = document.getElementById('wf-task-menu'); if (menu) menu.style.display = 'none';
+  try {
+    const r = await fetch('/api/intelligence/workflow-tasks/' + taskId + '/start', {method: 'POST'});
+    const d = await r.json();
+    if (d.ok) toastSuccess('任务已启动'); else toastError(d.msg || '启动失败');
+  } catch (e) { toastError(e.message); }
+}
+async function wfTaskStop(taskId) {
+  const menu = document.getElementById('wf-task-menu'); if (menu) menu.style.display = 'none';
+  try {
+    const r = await fetch('/api/intelligence/workflow-tasks/' + taskId + '/stop', {method: 'POST'});
+    const d = await r.json();
+    if (d.ok) toastSuccess('任务已停止'); else toastError(d.msg || '停止失败');
+  } catch (e) { toastError(e.message); }
+}
+async function wfTaskDelete(taskId) {
+  const menu = document.getElementById('wf-task-menu'); if (menu) menu.style.display = 'none';
+  if (!confirm('确认删除该工作流任务？此操作不可恢复。')) return;
+  try {
+    const r = await fetch('/api/intelligence/workflow-tasks/' + taskId, {method: 'DELETE'});
+    const d = await r.json();
+    if (d.ok) { toastSuccess('已删除'); loadWorkflowTaskPage(); }
+    else toastError(d.msg || '删除失败');
+  } catch (e) { toastError(e.message); }
+}
+function wfTaskEdit(taskId) {
+  const menu = document.getElementById('wf-task-menu'); if (menu) menu.style.display = 'none';
+  const t = __wfTasksCache.find(x => x.id === taskId);
+  if (t) wfOpenTaskModal(t);
+}
+
+function wfSetCron(expr) {
+  const el = document.getElementById('wf-task-cron');
+  if (el) el.value = expr;
+}
+
+function wfOpenTaskModal(task) {
+  const modal = document.getElementById('wf-task-modal');
+  document.getElementById('wf-task-modal-title').textContent = task ? (i18n('wf_task.edit_title') || '编辑工作流任务') : (i18n('wf_task.new_title') || '新建工作流任务');
+  document.getElementById('wf-task-name').value = task ? task.name : '';
+  document.getElementById('wf-task-goal').value = task ? (task.goal || '') : '';
+  document.getElementById('wf-task-cron').value = task ? (task.cron || '') : '';
+  modal.dataset.taskId = task ? task.id : '';
+  const wfMap = window.__wfTaskWfMap || {};
+  const wfList = Object.keys(wfMap).map(id => ({id: id, name: wfMap[id]}));
+  const wfSel = document.getElementById('wf-task-workflow');
+  wfSel.innerHTML = '<option value="">请选择工作流</option>' + wfList.map(w => `<option value="${w.id}">${wfEscape(w.name)}</option>`).join('');
+  wfSel.value = task ? task.workflow_id : '';
+  const dsSel = document.getElementById('wf-task-instance');
+  dsSel.innerHTML = '<option value="">请选择数据源</option>' + __wfTaskDatasources.map(d => `<option value="${wfEscape(d.id)}">${wfEscape(d.name || (d.host + ':' + d.port))}</option>`).join('');
+  dsSel.value = task ? task.instance_id : '';
+  modal.style.display = 'flex';
+}
+function wfCloseTaskModal() { document.getElementById('wf-task-modal').style.display = 'none'; }
+async function wfSaveTask() {
+  const modal = document.getElementById('wf-task-modal');
+  const taskId = modal.dataset.taskId || '';
+  const name = document.getElementById('wf-task-name').value.trim();
+  const workflow_id = document.getElementById('wf-task-workflow').value;
+  const instance_id = document.getElementById('wf-task-instance').value;
+  const goal = document.getElementById('wf-task-goal').value;
+  const cron = document.getElementById('wf-task-cron').value.trim();
+  if (!name) { toastError('请填写任务名称'); return; }
+  if (!workflow_id) { toastError('请选择工作流'); return; }
+  if (!instance_id) { toastError('请选择数据源'); return; }
+  const body = JSON.stringify({name, workflow_id, instance_id, goal, cron});
+  try {
+    const url = taskId ? ('/api/intelligence/workflow-tasks/' + taskId) : '/api/intelligence/workflow-tasks';
+    const r = await fetch(url, {method: taskId ? 'PUT' : 'POST', headers: {'Content-Type': 'application/json'}, body});
+    const d = await r.json();
+    if (d.ok) { toastSuccess('已保存'); wfCloseTaskModal(); loadWorkflowTaskPage(); }
+    else toastError(d.msg || '保存失败');
+  } catch (e) { toastError(e.message); }
+}
+
+async function wfOpenRunDrawer(taskId) {
+  const drawer = document.getElementById('wf-run-drawer');
+  const body = document.getElementById('wf-run-drawer-body');
+  const t = __wfTasksCache.find(x => x.id === taskId);
+  const titleEl = document.getElementById('wf-run-drawer-title');
+  const subEl = document.getElementById('wf-run-drawer-sub');
+  if (titleEl) titleEl.innerHTML = `<span class="wf-dot" style="background:var(--accent)"></span>${t ? wfEscape(t.name) : '运行历史'}`;
+  if (subEl) subEl.textContent = t ? `${wfEscape(window.__wfTaskWfMap[t.workflow_id] || '')} · ${wfEscape(wfDsName(t.instance_id))}` : '查看每次运行结果、产出与耗时';
+  body.innerHTML = '<div class="wf-run-empty">加载中…</div>';
+  drawer.style.display = 'flex';
+  try {
+    const r = await fetch('/api/intelligence/workflow-tasks/' + taskId + '/runs');
+    const d = await r.json();
+    if (!d.ok) { body.innerHTML = '<div class="wf-run-empty" style="color:var(--danger)">加载失败</div>'; return; }
+    const runs = d.runs || [];
+    if (!runs.length) { body.innerHTML = '<div class="wf-run-empty">暂无运行记录</div>'; return; }
+    const statusText = {running: '运行中', done: '完成', error: '失败', cancelled: '已取消'};
+    const triggerText = {manual: '手动', cron: '定时', api: 'API'};
+    body.innerHTML = '<div class="wf-run-timeline">' + runs.map(rn => {
+      const outs = (rn.outputs || []).map(o => `<div class="wf-run-out">${wfEscape(o.label || o.id || '')}（${wfEscape(o.action || '')}）：${wfEscape(o.summary || '')}</div>`).join('');
+      const dur = rn.duration_ms != null ? (rn.duration_ms / 1000).toFixed(1) + 's' : '-';
+      const when = rn.started_at ? wfEscape(rn.started_at) : '-';
+      return `<div class="wf-run-item ${rn.status}">
+        <div class="wf-ri-head">
+          <div class="wf-ri-status ${rn.status}">${statusText[rn.status] || rn.status} · ${triggerText[rn.trigger] || rn.trigger || '手动'}</div>
+          <div class="wf-ri-time">${when} · ${dur}</div>
+        </div>
+        <div class="wf-ri-metrics">
+          <span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>发现 ${rn.findings_count || 0}</span>
+          <span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>方案 ${rn.plan_count || 0}</span>
+        </div>
+        ${rn.error ? `<div class="wf-ri-error">${wfEscape(rn.error)}</div>` : ''}
+        ${outs || (rn.summary ? `<div class="wf-run-outs"><div class="wf-run-out">${wfEscape(rn.summary)}</div></div>` : '')}
+      </div>`;
+    }).join('') + '</div>';
+  } catch (e) { body.innerHTML = '<div class="wf-run-empty" style="color:var(--danger)">加载失败：' + wfEscape(e.message) + '</div>'; }
+}
+function wfCloseRunDrawer() { document.getElementById('wf-run-drawer').style.display = 'none'; }
+</script>
 <div class="app-shell">
 
   <!-- ─── Sidebar ─── -->
@@ -6461,6 +6710,9 @@ function formatBytes(bytes) {
     </div>
     <div class="nav-item" onclick="showPage('workflow'); loadWorkflowPage()" id="nav-workflow">
       <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><path d="M10 6.5h4a3 3 0 0 1 3 3v4.5"/></svg></span> <span data-i18n="menu.workflow">Workflow 编排</span> <span style="margin-left:6px;background:#f59e0b;color:#1f2937;font-size:10px;font-weight:600;padding:1px 6px;border-radius:999px;vertical-align:middle">开发中</span>
+    </div>
+    <div class="nav-item" onclick="showPage('workflow-task'); loadWorkflowTaskPage()" id="nav-workflow-task">
+      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><path d="M10 6.5h4a3 3 0 0 1 3 3v4.5"/></svg></span> <span data-i18n="menu.workflow_task">工作流任务</span>
     </div>
     <div class="nav-item" onclick="showPage('ai')" id="nav-ai">
       <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg></span> <span data-i18n="webui.nav_ai">AI 诊断设置</span>
@@ -9853,7 +10105,7 @@ curl -H "X-API-Key: YOUR_API_KEY" http://localhost:5003/api/v1/inspect/{task_id}
           <div class="card intel-hero">
             <div class="card-title">
               <svg viewBox="0 0 24 24" width="18" height="18" style="stroke:var(--accent2);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><path d="M10 6.5h4a3 3 0 0 1 3 3v4.5"/></svg>
-              <span>Workflow 编排</span>
+              <span data-i18n="menu.workflow">Workflow 编排</span>
             </div>
             <div style="color:var(--text-muted);font-size:12.5px;margin-bottom:14px">可视化拖拽编排多 Agent 工作流：从左侧拖入组件节点、在画布上连线定义依赖，保存后可一键执行并查看执行链。</div>
             <button class="btn btn-primary" onclick="wfNew()">+ 新增工作流</button>
@@ -9907,6 +10159,262 @@ curl -H "X-API-Key: YOUR_API_KEY" http://localhost:5003/api/v1/inspect/{task_id}
           </div>
         </div>
       </div><!-- /page-workflow -->
+
+      <!-- ══ Page: Workflow Tasks ══ -->
+      <div class="page" id="page-workflow-task" style="display:none;">
+        <style>
+          /* ── 页面头部 ── */
+          .wf-task-header{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;justify-content:space-between;margin-bottom:18px}
+          .wf-task-title-wrap{min-width:0;flex:1}
+          .wf-task-title{display:flex;align-items:center;gap:10px;font-size:20px;font-weight:700;letter-spacing:.2px;margin:0}
+          .wf-task-title .wf-title-icon{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--accent),rgba(0,200,160,.25));display:flex;align-items:center;justify-content:center;color:#04121a}
+          .wf-task-subtitle{color:var(--text-muted);font-size:13px;margin-top:4px;line-height:1.5}
+          .wf-task-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+
+          /* ── 统计条 ── */
+          .wf-task-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+          .wf-stat-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:12px;transition:transform var(--trans),box-shadow var(--trans)}
+          .wf-stat-card:hover{transform:translateY(-2px);box-shadow:0 8px 22px rgba(0,0,0,.18)}
+          .wf-stat-icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:var(--surface2);color:var(--text-muted)}
+          .wf-stat-icon.running{color:var(--success);background:rgba(0,200,160,.12)}
+          .wf-stat-icon.error{color:var(--danger);background:rgba(239,68,68,.12)}
+          .wf-stat-icon.stopped{color:var(--text-muted);background:var(--surface2)}
+          .wf-stat-value{font-size:22px;font-weight:700;line-height:1}
+          .wf-stat-label{font-size:12px;color:var(--text-muted);margin-top:2px}
+
+          /* ── 筛选 ── */
+          .wf-filter-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+          .wf-filter-pill{padding:7px 14px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--text-muted);font-size:13px;cursor:pointer;transition:all .18s;display:inline-flex;align-items:center;gap:6px}
+          .wf-filter-pill:hover{border-color:var(--accent);color:var(--text)}
+          .wf-filter-pill.active{background:rgba(0,200,160,.12);border-color:var(--accent);color:var(--accent);font-weight:600}
+          .wf-filter-pill .wf-dot{width:7px;height:7px;border-radius:50%}
+
+          /* ── 卡片网格 ── */
+          .wf-task-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+          .wf-task-card{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:0;cursor:pointer;transition:transform .2s,box-shadow .25s,border-color .2s;overflow:hidden;display:flex;flex-direction:column}
+          .wf-task-card::before{content:"";position:absolute;inset:0;border-radius:14px;padding:2px;background:linear-gradient(135deg,transparent,transparent);-webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;opacity:0;transition:opacity .25s}
+          .wf-task-card:hover{transform:translateY(-3px);box-shadow:0 12px 32px rgba(0,0,0,.22);border-color:rgba(148,163,184,.45)}
+          .wf-task-card.running{border-color:rgba(0,200,160,.5);box-shadow:0 0 0 1px rgba(0,200,160,.18),0 0 24px rgba(0,200,160,.18)}
+          .wf-task-card.running::before{background:linear-gradient(135deg,rgba(0,200,160,.35),transparent 55%);opacity:1}
+          .wf-task-card.error{border-color:rgba(239,68,68,.55);box-shadow:0 0 0 1px rgba(239,68,68,.18),0 0 24px rgba(239,68,68,.16)}
+          .wf-task-card.error::before{background:linear-gradient(135deg,rgba(239,68,68,.35),transparent 55%);opacity:1}
+          .wf-task-card.stopped{opacity:.95}
+
+          .wf-tc-strip{height:3.5px;width:100%;flex:0 0 auto}
+          .wf-tc-strip.running{background:linear-gradient(90deg,var(--success),rgba(0,200,160,.45));animation:strip-shimmer 2s infinite linear}
+          .wf-tc-strip.error{background:linear-gradient(90deg,var(--danger),rgba(239,68,68,.45))}
+          .wf-tc-strip.stopped{background:var(--border)}
+          @keyframes strip-shimmer{0%{background-position:0 0}100%{background-position:200% 0}}
+
+          .wf-tc-body{padding:16px 16px 14px;flex:1;min-width:0}
+          .wf-tc-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px}
+          .wf-tc-icon{width:40px;height:40px;border-radius:11px;background:var(--surface2);display:flex;align-items:center;justify-content:center;color:var(--accent);flex:0 0 auto}
+          .wf-tc-title{min-width:0}
+          .wf-tc-name{font-weight:700;font-size:15px;line-height:1.35;padding-right:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+          .wf-tc-wf{font-size:12px;color:var(--text-muted);margin-top:3px;display:flex;align-items:center;gap:5px}
+          .wf-tc-meta-row{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text-muted);margin-top:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+          .wf-tc-meta-row svg{width:14px;height:14px;flex:0 0 auto;opacity:.75}
+          .wf-tc-footer{display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--border);padding:11px 16px;background:rgba(148,163,184,.03)}
+          .wf-tc-status{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px}
+          .wf-tc-status.running{background:rgba(0,200,160,.13);color:var(--success)}
+          .wf-tc-status.error{background:rgba(239,68,68,.13);color:var(--danger)}
+          .wf-tc-status.stopped{background:var(--surface2);color:var(--text-muted)}
+          .wf-tc-dot{width:7px;height:7px;border-radius:50%;flex:0 0 auto}
+          .wf-tc-dot.running{background:var(--success);box-shadow:0 0 8px var(--success);animation:pulse-dot 1.5s infinite}
+          .wf-tc-dot.error{background:var(--danger);box-shadow:0 0 8px var(--danger)}
+          .wf-tc-dot.stopped{background:var(--text-muted)}
+          .wf-tc-time{font-size:11.5px;color:var(--text-muted)}
+
+          .wf-task-menu-btn{width:30px;height:30px;border-radius:8px;border:1px solid transparent;background:transparent;color:var(--text-muted);cursor:pointer;font-size:18px;line-height:1;display:flex;align-items:center;justify-content:center;transition:all .18s}
+          .wf-task-menu-btn:hover{background:var(--surface2);border-color:var(--border);color:var(--text)}
+          .wf-task-menu{position:absolute;z-index:220;min-width:150px;background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 36px rgba(0,0,0,.4);padding:6px;display:none;overflow:hidden}
+          .wf-task-menu button{display:flex;align-items:center;gap:9px;width:100%;text-align:left;padding:9px 12px;border:none;background:none;color:var(--text);border-radius:8px;cursor:pointer;font-size:13px;transition:background .15s}
+          .wf-task-menu button svg{width:15px;height:15px;opacity:.8}
+          .wf-task-menu button:hover{background:var(--surface2)}
+          .wf-task-menu button.danger{color:var(--danger)}
+          .wf-task-menu button.danger:hover{background:rgba(239,68,68,.12)}
+          .wf-task-menu hr{margin:5px 0;border:0;border-top:1px solid var(--border)}
+
+          /* ── 空状态 ── */
+          .wf-task-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:64px 20px;text-align:center;color:var(--text-muted)}
+          .wf-empty-ico{width:84px;height:84px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;margin-bottom:18px;color:var(--text-muted)}
+          .wf-empty-ico svg{width:42px;height:42px;opacity:.7}
+          .wf-empty-title{font-size:16px;font-weight:600;color:var(--text);margin-bottom:6px}
+          .wf-empty-sub{font-size:13px;max-width:360px;line-height:1.6;margin-bottom:18px}
+
+          /* ── 运行抽屉 ── */
+          .drawer-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;justify-content:flex-end;z-index:9998;backdrop-filter:blur(2px)}
+          .drawer-overlay[style*="display:flex"]{display:flex !important}
+          .drawer-box{width:min(520px,92vw);height:100%;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;box-shadow:-12px 0 48px rgba(0,0,0,.45)}
+          .drawer-header{display:flex;justify-content:space-between;align-items:center;padding:18px 20px;border-bottom:1px solid var(--border);background:var(--surface)}
+          .drawer-title{font-weight:700;font-size:16px;display:flex;align-items:center;gap:10px}
+          .drawer-title .wf-dot{width:8px;height:8px;border-radius:50%}
+          .drawer-body{padding:20px;overflow:auto;flex:1}
+          .drawer-sub{color:var(--text-muted);font-size:12.5px;margin-top:4px}
+
+          .wf-run-timeline{position:relative;padding-left:22px}
+          .wf-run-timeline::before{content:"";position:absolute;left:7px;top:6px;bottom:6px;width:2px;background:var(--border);border-radius:2px}
+          .wf-run-item{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:14px;transition:border-color .2s,transform .2s}
+          .wf-run-item:hover{border-color:rgba(148,163,184,.5);transform:translateX(2px)}
+          .wf-run-item::before{content:"";position:absolute;left:-18.5px;top:18px;width:10px;height:10px;border-radius:50%;background:var(--surface);border:2px solid var(--border);z-index:1}
+          .wf-run-item.running::before{border-color:var(--success);background:var(--success);box-shadow:0 0 10px var(--success)}
+          .wf-run-item.done::before{border-color:var(--success);background:var(--surface)}
+          .wf-run-item.error::before{border-color:var(--danger);background:var(--danger)}
+          .wf-run-item.cancelled::before{border-color:var(--warn);background:var(--warn)}
+          .wf-ri-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px}
+          .wf-ri-status{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:3px 9px;border-radius:999px}
+          .wf-ri-status.running{background:rgba(0,200,160,.13);color:var(--success)}
+          .wf-ri-status.done{background:rgba(0,200,160,.13);color:var(--success)}
+          .wf-ri-status.error{background:rgba(239,68,68,.13);color:var(--danger)}
+          .wf-ri-status.cancelled{background:rgba(245,158,11,.13);color:var(--warn)}
+          .wf-ri-time{font-size:11.5px;color:var(--text-muted);white-space:nowrap}
+          .wf-ri-metrics{display:flex;gap:16px;font-size:12.5px;color:var(--text-muted);margin:8px 0}
+          .wf-ri-metrics span{display:inline-flex;align-items:center;gap:5px}
+          .wf-ri-error{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);border-radius:8px;padding:9px 11px;font-size:12px;color:var(--danger);margin-top:8px;line-height:1.5}
+          .wf-run-outs{margin-top:10px}
+          .wf-run-out{display:flex;gap:10px;align-items:flex-start;font-size:12.5px;padding:8px 10px;border-radius:8px;background:var(--surface2);margin-bottom:7px;border:1px solid var(--border)}
+          .wf-run-out::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--accent);margin-top:7px;flex:0 0 auto}
+          .wf-run-empty{text-align:center;color:var(--text-muted);padding:40px 0;font-size:13px}
+
+          /* ── 模态框 ── */
+          #wf-task-modal .modal-box{max-width:560px;border-radius:16px;overflow:hidden}
+          .wf-modal-head{display:flex;align-items:center;gap:12px;padding:18px 20px;border-bottom:1px solid var(--border);background:var(--surface)}
+          .wf-modal-head .wf-ico{width:36px;height:36px;border-radius:10px;background:rgba(0,200,160,.12);color:var(--accent);display:flex;align-items:center;justify-content:center}
+          .wf-modal-title{font-size:16px;font-weight:700}
+          .wf-modal-sub{font-size:12px;color:var(--text-muted)}
+          .wf-form{padding:20px;display:flex;flex-direction:column;gap:16px}
+          .wf-form-row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+          .wf-form-group{display:flex;flex-direction:column;gap:6px}
+          .wf-form-group.full{grid-column:1/-1}
+          .wf-form-label{font-size:12.5px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:5px}
+          .wf-form-label .opt{color:var(--text-muted);font-weight:400}
+          .wf-form-input{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:14px;outline:none;transition:border-color .2s,box-shadow .2s}
+          .wf-form-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(0,200,160,.12)}
+          .wf-form-hint{font-size:11.5px;color:var(--text-muted);line-height:1.5}
+          .wf-cron-presets{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+          .wf-cron-chip{padding:5px 10px;border-radius:999px;border:1px solid var(--border);background:var(--surface2);color:var(--text-muted);font-size:12px;cursor:pointer;transition:all .18s}
+          .wf-cron-chip:hover{border-color:var(--accent);color:var(--accent);background:rgba(0,200,160,.08)}
+          .wf-modal-foot{display:flex;justify-content:flex-end;gap:10px;padding:14px 20px;border-top:1px solid var(--border);background:var(--surface)}
+          @media (max-width:640px){
+            .wf-task-stats{grid-template-columns:repeat(2,1fr)}
+            .wf-form-row{grid-template-columns:1fr}
+            .wf-task-header{flex-direction:column;align-items:flex-start}
+          }
+        </style>
+
+        <div class="page-content">
+          <div class="wf-task-header">
+            <div class="wf-task-title-wrap">
+              <h2 class="wf-task-title">
+                <span class="wf-title-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><path d="M10 6.5h4a3 3 0 0 1 3 3v4.5"/></svg></span>
+                <span data-i18n="menu.workflow_task">工作流任务</span>
+              </h2>
+              <div class="wf-task-subtitle" data-i18n="wf_task.page_sub">将已编排的工作流绑定数据源并保存为可复用任务，支持手动触发与 Cron 周期调度，实时查看运行状态与历史结果。</div>
+            </div>
+            <div class="wf-task-actions">
+              <button class="btn btn-primary" onclick="wfOpenTaskModal(null)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                <span data-i18n="wf_task.btn_new">新建任务</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="wf-task-stats" id="wf-task-stats">
+            <div class="wf-stat-card"><div class="wf-stat-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><path d="M10 6.5h4a3 3 0 0 1 3 3v4.5"/></svg></div><div><div class="wf-stat-value" id="wf-stat-total">0</div><div class="wf-stat-label" data-i18n="wf_task.stat_total">任务总数</div></div></div>
+            <div class="wf-stat-card"><div class="wf-stat-icon running"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg></div><div><div class="wf-stat-value" id="wf-stat-running">0</div><div class="wf-stat-label" data-i18n="wf_task.stat_running">运行中</div></div></div>
+            <div class="wf-stat-card"><div class="wf-stat-icon stopped"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg></div><div><div class="wf-stat-value" id="wf-stat-stopped">0</div><div class="wf-stat-label" data-i18n="wf_task.stat_stopped">已停止</div></div></div>
+            <div class="wf-stat-card"><div class="wf-stat-icon error"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div><div><div class="wf-stat-value" id="wf-stat-error">0</div><div class="wf-stat-label" data-i18n="wf_task.stat_error">故障</div></div></div>
+          </div>
+
+          <div class="wf-filter-bar" id="wf-task-filter-bar">
+            <button class="wf-filter-pill active" data-filter="" onclick="wfSetFilter(this,'')">
+              <span class="wf-dot" style="background:var(--text-muted)"></span><span data-i18n="wf_task.filter_all">全部</span>
+            </button>
+            <button class="wf-filter-pill" data-filter="running" onclick="wfSetFilter(this,'running')">
+              <span class="wf-dot" style="background:var(--success)"></span><span data-i18n="wf_task.filter_running">运行中</span>
+            </button>
+            <button class="wf-filter-pill" data-filter="stopped" onclick="wfSetFilter(this,'stopped')">
+              <span class="wf-dot" style="background:var(--text-muted)"></span><span data-i18n="wf_task.filter_stopped">已停止</span>
+            </button>
+            <button class="wf-filter-pill" data-filter="error" onclick="wfSetFilter(this,'error')">
+              <span class="wf-dot" style="background:var(--danger)"></span><span data-i18n="wf_task.filter_error">故障</span>
+            </button>
+          </div>
+
+          <div id="wf-task-grid" class="wf-task-grid" style="margin-top:16px"></div>
+          <div id="wf-task-empty" class="wf-task-empty" style="display:none">
+            <div class="wf-empty-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg></div>
+            <div class="wf-empty-title" data-i18n="wf_task.empty_title">还没有工作流任务</div>
+            <div class="wf-empty-sub" data-i18n="wf_task.empty_sub">把工作流和数据源绑定成任务后，就能手动运行或设置 Cron 周期调度，并在这里查看实时状态与历史结果。</div>
+            <button class="btn btn-primary" onclick="wfOpenTaskModal(null)" data-i18n="wf_task.btn_new">新建第一个任务</button>
+          </div>
+        </div>
+
+        <!-- 创建 / 编辑任务模态框 -->
+        <div class="modal-overlay" id="wf-task-modal" style="display:none" onclick="if(event.target===this)wfCloseTaskModal()">
+          <div class="modal-box">
+            <div class="wf-modal-head">
+              <div class="wf-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><path d="M10 6.5h4a3 3 0 0 1 3 3v4.5"/></svg></div>
+              <div>
+                <div class="wf-modal-title" id="wf-task-modal-title">新建工作流任务</div>
+                <div class="wf-modal-sub">选择工作流与数据源，保存后即可手动或按计划运行。</div>
+              </div>
+            </div>
+            <div class="wf-form">
+              <div class="wf-form-group full">
+                <label class="wf-form-label">任务名称</label>
+                <input id="wf-task-name" class="wf-form-input" placeholder="例如：每日生产库深度巡检">
+              </div>
+              <div class="wf-form-row">
+                <div class="wf-form-group">
+                  <label class="wf-form-label">选择工作流</label>
+                  <select id="wf-task-workflow" class="wf-form-input"></select>
+                </div>
+                <div class="wf-form-group">
+                  <label class="wf-form-label">选择数据源</label>
+                  <select id="wf-task-instance" class="wf-form-input"></select>
+                </div>
+              </div>
+              <div class="wf-form-group full">
+                <label class="wf-form-label">诊断目标 <span class="opt">（可选）</span></label>
+                <input id="wf-task-goal" class="wf-form-input" placeholder="留空则使用工作流默认目标">
+              </div>
+              <div class="wf-form-group full">
+                <label class="wf-form-label">周期调度 <span class="opt">（Cron，可选）</span></label>
+                <input id="wf-task-cron" class="wf-form-input" placeholder="例如 0 2 * * *（每天 02:00）">
+                <div class="wf-form-hint">留空表示不启用定时调度，仅手动启动。Cron 格式：分 时 日 月 周。</div>
+                <div class="wf-cron-presets">
+                  <span class="wf-cron-chip" onclick="wfSetCron('0 * * * *')">每小时</span>
+                  <span class="wf-cron-chip" onclick="wfSetCron('0 2 * * *')">每天 02:00</span>
+                  <span class="wf-cron-chip" onclick="wfSetCron('0 2 * * 1')">每周一 02:00</span>
+                  <span class="wf-cron-chip" onclick="wfSetCron('0 2 1 * *')">每月 1 日 02:00</span>
+                </div>
+              </div>
+            </div>
+            <div class="wf-modal-foot">
+              <button class="btn btn-ghost" onclick="wfCloseTaskModal()">取消</button>
+              <button class="btn btn-primary" onclick="wfSaveTask()">保存</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 运行结果抽屉 -->
+        <div class="drawer-overlay" id="wf-run-drawer" style="display:none" onclick="if(event.target===this)wfCloseRunDrawer()">
+          <div class="drawer-box">
+            <div class="drawer-header">
+              <div>
+                <div class="drawer-title" id="wf-run-drawer-title"><span class="wf-dot" style="background:var(--accent)"></span>运行历史</div>
+                <div class="drawer-sub" id="wf-run-drawer-sub">查看每次运行结果、产出与耗时</div>
+              </div>
+              <button class="btn btn-ghost" onclick="wfCloseRunDrawer()">✕</button>
+            </div>
+            <div class="drawer-body" id="wf-run-drawer-body"></div>
+          </div>
+        </div>
+
+        <!-- 卡片菜单（动态定位） -->
+        <div class="wf-task-menu" id="wf-task-menu"></div>
+      </div><!-- /page-workflow-task -->
 
       {% if pro_available %}
             <div class="page" id="page-flow" style="display:none;padding:0;">
