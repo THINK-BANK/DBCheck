@@ -62,7 +62,14 @@ if ! command -v pyinstaller &> /dev/null; then
 fi
 
 echo "[3/5] Installing project dependencies..."
-pip install -r deploy/requirements.txt --quiet
+# CI 宽松模式（DBCHECK_CI_LENIENT=1）：逐个依赖安装，装不上的可选驱动跳过
+# （macOS 上 dmpython 无 wheel、gbase8sdb 只有 sdist 且需厂商 SDK），
+# 最后统一 import 校验构建期必需模块。未设该变量时行为与原先完全一致。
+if [ "${DBCHECK_CI_LENIENT:-0}" = "1" ]; then
+    "$PYTHON_CMD" build/ci_install_deps.py
+else
+    pip install -r deploy/requirements.txt --quiet
+fi
 
 echo "[4/5] Building executable..."
 # Clean old build artifacts (NOT the build/ directory)

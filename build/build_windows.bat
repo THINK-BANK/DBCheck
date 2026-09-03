@@ -42,7 +42,14 @@ echo.
 echo [2/5] Installing dependencies (this may take a few minutes)...
 echo [    ] You will see pip progress output below.
 echo.
-pip install -r deploy/requirements.txt
+:: CI 宽松模式：逐个依赖安装，装不上的可选驱动（依赖厂商 SDK 的厂商驱动等）跳过，
+:: 最后统一 import 校验构建期必需模块。未设该变量时行为与原先完全一致。
+if defined DBCHECK_CI_LENIENT (
+    echo [    ] CI lenient mode: installing dependencies one-by-one.
+    python build\ci_install_deps.py
+) else (
+    pip install -r deploy/requirements.txt
+)
 if errorlevel 1 (
     echo [ERROR] Failed to install dependencies.
     if not defined GITHUB_ACTIONS pause

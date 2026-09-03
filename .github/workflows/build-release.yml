@@ -19,6 +19,9 @@ permissions:
 
 env:
   PY_VERSION: "3.11"
+  # CI 宽松依赖安装：逐个安装依赖，装不上的可选驱动（依赖厂商 SDK / 无对应平台
+  # wheel，如 macOS 上的 dmpython、gbase8sdb）跳过，最后统一校验构建期必需模块。
+  DBCHECK_CI_LENIENT: "1"
 
 jobs:
   build-windows:
@@ -101,6 +104,7 @@ jobs:
     name: Build macOS (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
     strategy:
+      fail-fast: false  # 两个架构互相独立，一个失败不影响另一个跑完（便于一次看全结果）
       matrix:
         include:
           - { runner: macos-14, arch: arm64 }
