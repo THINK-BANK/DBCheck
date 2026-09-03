@@ -75,8 +75,9 @@ jobs:
     runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
-        - { runner: macos-14, arch: arm64 }
-        - { runner: macos-13, arch: x86_64 }
+        include:
+          - { runner: macos-14, arch: arm64 }
+          - { runner: macos-15-intel, arch: x86_64 }
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
