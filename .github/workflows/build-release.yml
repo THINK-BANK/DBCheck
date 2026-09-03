@@ -33,9 +33,24 @@ jobs:
         with:
           python-version: ${{ env.PY_VERSION }}
 
+      # 干净 checkout 缺失的输入物：data/pro_data（空目录，git 不跟踪）与
+      # dbc_config.json（含凭据、不入库）——由 ci_prepare.py 现场补齐（幂等）
+      - name: Prepare build inputs
+        run: python build/ci_prepare.py
+
       - name: Build (PyInstaller -> zip)
-        run: .\build\build_windows.bat
-        shell: cmd
+        shell: pwsh
+        run: |
+          .\build\build_windows.bat 2>&1 | Tee-Object -FilePath build-windows.log
+          exit $LASTEXITCODE
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-windows
+          path: build-windows.log
+          if-no-files-found: warn
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -60,9 +75,21 @@ jobs:
             ln -sf "$PYBIN/bin/python3" /usr/local/bin/python3
             ln -sf "$PYBIN/bin/pip" /usr/local/bin/pip
             yum install -y libffi-devel openssl-devel postgresql-devel 2>/dev/null || true
-            bash build/build_linux.sh
+            # 补齐干净 checkout 缺失的输入物（运行时目录 + 默认配置）
+            python3 build/ci_prepare.py
+            bash build/build_linux.sh 2>&1 | tee build-linux.log
+            RC=${PIPESTATUS[0]}
             chmod -R a+rwX /src/dist
+            exit $RC
           '
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-linux
+          path: build-linux.log
+          if-no-files-found: warn
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -87,8 +114,22 @@ jobs:
         with:
           python-version: ${{ env.PY_VERSION }}
 
+      # 同 Windows：补齐干净 checkout 缺失的输入物
+      - name: Prepare build inputs
+        run: python build/ci_prepare.py
+
       - name: Build (PyInstaller -> tar.gz)
-        run: bash build/build_macos.sh
+        run: |
+          bash build/build_macos.sh 2>&1 | tee build-macos-${{ matrix.arch }}.log
+          exit ${PIPESTATUS[0]}
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-macos-${{ matrix.arch }}
+          path: build-macos-${{ matrix.arch }}.log
+          if-no-files-found: warn
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
