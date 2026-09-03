@@ -33,10 +33,21 @@ def _project_root() -> str:
 
 
 # 运行时目录：git 不跟踪空目录，但 spec 的 data_dirs 需要其存在
+# 注意：data/pro_data 必须是个「存在且非空的目录」，否则 PyInstaller 报错
+# "Unable to find '<dir>' when adding binary and data files"
 RUNTIME_DIRS = [
     os.path.join("data", "pro_data"),
     os.path.join("data", "reports"),
     os.path.join("data", "logs"),
+    os.path.join("data", "backups"),
+    os.path.join("data", "awr_uploads"),
+]
+
+# 配置文件：spec 的 data_files 需要这些文件存在于源码目录
+# （builtin_registry.json / dbcheck-quotes.json 位于 modules/config/ 下，已随源码检出，
+# 但 dbc_config.json 在根目录被 .gitignore 忽略，需现场生成）
+CONFIG_FILES = [
+    "dbc_config.json",
 ]
 
 # dbc_config.json 默认配置（不含任何密钥；AI 默认指向本地 Ollama）
@@ -82,6 +93,13 @@ def ensure_dirs(root: str) -> int:
             os.makedirs(path, exist_ok=True)
             print(f"[ci_prepare] created dir: {rel}")
             made += 1
+        # 确保 data/pro_data 非空（PyInstaller 要求非空目录才能被打包）
+        if rel == "data/pro_data":
+            keep = os.path.join(path, ".gitkeep")
+            if not os.path.exists(keep):
+                with open(keep, "w") as f:
+                    f.write("# Keep this directory non-empty for PyInstaller\n")
+                print(f"[ci_prepare] created .gitkeep in data/pro_data")
     return made
 
 
