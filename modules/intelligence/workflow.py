@@ -232,12 +232,28 @@ class Workflow:
         }
 
     def _save_report(self, step: Step, ctx: SharedContext, findings, plan) -> str:
-        """把上下文发现与处置方案导出为 Markdown 报告，落到 DATA_DIR/reports。"""
+        """把上下文发现与处置方案导出为 Markdown 报告，落到 DATA_DIR/reports。
+
+        报告风格对齐诊断中心：每条发现标注来源专家，并单列「AI 诊断叙述」
+        （多专家协同过程中写入 ctx.notes 的结论），让工作流产物与协同诊断
+        报告观感一致、可读可溯源。
+        """
         import datetime
         import os
 
         from modules.core import paths
 
+        # 来源专家 id → 中文名（解析失败退化为 id 本身）
+        def _src_name(sid: str) -> str:
+            try:
+                from .registry import registry as _reg
+
+                s = _reg.get(sid)
+                return s.name if s else (sid or "未知专家")
+            except Exception:
+                return sid or "未知专家"
+
+        notes = getattr(ctx, "notes", []) or []
         out_dir = paths.DATA_DIR / "reports"
         os.makedirs(out_dir, exist_ok=True)
         ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -256,6 +272,14 @@ class Workflow:
                 content.append("  - %s" % f.detail)
             if getattr(f, "suggestion", ""):
                 content.append("  - 建议：%s" % f.suggestion)
+            src = getattr(f, "source", "") or ""
+            if src:
+                content.append("  - 来源专家：%s" % _src_name(src))
+        if notes:
+            content.append("")
+            content.append("## AI 诊断叙述")
+            for n in notes:
+                content.append("- %s" % n)
         content.append("")
         content.append("## 处置方案（%d）" % len(plan))
         for p in plan:

@@ -4960,7 +4960,10 @@ async function wfRun() {
       html += '<div style="margin-top:10px"><b style="font-size:12px">输出节点</b>' + d.outputs.map(function(o){
         var info = '方式:' + escHtml(o.action) + '，发现:' + (o.findings_count || 0) + '，方案:' + (o.plan_count || 0);
         if (o.summary) info += '，摘要:' + escHtml(o.summary);
-        if (o.report_path) info += '，报告:' + escHtml(o.report_path);
+        if (o.report_path) {
+          var _rb = encodeURIComponent(String(o.report_path).split(/[\\/]/).pop());
+          info += '，报告:<a href="/api/download_file?name=' + _rb + '" target="_blank" style="color:var(--accent);text-decoration:underline">下载 / 查看</a> <span style="color:var(--text-muted);font-size:11px">(' + escHtml(o.report_path) + ')</span>';
+        }
         if (o.email_status) info += '，邮件:' + escHtml(o.email_status);
         return '<div style="font-size:12px;color:var(--text)">• ' + escHtml(o.label || o.id) + '：' + info + '</div>';
       }).join('') + '</div>';
@@ -6664,7 +6667,15 @@ async function wfOpenRunDrawer(taskId) {
     const statusText = {running: '运行中', done: '完成', error: '失败', cancelled: '已取消'};
     const triggerText = {manual: '手动', cron: '定时', api: 'API'};
     body.innerHTML = '<div class="wf-run-timeline">' + runs.map(rn => {
-      const outs = (rn.outputs || []).map(o => `<div class="wf-run-out">${wfEscape(o.label || o.id || '')}（${wfEscape(o.action || '')}）：${wfEscape(o.summary || '')}</div>`).join('');
+      const outs = (rn.outputs || []).map(o => {
+        let line = `<div class="wf-run-out">${wfEscape(o.label || o.id || '')}（${wfEscape(o.action || '')}）：${wfEscape(o.summary || '')}`;
+        if (o.report_path) {
+          const _rb = encodeURIComponent(String(o.report_path).split(/[\\/]/).pop());
+          line += `<br><a href="/api/download_file?name=${_rb}" target="_blank" style="color:var(--accent);text-decoration:underline;font-size:11px">下载 / 查看</a>`;
+        }
+        line += '</div>';
+        return line;
+      }).join('');
       const dur = rn.duration_ms != null ? (rn.duration_ms / 1000).toFixed(1) + 's' : '-';
       const when = rn.started_at ? wfEscape(rn.started_at) : '-';
       return `<div class="wf-run-item ${rn.status}">
@@ -6705,8 +6716,8 @@ function wfCloseRunDrawer() {
       <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9.5 12 3l9 6.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg></span> <span data-i18n="webui.nav_home">首页</span>
     </div>
 
-    <!-- ── 即时巡检 ── -->
-    <div class="nav-section" data-i18n="webui.nav_section_immediate">即时巡检</div>
+    <!-- ── 智能巡检 ── -->
+    <div class="nav-section">智能巡检</div>
     <div class="nav-item" onclick="showPage('wizard')" id="nav-wizard">
       <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></span> <span data-i18n="webui.nav_wizard">数据库巡检</span>
     </div>
@@ -6719,15 +6730,8 @@ function wfCloseRunDrawer() {
     <div class="nav-item" onclick="showPage('dm8-offline')" id="nav-dm8-offline">
       <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.66 3.58 3 8 3s8-1.34 8-3V5"/><path d="M4 12c0 1.66 3.58 3 8 3s8-1.34 8-3"/></svg></span> <span data-i18n="webui.nav_dm8_offline">达梦离线存储检查</span>
     </div>
-
-    <div class="nav-item" onclick="showPage('awr')" id="nav-awr">
-      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18"/><path d="M7 21v-6M12 21V8M17 21v-3"/></svg></span> <span data-i18n="webui.awr_nav">AWR 报告分析</span>
-    </div>
-
-    <!-- ── AI协同诊断 ── -->
-    <div class="nav-section" data-i18n="webui.nav_section_ai">AI协同诊断</div>
     <div class="nav-item" onclick="showPage('intelligence')" id="nav-intelligence">
-      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M7.6 7.6 11 16M16.4 7.6 13 16M8 6h8"/></svg></span>       <span data-i18n="webui.nav_intelligence">智能诊断中心</span>
+      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M7.6 7.6 11 16M16.4 7.6 13 16M8 6h8"/></svg></span> <span data-i18n="webui.nav_intelligence">智能诊断中心</span>
     </div>
     <div class="nav-item" onclick="showPage('workflow'); loadWorkflowPage()" id="nav-workflow">
       <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><path d="M10 6.5h4a3 3 0 0 1 3 3v4.5"/></svg></span> <span data-i18n="menu.workflow">Workflow 编排</span><span class="nav-dev-badge" data-i18n="menu.dev">开发中</span>
@@ -6735,29 +6739,17 @@ function wfCloseRunDrawer() {
     <div class="nav-item" onclick="showPage('workflow-task'); loadWorkflowTaskPage()" id="nav-workflow-task">
       <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><path d="M10 6.5h4a3 3 0 0 1 3 3v4.5"/></svg></span> <span data-i18n="menu.workflow_task">工作流任务</span><span class="nav-dev-badge" data-i18n="menu.dev">开发中</span>
     </div>
-    <div class="nav-item" onclick="showPage('ai')" id="nav-ai">
-      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg></span> <span data-i18n="webui.nav_ai">AI 诊断设置</span>
-    </div>
-    <div class="nav-item" onclick="showPage('schema-dict')" id="nav-schema-dict">
-      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg></span> <span>系统字典表</span>
-    </div>
-
-    <!-- ── SQL 审核(MVP1) ── -->
-    <div class="nav-section">变更安全</div>
-    <div class="nav-item" onclick="showPage('sql-audit')" id="nav-sql-audit">
-      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.4 8.5 8 11 4.6-2.5 8-6 8-11V5l-8-3z"/><path d="M9 12l2 2 4-4"/></svg></span> <span>SQL 审核</span>
-    </div>
-
-    <!-- ── 巡检编排(Pro) ── -->
     {% if pro_available %}
-    <div class="nav-section" data-i18n="webui.nav_section_orchestrate">巡检编排</div>
     <div class="nav-item" onclick="showPage('flow')" id="nav-flow">
       <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><path d="M10 6.5h4a3 3 0 0 1 3 3v4.5"/></svg></span> <span data-i18n="webui.nav_flow">巡检编排</span>
     </div>
     {% endif %}
 
-    <!-- ── 历史 ── -->
-    <div class="nav-section" data-i18n="webui.nav_section_history">历史</div>
+    <!-- ── 巡检报告 ── -->
+    <div class="nav-section">巡检报告</div>
+    <div class="nav-item" onclick="showPage('awr')" id="nav-awr">
+      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18"/><path d="M7 21v-6M12 21V8M17 21v-3"/></svg></span> <span data-i18n="webui.awr_nav">AWR 报告分析</span>
+    </div>
     <div class="nav-item" onclick="showPage('reports')" id="nav-reports">
       <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/><path d="M9 13h6M9 17h6M9 9h2"/></svg></span> <span data-i18n="webui.reports_title">数据库巡检历史</span>
     </div>
@@ -6767,13 +6759,60 @@ function wfCloseRunDrawer() {
     <div class="nav-item" onclick="showPage('diag-history')" id="nav-diag-history">
       <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v6h6"/><path d="M3.5 9a9 9 0 1 1-1 5"/><path d="M12 8v4l3 2"/></svg></span> <span data-i18n="webui.nav_diag_history">诊断历史</span>
     </div>
-
     <div class="nav-item" onclick="showPage('trend')" id="nav-trend">
       <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"/><path d="M17 7h4v4"/></svg></span> <span data-i18n="webui.trend_title">历史趋势分析</span>
     </div>
 
-    <!-- ── 配置管理 ── -->
-    <div class="nav-section" data-i18n="webui.nav_section_config">配置管理</div>
+    <!-- ── AI 与知识 ── -->
+    <div class="nav-section">AI 与知识</div>
+    <div class="nav-item" onclick="showPage('ai')" id="nav-ai">
+      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg></span> <span data-i18n="webui.nav_ai">AI 诊断设置</span>
+    </div>
+    <div class="nav-item" onclick="showPage('schema-dict')" id="nav-schema-dict">
+      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg></span> <span>系统字典表</span>
+    </div>
+    <div class="nav-item" onclick="showPage('rag')" id="nav-rag">
+      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-5a4 4 0 0 0-4 4 4 4 0 0 0-4-4H3Z"/></svg></span> <span data-i18n="webui.rag_nav">RAG 知识库</span>
+    </div>
+    <div class="nav-item" onclick="showPage('doc-kb')" id="nav-doc-kb">
+      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span> <span data-i18n="webui.doc_kb_nav">官方文档知识库</span>
+    </div>
+
+    <!-- ── 变更安全 ── -->
+    <div class="nav-section">变更安全</div>
+    <div class="nav-item" onclick="showPage('sql-audit')" id="nav-sql-audit">
+      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.4 8.5 8 11 4.6-2.5 8-6 8-11V5l-8-3z"/><path d="M9 12l2 2 4-4"/></svg></span> <span>SQL 审核</span>
+    </div>
+
+    <!-- ── 监控运维 ── -->
+    <div class="nav-section">监控运维</div>
+    <div class="nav-item" onclick="showPage('monitor-slow')" id="nav-monitor-slow">
+      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span> <span data-i18n="webui.nav_monitor_slow">实时慢查询</span>
+    </div>
+    <div class="nav-item" onclick="showPage('monitor-conn')" id="nav-monitor-conn">
+      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4V8Z"/></svg></span> <span data-i18n="webui.nav_monitor_conn">活跃连接监控</span>
+    </div>
+    <div class="nav-item" onclick="showPage('sql-editor')" id="nav-sql-editor">
+      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg></span> <span data-i18n="webui.nav_sql_editor">SQL 编辑器</span>
+    </div>
+    <div class="nav-item" onclick="showPage('remote-shell')" id="nav-remote-shell">
+      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="4 17 10 11 4 5"/><path d="m12 19 9 0"/></svg></span> <span data-i18n="remote_shell.title">远程终端</span>
+    </div>
+    <div class="nav-item" onclick="showPage('oracle-client')" id="nav-oracle-client">
+      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span> <span data-i18n="webui.nav_oracle_client">Oracle Client</span>
+    </div>
+    <div class="nav-item" onclick="showPage('notifier')" id="nav-notifier">
+      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span> <span data-i18n="webui.nav_notifier">通知设置</span>
+    </div>
+    <div class="nav-item" onclick="showPage('disaster-recovery')" id="nav-disaster-recovery">
+      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 8v4"/><path d="m10 10 2-2 2 2"/></svg></span> <span data-i18n="webui.nav_disaster_recovery">容灾备份</span>
+    </div>
+    <div class="nav-item" onclick="showPage('data-management')" id="nav-data-management">
+      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="4" width="20" height="5" rx="1"/><path d="M4 9v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9"/><path d="M10 13h4"/></svg></span> <span data-i18n="webui.nav_data_management">RaccoonX 备份</span>
+    </div>
+
+    <!-- ── 数据源与配置 ── -->
+    <div class="nav-section">数据源与配置</div>
     <div class="nav-item" onclick="showPage('datasources')" id="nav-datasources">
       <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.66 3.58 3 8 3s8-1.34 8-3V5"/><path d="M4 12c0 1.66 3.58 3 8 3s8-1.34 8-3"/></svg></span> <span data-i18n="webui.nav_datasources">数据源管理</span>
     </div>
@@ -6791,49 +6830,12 @@ function wfCloseRunDrawer() {
       <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M9 12h6M9 16h6"/></svg></span> <span data-i18n="webui.nav_rules">规则引擎</span>
     </div>
     {% endif %}
-    <div class="nav-item" onclick="showPage('rag')" id="nav-rag">
-      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-5a4 4 0 0 0-4 4 4 4 0 0 0-4-4H3Z"/></svg></span> <span data-i18n="webui.rag_nav">RAG 知识库</span>
-    </div>
-    <div class="nav-item" onclick="showPage('doc-kb')" id="nav-doc-kb">
-      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span> <span data-i18n="webui.doc_kb_nav">官方文档知识库</span>
-    </div>
     <div class="nav-item" onclick="showPage('plugin-market')" id="nav-plugin-market">
       <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg></span> <span data-i18n="webui.nav_plugin_market">插件市场</span>
     </div>
 
-    <!-- ── 工具 ── -->
-    <div class="nav-section" data-i18n="webui.nav_section_tools">工具</div>
-    <div class="nav-item" onclick="showPage('sql-editor')" id="nav-sql-editor">
-      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg></span> <span data-i18n="webui.nav_sql_editor">SQL 编辑器</span>
-    </div>
-    <div class="nav-item" onclick="showPage('remote-shell')" id="nav-remote-shell">
-      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="4 17 10 11 4 5"/><path d="m12 19 9 0"/></svg></span> <span data-i18n="remote_shell.title">远程终端</span>
-    </div>
-    <div class="nav-item" onclick="showPage('monitor-slow')" id="nav-monitor-slow">
-      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span> <span data-i18n="webui.nav_monitor_slow">实时慢查询</span>
-    </div>
-    <div class="nav-item" onclick="showPage('monitor-conn')" id="nav-monitor-conn">
-      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4V8Z"/></svg></span> <span data-i18n="webui.nav_monitor_conn">活跃连接监控</span>
-    </div>
-
-    <!-- ── 容灾备份 ── -->
-    <div class="nav-section" data-i18n="webui.nav_section_dr">容灾备份</div>
-    <div class="nav-item" onclick="showPage('disaster-recovery')" id="nav-disaster-recovery">
-      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 8v4"/><path d="m10 10 2-2 2 2"/></svg></span> <span data-i18n="webui.nav_disaster_recovery">容灾备份</span>
-    </div>
-    <div class="nav-item" onclick="showPage('data-management')" id="nav-data-management">
-      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="4" width="20" height="5" rx="1"/><path d="M4 9v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9"/><path d="M10 13h4"/></svg></span> <span data-i18n="webui.nav_data_management">RaccoonX 备份</span>
-    </div>
-
     <!-- ── 系统 ── -->
     <div class="nav-section" data-i18n="webui.nav_section_system">系统</div>
-    <!-- Oracle Client 设置：支持一键自动下载 Instant Client，无需手动去 Oracle 官网 -->
-    <div class="nav-item" onclick="showPage('oracle-client')" id="nav-oracle-client">
-      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span> <span data-i18n="webui.nav_oracle_client">Oracle Client</span>
-    </div>
-    <div class="nav-item" onclick="showPage('notifier')" id="nav-notifier">
-      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span> <span data-i18n="webui.nav_notifier">通知设置</span>
-    </div>
     <div class="nav-item" onclick="showPage('apikey')" id="nav-apikey">
       <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4"/><path d="m21 2-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/></svg></span> <span data-i18n="webui.nav_apikey">API Key 管理</span>
     </div>
@@ -6848,6 +6850,7 @@ function wfCloseRunDrawer() {
     </div>
 
     </div><!-- /sidebar-nav -->
+
 
     <div class="sidebar-footer">
       <button class="sidebar-toggle" onclick="toggleSidebar()" title="折叠/展开菜单" id="sidebar-toggle-btn">«</button>
@@ -10294,8 +10297,9 @@ curl -H "X-API-Key: YOUR_API_KEY" http://localhost:5003/api/v1/inspect/{task_id}
           .wf-ri-metrics span{display:inline-flex;align-items:center;gap:5px}
           .wf-ri-error{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);border-radius:8px;padding:9px 11px;font-size:12px;color:var(--danger);margin-top:8px;line-height:1.5}
           .wf-run-outs{margin-top:10px}
-          .wf-run-out{display:flex;gap:10px;align-items:flex-start;font-size:12.5px;padding:8px 10px;border-radius:8px;background:var(--surface2);margin-bottom:7px;border:1px solid var(--border)}
-          .wf-run-out::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--accent);margin-top:7px;flex:0 0 auto}
+          .wf-run-out{position:relative;display:block;font-size:12.5px;padding:8px 10px 8px 22px;border-radius:8px;background:var(--surface2);margin-bottom:7px;border:1px solid var(--border);line-height:1.55}
+          .wf-run-out::before{content:"";position:absolute;left:9px;top:14px;width:5px;height:5px;border-radius:50%;background:var(--accent)}
+          .wf-run-out a{display:inline-block;white-space:nowrap}
           .wf-run-empty{text-align:center;color:var(--text-muted);padding:40px 0;font-size:13px}
 
           /* ── 模态框 ── */
