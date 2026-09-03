@@ -7207,7 +7207,7 @@ def api_ds_databases(ds_id):
     if not inst:
         return jsonify({'error': f'数据源不存在: {ds_id}'}), 404
 
-    db_type = inst.get('db_type', '').lower().replace('oracle_full', 'oracle')
+    db_type = inst.get('db_type', '').lower().replace('oracle_full', 'oracle').replace('_jdbc', '')
     if db_type == 'pg':
         db_type = 'postgresql'
     host     = inst.get('host', '')
@@ -7440,7 +7440,7 @@ def api_ds_objects(ds_id):
     if not inst:
         return jsonify({'error': f'数据源不存在: {ds_id}'}), 404
 
-    db_type = inst.get('db_type', '').lower().replace('oracle_full', 'oracle')
+    db_type = inst.get('db_type', '').lower().replace('oracle_full', 'oracle').replace('_jdbc', '')
     if db_type == 'pg':
         db_type = 'postgresql'
     host    = inst.get('host', '')
@@ -7954,7 +7954,7 @@ def api_execute_sql():
     if not db_info:
         return jsonify({'error': '数据源不存在'}), 404
 
-    db_type = db_info.get('db_type', '').replace('oracle_full', 'oracle')
+    db_type = (db_info.get('db_type', '') or '').lower().replace('oracle_full', 'oracle').replace('_jdbc', '')
     if db_type == 'pg':
         db_type = 'postgresql'
     host = db_info.get('host', '')
@@ -8706,7 +8706,7 @@ def api_inspection_execute_sql():
     if not db_info:
         return jsonify({'ok': False, 'error': '数据源不存在'})
 
-    db_type = db_info.get('db_type', '').lower()
+    db_type = db_info.get('db_type', '').lower().replace('oracle_full', 'oracle').replace('_jdbc', '')
     datasource_name = db_info.get('name', datasource_id)
 
     # 4. 执行 SQL
@@ -10340,11 +10340,79 @@ def on_join(data):
 
 # 活跃终端会话: {sid: {'ssh': SSHClient, 'channel': Channel, 'thread': Thread, 'instance_id': str}}
 _remote_sessions = {}
+_remote_sessions_lock = threading.Lock()
+
+
+def _remote_shell_worker(sid, instance_id, ssh_host, ssh_port, ssh_user, ssh_password, ssh_key_file):
+    """在原生线程中执行 paramiko SSH 连接与读取循环。
+
+    源码模式未打 gevent monkey patch，paramiko 的 socket IO 会阻塞 gevent hub；
+    因此远程终端的阻塞操作必须放到原生线程，避免卡死整个 WebSocket 事件循环。
+    """
+    import paramiko
+    import time
+
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+    try:
+        if ssh_key_file and os.path.isfile(ssh_key_file):
+            client.connect(hostname=ssh_host, port=ssh_port, username=ssh_user,
+                           key_filename=ssh_key_file, timeout=10,
+                           look_for_keys=False, allow_agent=False,
+                           disabled_algorithms={'pubkeys': ['ssh-rsa']})
+        elif ssh_password:
+            client.connect(hostname=ssh_host, port=ssh_port, username=ssh_user,
+                           password=ssh_password, timeout=10,
+                           look_for_keys=False, allow_agent=False,
+                           disabled_algorithms={'pubkeys': ['ssh-rsa']})
+        else:
+            socketio.emit('remote_shell_status', {'status': 'error', 'msg': 'SSH 密码或密钥文件为空'}, room=sid)
+            return
+    except Exception as e:
+        socketio.emit('remote_shell_status', {'status': 'error', 'msg': f'SSH 连接失败: {e}'}, room=sid)
+        return
+
+    try:
+        channel = client.invoke_shell(term='xterm', width=120, height=30)
+    except Exception as e:
+        socketio.emit('remote_shell_status', {'status': 'error', 'msg': f'打开 SSH Shell 失败: {e}'}, room=sid)
+        client.close()
+        return
+
+    # 通知前端已连接
+    socketio.emit('remote_shell_status', {'status': 'connected', 'msg': f'已连接 {ssh_user}@{ssh_host}:{ssh_port}'}, room=sid)
+
+    # 读取循环：在原生线程中阻塞读取不影响 gevent 事件循环
+    while True:
+        if channel.closed:
+            break
+        if channel.recv_ready():
+            try:
+                recv_data = channel.recv(4096).decode('utf-8', errors='replace')
+                socketio.emit('remote_shell_output', {'data': recv_data}, room=sid)
+            except Exception:
+                break
+        time.sleep(0.05)
+
+    # 连接断开清理
+    with _remote_sessions_lock:
+        session = _remote_sessions.pop(sid, None)
+    if session:
+        try:
+            session['channel'].close()
+        except Exception:
+            pass
+        try:
+            session['ssh'].close()
+        except Exception:
+            pass
+    socketio.emit('remote_shell_status', {'status': 'disconnected', 'msg': '连接已断开'}, room=sid)
 
 
 @socketio.on('remote_shell_connect')
 def on_remote_shell_connect(data):
-    """SSH 连接远程服务器"""
+    """SSH 连接远程服务器（前置校验后交给原生线程执行阻塞 IO）"""
     instance_id = data.get('instance_id', '')
     if not instance_id:
         socketio.emit('remote_shell_status', {'status': 'error', 'msg': '缺少实例 ID'}, room=request.sid)
@@ -10367,93 +10435,42 @@ def on_remote_shell_connect(data):
         ssh_password = inst.get('ssh_password', '') or ''
         ssh_key_file = inst.get('ssh_key_file', '') or ''
 
-        # 关闭已有会话
-        if request.sid in _remote_sessions:
-            try:
-                _remote_sessions[request.sid]['channel'].close()
-                _remote_sessions[request.sid]['ssh'].close()
-            except Exception:
-                pass
-            _remote_sessions[request.sid]['thread'].join(timeout=3)
-            del _remote_sessions[request.sid]
-
-        import paramiko
-        client = paramiko.SSHClient()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-
-        try:
-            if ssh_key_file and os.path.isfile(ssh_key_file):
-                client.connect(hostname=ssh_host, port=ssh_port, username=ssh_user,
-                               key_filename=ssh_key_file, timeout=10,
-                               look_for_keys=False, allow_agent=False,
-                               disabled_algorithms={'pubkeys': ['ssh-rsa']})
-            elif ssh_password:
-                client.connect(hostname=ssh_host, port=ssh_port, username=ssh_user,
-                               password=ssh_password, timeout=10,
-                               look_for_keys=False, allow_agent=False,
-                               disabled_algorithms={'pubkeys': ['ssh-rsa']})
-            else:
-                socketio.emit('remote_shell_status', {'status': 'error', 'msg': 'SSH 密码或密钥文件为空'}, room=request.sid)
-                return
-        except Exception as e:
-            socketio.emit('remote_shell_status', {'status': 'error', 'msg': f'SSH 连接失败: {e}'}, room=request.sid)
-            return
-
-        # 打开一个 shell 通道
-        channel = client.invoke_shell(term='xterm', width=120, height=30)
-
-        # 在后台任务前捕获 sid（request context 不传递到后台线程）
         sid = request.sid
 
-        # 启动读取线程（使用 socketio.start_background_task 确保 emit 在正确上下文中）
-        def read_loop():
-            import time
-            # 等待 shell 启动并输出欢迎信息/提示符
-            time.sleep(0.5)
-            socketio.emit('remote_shell_status', {'status': 'connected', 'msg': f'已连接 {ssh_user}@{ssh_host}:{ssh_port}'}, room=sid)
+        # 关闭已有会话（在主线程/gevent 协程中执行，避免跨线程操作 dict）
+        with _remote_sessions_lock:
+            old = _remote_sessions.pop(sid, None)
+        if old:
+            try:
+                old['channel'].close()
+                old['ssh'].close()
+            except Exception:
+                pass
+            old['thread'].join(timeout=3)
 
-            while True:
-                if channel.closed:
-                    break
-                if channel.recv_ready():
-                    try:
-                        recv_data = channel.recv(4096).decode('utf-8', errors='replace')
-                        socketio.emit('remote_shell_output', {'data': recv_data}, room=sid)
-                    except Exception:
-                        break
-                time.sleep(0.05)
-            # 连接断开清理
-            if sid in _remote_sessions:
-                try:
-                    channel.close()
-                    client.close()
-                except Exception:
-                    pass
-                _remote_sessions.pop(sid, None)
-                socketio.emit('remote_shell_status', {'status': 'disconnected', 'msg': '连接已断开'}, room=sid)
-
-        t = socketio.start_background_task(target=read_loop)
-
-        _remote_sessions[sid] = {
-            'ssh': client,
-            'channel': channel,
-            'thread': t,
-            'instance_id': instance_id
-        }
+        # 在原生线程中执行 paramiko 阻塞连接，避免卡死 gevent hub
+        t = threading.Thread(
+            target=_remote_shell_worker,
+            args=(sid, instance_id, ssh_host, ssh_port, ssh_user, ssh_password, ssh_key_file),
+            daemon=True
+        )
+        t.start()
 
     except Exception as e:
         import traceback
         traceback.print_exc()
-        socketio.emit('remote_shell_status', {'status': 'error', 'msg': str(e)}, room=request.sid)
+        socketio.emit('remote_shell_status', {'status': 'error', 'msg': str(e) or 'SSH 连接异常'}, room=request.sid)
 
 
 @socketio.on('remote_shell_input')
 def on_remote_shell_input(data):
     """接收前端终端输入，发送到 SSH channel"""
     sid = request.sid
-    if sid in _remote_sessions:
+    with _remote_sessions_lock:
+        session = _remote_sessions.get(sid)
+    if session:
         try:
-            _remote_sessions[sid]['channel'].send(data.get('data', ''))
+            session['channel'].send(data.get('data', ''))
         except Exception:
             pass
 
@@ -10462,12 +10479,14 @@ def on_remote_shell_input(data):
 def on_remote_shell_resize(data):
     """终端窗口大小调整"""
     sid = request.sid
-    if sid not in _remote_sessions:
+    with _remote_sessions_lock:
+        session = _remote_sessions.get(sid)
+    if not session:
         return
     try:
         cols = int(data.get('cols', 80))
         rows = int(data.get('rows', 24))
-        _remote_sessions[sid]['channel'].resize_pty(width=cols, height=rows)
+        session['channel'].resize_pty(width=cols, height=rows)
     except Exception:
         pass
 
@@ -10476,14 +10495,15 @@ def on_remote_shell_resize(data):
 def on_remote_shell_disconnect():
     """断开 SSH 连接"""
     sid = request.sid
-    if sid in _remote_sessions:
+    with _remote_sessions_lock:
+        session = _remote_sessions.pop(sid, None)
+    if session:
         try:
-            _remote_sessions[sid]['channel'].close()
-            _remote_sessions[sid]['ssh'].close()
+            session['channel'].close()
+            session['ssh'].close()
         except Exception:
             pass
-        _remote_sessions[sid]['thread'].join(timeout=3)
-        del _remote_sessions[sid]
+        session['thread'].join(timeout=3)
         socketio.emit('remote_shell_status', {'status': 'disconnected', 'msg': '已断开'}, room=sid)
 
 
@@ -10491,14 +10511,15 @@ def on_remote_shell_disconnect():
 def on_disconnect():
     """前端断开时清理 SSH 会话"""
     sid = request.sid
-    if sid in _remote_sessions:
+    with _remote_sessions_lock:
+        session = _remote_sessions.pop(sid, None)
+    if session:
         try:
-            _remote_sessions[sid]['channel'].close()
-            _remote_sessions[sid]['ssh'].close()
+            session['channel'].close()
+            session['ssh'].close()
         except Exception:
             pass
-        _remote_sessions[sid]['thread'].join(timeout=3)
-        del _remote_sessions[sid]
+        session['thread'].join(timeout=3)
 
 
 def _setup_driver_paths():

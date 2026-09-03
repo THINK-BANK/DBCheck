@@ -23081,6 +23081,24 @@ function initSqlEditor() {
   window.sqlEditor = null;  // 兼容引用
 }
 
+// ─── SQL 编辑器文本读写（原生 textarea 模式）───
+function getSqlEditorText() {
+  var ta = document.getElementById('sql-input-area');
+  if (ta) return ta.value;
+  // 兼容：若未来恢复 CodeMirror，则优先用其实例
+  if (window.sqlEditor && typeof window.sqlEditor.getValue === 'function') return window.sqlEditor.getValue();
+  return '';
+}
+function setSqlEditorText(text) {
+  var ta = document.getElementById('sql-input-area');
+  if (ta) {
+    ta.value = (text == null ? '' : String(text));
+    if (window.sqlEditor && typeof window.sqlEditor.setValue === 'function') window.sqlEditor.setValue(ta.value);
+    return;
+  }
+  if (window.sqlEditor && typeof window.sqlEditor.setValue === 'function') window.sqlEditor.setValue(text == null ? '' : String(text));
+}
+
 async function loadSqlTree() {
   var body = document.getElementById('sql-tree-body');
   if (!body) return;
@@ -23102,7 +23120,7 @@ async function loadSqlTree() {
       var label = (ds.name || (ds.host + ':' + ds.port));
       var type  = (ds.db_type || '').toLowerCase().replace('oracle_full','oracle');
       html += '<div class="sql-tree-node" data-type="ds" data-ds-id="' + dsId + '">'
-            +   '<span class="tree-toggle" id="tree-toggle-ds-' + dsId + '" onclick="treeToggleDs(' + dsId + ', this)">▶</span>'
+            +   '<span class="tree-toggle" id="tree-toggle-ds-' + dsId + '" onclick="treeToggleDs(\'' + dsId + '\', this)">▶</span>'
             +   '<span class="tree-icon">🗄</span>'
             +   '<span class="tree-label" onclick="treeSelect(this.parentElement)">' + escapeHtml(label) + ' <small style="color:var(--text-muted)">(' + type + ')</small></span>'
             + '</div>';
@@ -23135,7 +23153,7 @@ async function treeToggleDs(dsId, toggleEl) {
       var safeId = dbName.replace(/[^a-zA-Z0-9]/g,'_');
       var dbNameEsc = dbName.replace(/'/g, "\\'");
       html += '<div class="sql-tree-node" data-type="db" data-ds-id="' + dsId + '" data-db="' + escapeHtml(dbName) + '">'
-            +   '<span class="tree-toggle" id="tree-toggle-db-' + dsId + '-' + safeId + '" onclick="treeToggleDb(' + dsId + ', \'' + dbNameEsc + '\', this)">▶</span>'
+            +   '<span class="tree-toggle" id="tree-toggle-db-' + dsId + '-' + safeId + '" onclick="treeToggleDb(\'' + dsId + '\', \'' + dbNameEsc + '\', this)">▶</span>'
             +   '<span class="tree-icon">🗃</span>'
             +   '<span class="tree-label" onclick="treeSelect(this.parentElement)">' + escapeHtml(dbName) + '</span>'
             + '</div>';
@@ -23659,6 +23677,7 @@ function connectRemoteShell() {
     return;
   }
   console.log('[RemoteShell] Connecting to instance:', instanceId);
+  updateRemoteStatus('connecting', (I18N && I18N['remote_shell.connecting']) || '连接中...');
   _remoteSocket.emit('remote_shell_connect', { instance_id: instanceId });
 }
 
@@ -23678,10 +23697,18 @@ function updateRemoteStatus(status, msg) {
   } else if (status === 'disconnected') {
     statusEl.innerHTML = '<span class="status-dot disconnected"></span> 未连接';
     connectBtn.style.display = 'inline-block';
+    connectBtn.disabled = false;
     disconnectBtn.style.display = 'none';
     _remoteConnected = false;
+  } else if (status === 'connecting') {
+    statusEl.innerHTML = '<span class="status-dot disconnected"></span> ' + (msg || '连接中...');
+    connectBtn.disabled = true;
   } else if (status === 'error') {
     statusEl.innerHTML = `<span class="status-dot disconnected"></span> 错误: ${msg}`;
+    connectBtn.style.display = 'inline-block';
+    connectBtn.disabled = false;
+    disconnectBtn.style.display = 'none';
+    _remoteConnected = false;
     toast(msg, 'error');
   }
 }
