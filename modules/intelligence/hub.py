@@ -193,6 +193,34 @@ def _build_inspection_report(instance_id: str) -> Optional[Dict[str, Any]]:
     }
 
 
+def prepare_instance_inputs(instance_id: str) -> Dict[str, Any]:
+    """构造实例输入：数据源连接信息 + 历史巡检报告。
+
+    供诊断中枢 ``_prepare`` 与「工作流任务」运行器共用，确保无论走哪条执行路径，
+    专家都能拿到 ``target_instance`` / ``target_meta`` / ``inspection_report`` 三样数据。
+    单点失败（解密失败 / 无历史巡检）不影响整体，缺失即留空由专家自行降级。
+    """
+    inputs: Dict[str, Any] = {}
+    try:
+        inst = _get_instance(instance_id)
+        if inst:
+            inputs["target_instance"] = inst
+            inputs["target_meta"] = {
+                "instance_id": instance_id,
+                "instance_name": inst.get("name", ""),
+                "db_type": inst.get("db_type", ""),
+            }
+    except Exception:
+        pass
+    try:
+        report = _build_inspection_report(instance_id)
+        if report is not None:
+            inputs["inspection_report"] = report
+    except Exception:
+        pass
+    return inputs
+
+
 class DiagnosticHub:
     def __init__(self) -> None:
         register_all()
@@ -216,28 +244,8 @@ class DiagnosticHub:
     def _prepare(self, goal: str, instance_id: str, inputs: dict = None):
         """构造共享上下文并规划协同顺序（供 dispatch / dispatch_stream 复用）。"""
         ctx_inputs = dict(inputs or {})
-
-        # 取目标数据源的解密连接信息，供巡检专员实时调用引擎使用
-        target_instance = None
-        try:
-            target_instance = _get_instance(instance_id)
-        except Exception:
-            target_instance = None
-        if target_instance:
-            ctx_inputs["target_instance"] = target_instance
-            ctx_inputs["target_meta"] = {
-                "instance_id": instance_id,
-                "instance_name": target_instance.get("name", ""),
-                "db_type": target_instance.get("db_type", ""),
-            }
-
-        # 同时预取最近一次历史巡检报告，作为实时引擎失败时的回退
-        try:
-            report = _build_inspection_report(instance_id)
-            if report is not None:
-                ctx_inputs.setdefault("inspection_report", report)
-        except Exception:
-            pass
+        # 注入实例数据源连接信息 + 历史巡检报告（与「工作流任务」运行器共用同一入口）
+        ctx_inputs.update(prepare_instance_inputs(instance_id))
 
         ctx = SharedContext(
             goal=goal or "对目标数据源做一次协同诊断",

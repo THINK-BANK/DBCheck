@@ -6643,6 +6643,7 @@ async function wfSaveTask() {
 
 async function wfOpenRunDrawer(taskId) {
   const drawer = document.getElementById('wf-run-drawer');
+  const box = document.getElementById('wf-run-drawer-box');
   const body = document.getElementById('wf-run-drawer-body');
   const t = __wfTasksCache.find(x => x.id === taskId);
   const titleEl = document.getElementById('wf-run-drawer-title');
@@ -6650,6 +6651,9 @@ async function wfOpenRunDrawer(taskId) {
   if (titleEl) titleEl.innerHTML = `<span class="wf-dot" style="background:var(--accent)"></span>${t ? wfEscape(t.name) : '运行历史'}`;
   if (subEl) subEl.textContent = t ? `${wfEscape(window.__wfTaskWfMap[t.workflow_id] || '')} · ${wfEscape(wfDsName(t.instance_id))}` : '查看每次运行结果、产出与耗时';
   body.innerHTML = '<div class="wf-run-empty">加载中…</div>';
+  const aiPanel = document.getElementById('ai-chat-sidebar');
+  const aiOpen = aiPanel && (aiPanel.classList.contains('open') || !aiPanel.classList.contains('collapsed'));
+  if (aiPanel) drawer.classList.toggle('ai-panel-open', !!aiOpen);
   drawer.style.display = 'flex';
   try {
     const r = await fetch('/api/intelligence/workflow-tasks/' + taskId + '/runs');
@@ -6678,7 +6682,11 @@ async function wfOpenRunDrawer(taskId) {
     }).join('') + '</div>';
   } catch (e) { body.innerHTML = '<div class="wf-run-empty" style="color:var(--danger)">加载失败：' + wfEscape(e.message) + '</div>'; }
 }
-function wfCloseRunDrawer() { document.getElementById('wf-run-drawer').style.display = 'none'; }
+function wfCloseRunDrawer() {
+  const drawer = document.getElementById('wf-run-drawer');
+  if (drawer) drawer.classList.remove('ai-panel-open');
+  drawer.style.display = 'none';
+}
 </script>
 <div class="app-shell">
 
@@ -10256,8 +10264,9 @@ curl -H "X-API-Key: YOUR_API_KEY" http://localhost:5003/api/v1/inspect/{task_id}
           .wf-empty-sub{font-size:13px;max-width:360px;line-height:1.6;margin-bottom:18px}
 
           /* ── 运行抽屉 ── */
-          .drawer-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;justify-content:flex-end;z-index:9998;backdrop-filter:blur(2px)}
+          .drawer-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;justify-content:flex-end;z-index:10001;backdrop-filter:blur(2px)}
           .drawer-overlay[style*="display:flex"]{display:flex !important}
+          .drawer-overlay.ai-panel-open{right:420px}
           .drawer-box{width:min(520px,92vw);height:100%;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;box-shadow:-12px 0 48px rgba(0,0,0,.45)}
           .drawer-header{display:flex;justify-content:space-between;align-items:center;padding:18px 20px;border-bottom:1px solid var(--border);background:var(--surface)}
           .drawer-title{font-weight:700;font-size:16px;display:flex;align-items:center;gap:10px}
@@ -10413,7 +10422,7 @@ curl -H "X-API-Key: YOUR_API_KEY" http://localhost:5003/api/v1/inspect/{task_id}
 
         <!-- 运行结果抽屉 -->
         <div class="drawer-overlay" id="wf-run-drawer" style="display:none" onclick="if(event.target===this)wfCloseRunDrawer()">
-          <div class="drawer-box">
+          <div class="drawer-box" id="wf-run-drawer-box">
             <div class="drawer-header">
               <div>
                 <div class="drawer-title" id="wf-run-drawer-title"><span class="wf-dot" style="background:var(--accent)"></span>运行历史</div>

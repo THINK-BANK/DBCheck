@@ -30,6 +30,7 @@ except Exception:  # croniter 缺失时仅禁用调度，不影响手动启停
     _HAS_CRONITER = False
 
 from .workflow import Step, Workflow
+from .hub import prepare_instance_inputs
 from .workflow_store import get_workflow
 from .workflow_task_store import (
     STATUS_ERROR,
@@ -170,11 +171,13 @@ class TaskRunner:
             if isinstance(e, (list, tuple)) and len(e) == 2
         ]
         engine = Workflow(steps, edges)
+        # 注入数据源连接信息 + 历史巡检报告，供各专家（如深度巡检专员）实时分析
+        wf_inputs = prepare_instance_inputs(task["instance_id"])
         try:
             result = engine.run(
                 goal=task.get("goal") or "",
                 instance_id=task["instance_id"],
-                inputs={},
+                inputs=wf_inputs,
                 cancel_event=cancel,
             )
             dur = int((time.time() - started) * 1000)
