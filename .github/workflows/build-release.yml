@@ -47,11 +47,24 @@ jobs:
           .\build\build_windows.bat 2>&1 | Tee-Object -FilePath build-windows.log
           exit $LASTEXITCODE
 
+      # 构建日志的下载需要认证，但产物「列表」无需认证即可读。
+      # 故把关键报错摘要编进产物名，失败时无需登录即可看到首因。
+      - name: Extract error snippet
+        if: failure()
+        shell: pwsh
+        run: |
+          $snip = ((Select-String -Path build-windows.log -Pattern 'error|failed|Traceback|No matching|Unable to find' |
+            Select-Object -Last 3 | ForEach-Object { $_.Line }) -join ' | ')
+          $snip = ($snip -replace '[^a-zA-Z0-9 |._-]', ' ')
+          if ($snip.Length -gt 160) { $snip = $snip.Substring(0, 160) }
+          "ERR_SNIPPET=$snip" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "snippet: $snip"
+
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: build-log-windows
+          name: build-log-windows-${{ env.ERR_SNIPPET }}
           path: build-windows.log
           if-no-files-found: warn
 
@@ -86,11 +99,20 @@ jobs:
             exit $RC
           '
 
+      # 同 Windows：把关键报错摘要编进产物名（产物列表无需认证即可读）
+      - name: Extract error snippet
+        if: failure()
+        run: |
+          SNIP=$(grep -aiE "error|failed|Traceback|No matching|Unable to find" build-linux.log \
+            | tail -3 | tr -d '\r' | tr '\n' '|' | tr -c 'a-zA-Z0-9 |._-' ' ' | cut -c1-160)
+          echo "ERR_SNIPPET=$SNIP" >> "$GITHUB_ENV"
+          echo "snippet: $SNIP"
+
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: build-log-linux
+          name: build-log-linux-${{ env.ERR_SNIPPET }}
           path: build-linux.log
           if-no-files-found: warn
 
@@ -127,11 +149,20 @@ jobs:
           bash build/build_macos.sh 2>&1 | tee build-macos-${{ matrix.arch }}.log
           exit ${PIPESTATUS[0]}
 
+      # 同 Windows：把关键报错摘要编进产物名（产物列表无需认证即可读）
+      - name: Extract error snippet
+        if: failure()
+        run: |
+          SNIP=$(grep -aiE "error|failed|Traceback|No matching|Unable to find" "build-macos-${{ matrix.arch }}.log" \
+            | tail -3 | tr -d '\r' | tr '\n' '|' | tr -c 'a-zA-Z0-9 |._-' ' ' | cut -c1-160)
+          echo "ERR_SNIPPET=$SNIP" >> "$GITHUB_ENV"
+          echo "snippet: $SNIP"
+
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: build-log-macos-${{ matrix.arch }}
+          name: build-log-macos-${{ matrix.arch }}-${{ env.ERR_SNIPPET }}
           path: build-macos-${{ matrix.arch }}.log
           if-no-files-found: warn
 
