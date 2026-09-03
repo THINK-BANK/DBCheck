@@ -18,7 +18,7 @@ echo.
 python --version >nul 2>&1
 if errorlevel 1 (
     echo [ERROR] Python not found. Please install Python 3.10+.
-    pause
+    if not defined GITHUB_ACTIONS pause
     exit /b 1
 )
 
@@ -28,7 +28,7 @@ echo [1/5] Python version: %PYVER%
 python -c "import sys; sys.exit(0 if sys.version_info >= (3,10) else 1)" >nul 2>&1
 if errorlevel 1 (
     echo [ERROR] Python >= 3.10 required. Current: %PYVER%
-    pause
+    if not defined GITHUB_ACTIONS pause
     exit /b 1
 )
 
@@ -45,7 +45,7 @@ echo.
 pip install -r deploy/requirements.txt
 if errorlevel 1 (
     echo [ERROR] Failed to install dependencies.
-    pause
+    if not defined GITHUB_ACTIONS pause
     exit /b 1
 )
 echo.
@@ -54,7 +54,7 @@ echo [    ] Installing PyInstaller...
 pip install pyinstaller
 if errorlevel 1 (
     echo [ERROR] Failed to install PyInstaller.
-    pause
+    if not defined GITHUB_ACTIONS pause
     exit /b 1
 )
 echo.
@@ -84,7 +84,7 @@ if errorlevel 1 (
     echo.
     echo [ERROR] PyInstaller failed!
     echo [    ] Common fix: close any running RaccoonX instances, then retry.
-    pause
+    if not defined GITHUB_ACTIONS pause
     exit /b 1
 )
 
@@ -96,7 +96,7 @@ if exist "%WORKPATH%" (
 :: Check output
 if not exist "%DISTPATH%\RaccoonX-Windows" (
     echo [ERROR] Build output not found at %DISTPATH%\RaccoonX-Windows
-    pause
+    if not defined GITHUB_ACTIONS pause
     exit /b 1
 )
 echo.
@@ -106,7 +106,7 @@ echo [5/5] Packaging distribution...
 python build\package_windows.py "%DISTPATH%" "%VERSION%"
 if errorlevel 1 (
     echo [ERROR] Packaging failed.
-    pause
+    if not defined GITHUB_ACTIONS pause
     exit /b 1
 )
 
@@ -115,4 +115,4 @@ echo ==========================================
 echo   BUILD SUCCESS!
 echo ==========================================
 echo.
-pause
+if not defined GITHUB_ACTIONS pause

@@ -1,0 +1,132 @@
+name: Build Release Binaries
+
+# 触发：
+#   1) 推送 v* 标签时自动出包并挂到该标签的 Release 下
+#   2) 手动 dispatch（用于回填某个已存在标签，需先删除该 Release 避免冲突）
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release tag, e.g. v26.9.3.0"
+        required: true
+        default: "v26.9.3.0"
+
+permissions:
+  contents: write
+
+env:
+  PY_VERSION: "3.11"
+
+jobs:
+  build-windows:
+    name: Build Windows (x64)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PY_VERSION }}
+
+      - name: Build (PyInstaller -> zip)
+        run: .\build\build_windows.bat
+        shell: cmd
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/RaccoonX-Windows-*.zip
+
+  build-linux:
+    name: Build Linux (manylinux2014 / glibc 2.17)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      # 在 manylinux2014 容器内构建，产物兼容 CentOS 7 / RHEL 7 (glibc 2.17)
+      - name: Build in manylinux2014 container
+        run: |
+          docker run --rm -v "$PWD":/src -w /src quay.io/pypa/manylinux2014_x86_64 bash -c '
+            set -e
+            PYBIN=$(ls -d /opt/python/cp311-cp311 2>/dev/null || ls -d /opt/python/cp310-cp310 2>/dev/null || ls -d /opt/python/cp3*-cp3* 2>/dev/null | sort | tail -1)
+            echo "Using manylinux Python: $PYBIN"
+            ln -sf "$PYBIN/bin/python3" /usr/local/bin/python3
+            ln -sf "$PYBIN/bin/pip" /usr/local/bin/pip
+            yum install -y libffi-devel openssl-devel postgresql-devel 2>/dev/null || true
+            bash build/build_linux.sh
+            chmod -R a+rwX /src/dist
+          '
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: dist/RaccoonX-Linux-*.tar.gz
+
+  build-macos:
+    name: Build macOS (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        - { runner: macos-14, arch: arm64 }
+        - { runner: macos-13, arch: x86_64 }
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PY_VERSION }}
+
+      - name: Build (PyInstaller -> tar.gz)
+        run: bash build/build_macos.sh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.arch }}
+          path: dist/RaccoonX-macOS-${{ matrix.arch }}.tar.gz
+
+  release:
+    name: Attach to Release
+    needs: [build-windows, build-linux, build-macos]
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version || github.ref_name }}
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List artifacts
+        run: find artifacts -type f -exec ls -lh {} \;
+
+      - name: Create Release and upload binaries
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          generate_release_notes: true
+          files: |
+            artifacts/windows/*.zip
+            artifacts/linux/*.tar.gz
+            artifacts/macos-arm64/*.tar.gz
+            artifacts/macos-x86_64/*.tar.gz
+
+      # 打 tag 时自动追加安装提示（含 macOS 未签名/公证说明）
+      - name: Append install notices to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          NOTE=$'\n---\n\n## ⚠️ 安装注意事项\n\n- **macOS**：当前分发包**未做 Apple 公证（二进制未签名）**。首次打开若被 Gatekeeper 拦截，请右键点击 App / 可执行文件 →「打开」并在弹窗中确认即可运行；如需彻底消除提示，后续可接入 Apple 开发者证书做正式公证。\n- **Linux**：基于 manylinux2014（glibc 2.17）构建，兼容 CentOS 7 / RHEL 7 及更高版本发行版。\n- **Windows**：解压后双击 `start.bat` 启动，浏览器访问 http://localhost:5003 。'
+          BODY=$(gh release view "$TAG" --json body --jq '.body')
+          printf '%s%s\n' "$BODY" "$NOTE" > release_notes.md
+          gh release edit "$TAG" --notes-file release_notes.md
