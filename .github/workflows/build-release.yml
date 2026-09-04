@@ -97,8 +97,10 @@ jobs:
                 java-11-openjdk java-11-openjdk-devel ant \
                 2>/dev/null || true
             # 替换系统默认 Java 为 11 (默认是 Java 8)
-            rm -f /usr/bin/java
+            # 需要同时替换 java/javac 两个命令
+            rm -f /usr/bin/java /usr/bin/javac
             ln -s /usr/lib/jvm/java-11-openjdk/bin/java /usr/bin/java
+            ln -s /usr/lib/jvm/java-11-openjdk/bin/javac /usr/bin/javac
             # 补齐干净 checkout 缺失的输入物（运行时目录 + 默认配置）
             python3 build/ci_prepare.py
             bash build/build_linux.sh 2>&1 | tee build-linux.log
