@@ -175,6 +175,8 @@ jobs:
   release:
     name: Attach to Release
     needs: [build-windows, build-linux, build-macos]
+    # 部分构建失败时也尝试运行（有 artifact 就上传，没有则跳过）
+    if: always()
     runs-on: ubuntu-latest
     env:
       TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version || github.ref_name }}
