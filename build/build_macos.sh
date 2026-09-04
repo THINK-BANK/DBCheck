@@ -46,6 +46,15 @@ fi
 
 echo "[2/5] Checking dependencies..."
 
+# Install system dependencies required by Python drivers
+# (pyodbc needs unixodbc, which may not be present on fresh CI images)
+if command -v brew &> /dev/null; then
+    if [ -z "$(brew list unixodbc 2>/dev/null)" ]; then
+        echo "  Installing unixodbc (required by pyodbc)..."
+        brew install unixodbc
+    fi
+fi
+
 # Create virtual environment
 VENV_DIR="$PROJECT_ROOT/.venv_build"
 if [ ! -d "$VENV_DIR" ]; then
