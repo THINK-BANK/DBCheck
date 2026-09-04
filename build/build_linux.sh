@@ -58,7 +58,8 @@ source "$VENV_DIR/bin/activate"
 
 # 升级 pip/setuptools/wheel：manylinux2014 自带 pip 较旧，升级可提高预编译
 # wheel 命中率，避免 JPype1/Pillow 等被迫从源码编译（缺 jpeg 等系统库）
-pip install --upgrade pip setuptools wheel
+# --timeout/--retries 防御 CI 网络抖动导致大 wheel 下载超时 fallback 源码编译
+pip install --upgrade pip setuptools wheel --timeout 120 --retries 10
 
 # Check pyinstaller
 if ! command -v pyinstaller &> /dev/null; then
@@ -92,7 +93,8 @@ STARTEOF
 chmod +x "$BUILDDIR/start.sh"
 
 # Create tar.gz
-RELEASE_NAME="RaccoonX-Linux-x86_64"
+VERSION=$($PYTHON_CMD -c "import json; print(json.load(open('modules/config/version.json', encoding='utf-8'))['version'])")
+RELEASE_NAME="RaccoonX-Linux-x86_64-$VERSION"
 cd dist
 tar czf "$RELEASE_NAME.tar.gz" RaccoonX-Linux/
 cd "$PROJECT_ROOT"

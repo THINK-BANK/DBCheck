@@ -10,9 +10,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release tag, e.g. v26.9.3.0"
+        description: "Release tag, e.g. v26.9.4.0"
         required: true
-        default: "v26.9.3.0"
+        default: "v26.9.4.0"
 
 permissions:
   contents: write
@@ -72,7 +72,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: windows
-          path: dist/RaccoonX-Windows-*.zip
+          path: dist/RaccoonX-Windows-x86_64-*.zip
 
   build-linux:
     name: Build Linux (manylinux2014 / glibc 2.17)
@@ -92,7 +92,7 @@ jobs:
             ln -sf "$PYBIN/bin/pip" /usr/local/bin/pip
             # 升级 pip/setuptools/wheel：manylinux2014 自带 pip 较旧，升级可提高
             # 预编译 wheel 命中率，避免 JPype1/Pillow 等被迫从源码编译
-            python3 -m pip install --upgrade pip setuptools wheel
+            python3 -m pip install --upgrade pip setuptools wheel --timeout 120 --retries 10
             # Pillow/JPype1/Pandas 源码编译需要的系统库（即使能命中 wheel 也装齐，作为兜底）
             # Pillow 需要：libjpeg-turbo-devel zlib-devel libpng-devel freetype-devel
             #              libtiff-devel lcms2-devel libwebp-devel openjpeg2-devel
@@ -100,13 +100,18 @@ jobs:
             # PyInstaller 需要 Python 共享库 (python-libs)
             # Pandas/Cython 编译需要 cython 和开发工具
             # 注意：CentOS 7 里 Pillow 真正要的是 libjpeg-turbo-devel（libjpeg-devel 是 6b 老版本，不匹配）
-            yum install -y libffi-devel openssl-devel postgresql-devel \
-                libjpeg-turbo-devel zlib-devel libpng-devel freetype-devel \
-                libtiff-devel lcms2-devel libwebp-devel openjpeg2-devel \
-                java-11-openjdk java-11-openjdk-devel ant \
-                python3-libs python3-devel \
-                gcc gcc-c++ make cmake ninja-build cython pkgconfig \
-                2>&1 || echo "[warn] some yum packages failed to install"
+            # 重试循环确保网络抖动时也能装齐；Pillow 源码编译兜底必须有 jpeg 等开发库。
+            # 注意：CentOS 7 里 Pillow 真正要的是 libjpeg-turbo-devel（libjpeg-devel 是 6b 老版本，不匹配）
+            for i in 1 2 3; do
+              yum install -y libffi-devel openssl-devel postgresql-devel \
+                  libjpeg-turbo-devel zlib-devel libpng-devel freetype-devel \
+                  libtiff-devel lcms2-devel libwebp-devel openjpeg2-devel \
+                  java-11-openjdk java-11-openjdk-devel ant \
+                  python3-libs python3-devel \
+                  gcc gcc-c++ make cmake ninja-build cython pkgconfig && break
+              echo "[warn] yum install attempt $i failed, retrying in 5s..."
+              sleep 5
+            done
             # 设置 JAVA_HOME 让所有 Java 工具都使用 Java 11
             export JAVA_HOME=/usr/lib/jvm/java-11-openjdk
             export PATH=$JAVA_HOME/bin:$PATH
@@ -140,7 +145,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: linux
-          path: dist/RaccoonX-Linux-*.tar.gz
+          path: dist/RaccoonX-Linux-x86_64-*.tar.gz
 
   build-macos:
     name: Build macOS (${{ matrix.arch }})
@@ -190,7 +195,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: macos-${{ matrix.arch }}
-          path: dist/RaccoonX-macOS-${{ matrix.arch }}.tar.gz
+          path: dist/RaccoonX-macOS-${{ matrix.arch }}-*.tar.gz
 
   release:
     name: Attach to Release

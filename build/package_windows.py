@@ -3,7 +3,7 @@
 Usage: python package_windows.py <distpath> <version>
 
   distpath  - path to 'dist' directory (contains RaccoonX-Windows folder)
-  version   - version string, e.g. v26.9.3
+  version   - version string, e.g. v26.9.4
 """
 import os
 import shutil
@@ -20,7 +20,7 @@ def main():
     version = sys.argv[2]
 
     src = os.path.join(distpath, "RaccoonX-Windows")
-    dst_name = "RaccoonX-Windows-" + version
+    dst_name = "RaccoonX-Windows-x86_64-" + version
     dst = os.path.join(distpath, dst_name)
     zip_path = dst + ".zip"
 

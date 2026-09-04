@@ -88,7 +88,12 @@ def _iter_requirement_lines(path: str):
 
 
 def _pip_install(spec: str) -> bool:
-    cmd = [sys.executable, "-m", "pip", "install", "--prefer-binary", spec]
+    # --prefer-binary: 优先用预编译 wheel，避免从 sdist 源码编译（Pillow 源码编译需
+    #   jpeg 等系统库，且 CI 网络偶发抖动时大 wheel 易超时 fallback 到源码编译而失败）。
+    # --timeout 120 --retries 10: CI 到 pypi 网络偶发超时（默认 15s 对 numpy/pandas/
+    #   Pillow/JPype1 等大包不够），放宽超时与重试，避免非确定性构建失败。
+    cmd = [sys.executable, "-m", "pip", "install", "--prefer-binary",
+           "--timeout", "120", "--retries", "10", spec]
     proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     ok = proc.returncode == 0
     print(f"[ci_deps] {'OK  ' if ok else 'FAIL'} pip install {spec}", flush=True)

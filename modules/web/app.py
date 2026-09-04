@@ -1453,7 +1453,16 @@ def run_inspection_task(task_id, db_info, inspector_name, template_id=None, chap
             context = apply_desensitization(context)
 
         ofile_result = data.generate_report(ofile, inspector_nm)
+        print(f"[DEBUG] generate_report 返回: {ofile_result}")
+        print(f"[DEBUG] ofile 路径: {ofile}")
+        if ofile_result and os.path.exists(ofile_result):
+            print(f"[DEBUG] 文件确实存在，大小: {os.path.getsize(ofile_result)}")
         if not ofile_result:
+            # 补充诊断：文件是否存在、目录是否可写，便于定位
+            _writable = os.access(reports_dir, os.W_OK)
+            print(f"[ERROR] generate_report 返回空 ({ofile_result})；"
+                  f"目标路径={ofile}；目录可写={_writable}；"
+                  f"文件已存在={os.path.exists(ofile)}")
             raise RuntimeError(_t('webui.err_report_generate'))
         _emit('log', {'msg': _t('webui.log_report_ok').format(fname=file_name)})
         print(f"[REPORT] 报告已生成: {ofile_result}")
