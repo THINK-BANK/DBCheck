@@ -91,10 +91,10 @@ jobs:
             ln -sf "$PYBIN/bin/python3" /usr/local/bin/python3
             ln -sf "$PYBIN/bin/pip" /usr/local/bin/pip
             # Pillow/JPype1 编译需要的系统库
-            # JPype1 需要 JDK（Java_JAVA_EXECUTABLE 等）
+            # JPype1 需要 JDK + Ant (find_program: ANT_EXECUTABLE)
             yum install -y libffi-devel openssl-devel postgresql-devel \
                 libjpeg-devel zlib-devel libpng-devel freetype-devel \
-                java-11-openjdk java-11-openjdk-devel \
+                java-11-openjdk java-11-openjdk-devel ant \
                 2>/dev/null || true
             # 补齐干净 checkout 缺失的输入物（运行时目录 + 默认配置）
             python3 build/ci_prepare.py
