@@ -56,6 +56,10 @@ fi
 
 source "$VENV_DIR/bin/activate"
 
+# 升级 pip/setuptools/wheel：manylinux2014 自带 pip 较旧，升级可提高预编译
+# wheel 命中率，避免 JPype1/Pillow 等被迫从源码编译（缺 jpeg 等系统库）
+pip install --upgrade pip setuptools wheel
+
 # Check pyinstaller
 if ! command -v pyinstaller &> /dev/null; then
     echo "  Installing pyinstaller..."

@@ -88,7 +88,7 @@ def _iter_requirement_lines(path: str):
 
 
 def _pip_install(spec: str) -> bool:
-    cmd = [sys.executable, "-m", "pip", "install", spec]
+    cmd = [sys.executable, "-m", "pip", "install", "--prefer-binary", spec]
     proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     ok = proc.returncode == 0
     print(f"[ci_deps] {'OK  ' if ok else 'FAIL'} pip install {spec}", flush=True)
