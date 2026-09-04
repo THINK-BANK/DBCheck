@@ -92,9 +92,11 @@ jobs:
             ln -sf "$PYBIN/bin/pip" /usr/local/bin/pip
             # Pillow/JPype1 编译需要的系统库
             # JPype1 需要 JDK 11+ (Java 8 编译会失败: javac: invalid target release: 9)
+            # PyInstaller 需要 Python 共享库 (python-libs)
             yum install -y libffi-devel openssl-devel postgresql-devel \
                 libjpeg-devel zlib-devel libpng-devel freetype-devel \
                 java-11-openjdk java-11-openjdk-devel ant \
+                python3-libs python3-devel \
                 2>/dev/null || true
             # 设置 JAVA_HOME 让所有 Java 工具都使用 Java 11
             export JAVA_HOME=/usr/lib/jvm/java-11-openjdk
